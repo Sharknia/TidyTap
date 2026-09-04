@@ -1,6 +1,24 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Applying changes…" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Applying changes…" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "변경 사항 적용 중…" } }
+      }
+    },
+    "Changes applied." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Changes applied." } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "변경 사항이 적용되었습니다." } }
+      }
+    },
+    "Changes could not be applied." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Changes could not be applied." } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "변경 사항을 적용할 수 없습니다." } }
+      }
+    },
     "Open System Settings" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Open System Settings" } },

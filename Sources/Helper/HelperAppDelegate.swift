@@ -1,4 +1,5 @@
 import AppKit
+import TidyTapInputEngine
 
 /// A background-only helper. It owns the process lifetime and applies the
 /// complete persisted snapshot at launch and after each change notification.
@@ -8,13 +9,19 @@ final class HelperAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let preferences = TidyTapPreferencesStore()
+        let inputFeatures = InputFeaturesAdapter()
         let coordinator = ApplyCoordinator(
             preferences: preferences,
-            capsFeature: NoopCapsFeature(),
-            inputFeatures: NoopInputFeatures(),
+            capsFeature: CapsLockFeatureAdapter(system: MacOSSystemApplyAdapter(), ownershipStore: preferences),
+            inputFeatures: inputFeatures,
             menuBar: MenuBarController(),
             terminator: ApplicationTerminator()
         )
+        inputFeatures.runtimeStatusHandler = { [weak coordinator] requestID, result, error in
+            DispatchQueue.main.async {
+                coordinator?.reportRuntimeInput(requestID: requestID, result, error: error)
+            }
+        }
         let lifecycle = HelperLifecycle(coordinator: coordinator)
         self.lifecycle = lifecycle
         lifecycle.start()

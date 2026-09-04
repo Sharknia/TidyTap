@@ -2,6 +2,7 @@ import Foundation
 
 /// Listens only for a request signal; the full snapshot is always re-read from
 /// the shared domain. This makes missed notifications harmless at next launch.
+@MainActor
 final class HelperLifecycle: NSObject {
     private let coordinator: ApplyCoordinator
     private var isObservingSettings = false
@@ -28,10 +29,6 @@ final class HelperLifecycle: NSObject {
             DistributedNotificationCenter.default().removeObserver(self)
             isObservingSettings = false
         }
-    }
-
-    deinit {
-        stop()
     }
 
     @objc private func settingsDidChange(_ notification: Notification) {

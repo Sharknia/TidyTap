@@ -23,6 +23,7 @@ final class SettingsCoordinator {
 
     private(set) var latestRequestID: UUID?
     private(set) var latestApplyStatus: TidyTapApplyStatus?
+    private var settingsBeforeLatestRequest: TidyTapSettings?
 
     init(
         preferences: TidyTapPreferencesStoring = TidyTapPreferencesStore(),
@@ -39,10 +40,27 @@ final class SettingsCoordinator {
     func restoreSession() {
         let request = preferences.readRequest()
         try? loginItemManager.setEnabled(request.settings.launchAtLogin)
-        if request.settings.requiresHelper {
-            helperLauncher.launchOrActivateHelper()
-        }
+        latestRequestID = request.applyRequestID
+        let status = preferences.readApplyStatus()
+        latestApplyStatus = status?.applyRequestID == request.applyRequestID ? status : nil
+        helperLauncher.launchOrActivateHelper()
     }
+
+    func persistedSettings() -> TidyTapSettings {
+        preferences.readRequest().settings
+    }
+
+    func settingsForUI() -> TidyTapSettings {
+        let request = preferences.readRequest()
+        let status = preferences.readApplyStatus()
+        var settings = status?.applyRequestID == request.applyRequestID
+            ? status?.effectiveSettings ?? request.settings
+            : request.settings
+        settings.launchAtLogin = loginItemManager.status() == .enabled
+        return settings
+    }
+
+    func loginItemStatus() -> TidyTapLoginItemStatus { loginItemManager.status() }
 
     @discardableResult
     func save(_ settings: TidyTapSettings) throws -> UUID {
@@ -72,12 +90,11 @@ final class SettingsCoordinator {
 
         latestRequestID = requestID
         latestApplyStatus = .pending(requestID)
+        settingsBeforeLatestRequest = previousRequest.settings
 
-        // A running helper must receive an all-off request so it can restore
-        // state and exit. If it is not running, no helper is necessary.
-        if settings.requiresHelper {
-            helperLauncher.launchOrActivateHelper()
-        }
+        // All-off requests also launch the helper: a prior crash may have left
+        // a durable Caps journal that only the helper can safely restore.
+        helperLauncher.launchOrActivateHelper()
         TidyTapIPC.postSettingsDidChange(requestID: requestID)
         return requestID
     }
@@ -86,13 +103,44 @@ final class SettingsCoordinator {
     /// helper result cannot make a newer UI toggle appear successful.
     @discardableResult
     func receiveApplyResult() -> TidyTapApplyStatus? {
-        guard let expectedID = latestRequestID,
-              let status = preferences.readApplyStatus(),
-              status.applyRequestID == expectedID else {
+        let request = preferences.readRequest()
+        guard let status = preferences.readApplyStatus(),
+              status.applyRequestID == request.applyRequestID else {
             return nil
         }
-
+        latestRequestID = request.applyRequestID
         latestApplyStatus = status
         return status
+    }
+
+    /// A rejected helper request has already been restored by the helper. Keep
+    /// the visible UI truthful without issuing a second settings submission.
+    func visibleSettings(for status: TidyTapApplyStatus) -> TidyTapSettings {
+        var settings: TidyTapSettings
+        if let effective = status.effectiveSettings {
+            settings = effective
+        } else {
+            switch status.outcome {
+            case .failed, .recoveryRequired:
+                settings = settingsBeforeLatestRequest ?? persistedSettings()
+            case .pending, .applied, .partiallyApplied:
+                settings = persistedSettings()
+            }
+        }
+        settings.launchAtLogin = loginItemManager.status() == .enabled
+        return settings
+    }
+
+    func permissionSettingsPane(for status: TidyTapApplyStatus) -> TidyTapPermission? {
+        guard let code = status.errorCode else { return nil }
+        if code.contains("permissionDenied.accessibility") ||
+            code.contains("permissionPartial.accessibility") {
+            return .accessibility
+        }
+        if code.contains("permissionDenied.inputMonitoring") ||
+            code.contains("permissionPartial.inputMonitoring") {
+            return .inputMonitoring
+        }
+        return nil
     }
 }

@@ -50,7 +50,7 @@ TidyTapHelper (LSUIElement, 단일 백그라운드 프로세스)
 
 helper가 실행되지 않은 상태의 알림은 큐에 쌓이지 않아도 된다. 다음 helper 시작 시 저장된 스냅샷이 기준이다. 동시에 여러 알림이 오면 마지막으로 읽은 전체 스냅샷 하나를 적용하며, 적용 중에는 serial coordinator로 재진입을 막는다.
 
-helper는 같은 preferences domain의 별도 status 키에 `applyRequestID`, 성공/실패 상태, 실패한 구성요소, 사람이 읽을 수 있는 오류 코드를 원자적으로 기록하고, `TidyTapApplyResult` 알림에 동일한 ID를 담아 앱에 반환한다. 앱은 자신이 보낸 ID와 일치하는 결과만 현재 토글 상태에 반영한다. 앱이 결과 알림을 놓쳐도 status 키를 다시 읽어 확인한다. 설정 저장 실패나 일치하는 적용 결과가 실패인 경우 토글을 성공 상태로 표시하지 않고 오류/권한 상태를 표시한다.
+helper는 같은 preferences domain의 별도 status 키에 `applyRequestID`, 성공/실패 상태, 실패한 구성요소, 사람이 읽을 수 있는 오류 코드, 실제로 남은 유효 설정 스냅샷을 원자적으로 기록하고, `TidyTapApplyResult` 알림에 동일한 ID를 담아 앱에 반환한다. 앱은 자신이 보낸 ID와 일치하는 결과만 현재 토글 상태에 반영한다. 앱이 결과 알림을 놓쳐도 시작할 때 status 키를 다시 읽어 유효 설정을 복원한다. 설정 저장 실패나 일치하는 적용 결과가 실패인 경우 토글을 성공 상태로 표시하지 않고 오류/권한 상태를 표시한다.
 
 적용은 helper 내부의 직렬 트랜잭션이다. 새 스냅샷을 검증하고, 변경 전 각 controller의 복원 가능한 상태를 캡처한 뒤 Caps(HID와 단축키), event tap, 메뉴 막대 순서로 적용한다. Caps 단계에서 `CapsLockController`가 HID 매핑을 소유하고, 성공한 뒤 `InputSourceShortcutController`가 단축키를 소유한다. 어느 단계든 실패하면 이미 변경한 항목을 역순으로 롤백한다. 롤백도 실패하면 원본 이벤트를 통과시키고 실패 상태와 복구 필요 상태를 보고한다. 전체 적용이 성공한 경우에만 새 `applyRequestID`를 활성 상태로 확정한다.
 
@@ -84,7 +84,7 @@ Caps Lock 전용 경로는 권한 요청 UI를 만들지 않는다. 휠 경로�
 
 ## 7. 백업·복원 소유권
 
-`CapsLockController`는 기존 HID 매핑의 백업과 복원만 소유한다. 활성화 전 충돌을 검사하고, 기존 매핑 배열에 TidyTap의 Caps Lock→F18 항목만 추가한다. 비활성화 때는 현재 배열에서 TidyTap이 만든 정확한 항목만 제거한다. `InputSourceShortcutController`는 입력 소스 단축키의 백업과 복원만 소유한다. 현재 값이 TidyTap이 설정한 F18과 같을 때만 백업값으로 복원한다. 사용자가 중간에 값을 바꿨으면 덮어쓰지 않고 충돌 상태를 보고한다. 두 controller의 변경 순서·검증·역순 롤백은 `ApplyCoordinator`가 단일 트랜잭션으로 조정한다. 다른 HID 매핑은 어떤 경우에도 덮어쓰거나 제거하지 않는다.
+`CapsLockController`는 기존 HID 매핑의 백업과 복원만 소유한다. 활성화 전 충돌을 검사하고, 기존 매핑 배열에 TidyTap의 Caps Lock→F18 항목만 추가한다. 비활성화 때는 현재 배열에서 TidyTap이 만든 정확한 항목만 제거한다. `InputSourceShortcutController`는 입력 소스 단축키의 백업과 복원만 소유한다. 현재 값이 TidyTap이 설정한 F18과 같을 때만 백업값으로 복원한다. 사용자가 중간에 값을 바꿨으면 덮어쓰지 않고 충돌 상태를 보고한다. helper는 두 변경의 정확한 before/after 계획을 `prepared` 저널로 먼저 저장하므로 HID만 반영된 시점이나 단축키 plist 기록 후 활성화 전 시점에 종료되어도 다음 시작에서 남은 단계만 검증·완료한다. 커밋된 저널과 F18 단축키는 남았지만 재부팅으로 휘발성 HID 매핑만 사라진 경우에는 다른 Caps Lock 매핑이 없음을 확인한 뒤 HID 항목만 재적용한다. 두 controller의 변경 순서·검증·역순 롤백은 `ApplyCoordinator`가 단일 트랜잭션으로 조정한다. 다른 HID 매핑은 어떤 경우에도 덮어쓰거나 제거하지 않는다.
 
 앱 삭제를 감지하여 자동 복원하지 않는다. 지원 제거 절차는 모든 토글과 옵션을 끄고, Caps 백업 복원 및 helper 종료를 확인한 후 앱을 종료·삭제하는 순서이며 README에도 동일하게 기록한다.
 

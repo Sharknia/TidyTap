@@ -9,7 +9,7 @@ public struct CapsHIDOwnership: Codable, Equatable, Sendable {
     }
 }
 
-public struct HIDMappingChange: Equatable, Sendable {
+public struct HIDMappingChange: Codable, Equatable, Sendable {
     public let before: [HIDMapping]
     public let after: [HIDMapping]
     public let ownershipAfterCommit: CapsHIDOwnership?
@@ -108,6 +108,14 @@ public final class CapsLockController: @unchecked Sendable {
         }
         try rollback(change)
     }
+
+    public func hasTidyTapMapping() throws -> Bool {
+        try system.readHIDMappings().contains(.tidyTapCapsLock)
+    }
+
+    public func currentMappings() throws -> [HIDMapping] {
+        try system.readHIDMappings()
+    }
 }
 
 public struct Hotkey60Ownership: Codable, Equatable, Sendable {
@@ -120,7 +128,7 @@ public struct Hotkey60Ownership: Codable, Equatable, Sendable {
     }
 }
 
-public struct Hotkey60Change: Equatable, Sendable {
+public struct Hotkey60Change: Codable, Equatable, Sendable {
     public let before: PropertyListDictionary
     public let after: PropertyListDictionary
     public let ownershipAfterCommit: Hotkey60Ownership?
@@ -235,6 +243,18 @@ public final class InputSourceShortcutController: @unchecked Sendable {
         return hotkeys[hotkey60Key]
     }
 
+    public func hasTidyTapHotkey() throws -> Bool {
+        try Self.checkedHotkey60(in: system.readSymbolicHotkeyDomain()) == .tidyTapHotkey60
+    }
+
+    public func currentDomain() throws -> PropertyListDictionary {
+        try system.readSymbolicHotkeyDomain()
+    }
+
+    public func activateCurrentSettings() throws {
+        try system.activateSymbolicHotkeySettings()
+    }
+
     private static func checkedHotkey60(
         in domain: PropertyListDictionary
     ) throws -> PropertyListValue? {
@@ -269,6 +289,27 @@ public struct CapsLockFeatureOwnership: Codable, Equatable, Sendable {
     public init(hid: CapsHIDOwnership, hotkey60: Hotkey60Ownership) {
         self.hid = hid
         self.hotkey60 = hotkey60
+    }
+}
+
+/// A durable, fully prepared transaction. Persisting both before/after values
+/// lets a restarted helper distinguish an untouched transaction from each
+/// partial commit without guessing from an ownership token alone.
+public struct CapsLockEnablePlan: Codable, Equatable, Sendable {
+    public let hid: HIDMappingChange
+    public let hotkey60: Hotkey60Change
+
+    public init(hid: HIDMappingChange, hotkey60: Hotkey60Change) {
+        self.hid = hid
+        self.hotkey60 = hotkey60
+    }
+
+    public var ownership: CapsLockFeatureOwnership? {
+        guard let hidOwnership = hid.ownershipAfterCommit,
+              let hotkeyOwnership = hotkey60.ownershipAfterCommit else {
+            return nil
+        }
+        return CapsLockFeatureOwnership(hid: hidOwnership, hotkey60: hotkeyOwnership)
     }
 }
 
@@ -335,19 +376,142 @@ public final class CapsLockFeatureController: @unchecked Sendable {
         return CapsLockFeatureOwnership(hid: hidOwnership, hotkey60: hotkeyOwnership)
     }
 
-    public func disable(ownership: CapsLockFeatureOwnership) throws {
-        let hotkeyChange = try hotkey.prepareDisable(ownership: ownership.hotkey60)
-        let hidChange = try hid.prepareDisable(ownership: ownership.hid)
+    public func prepareEnablePlan() throws -> CapsLockEnablePlan {
+        let inputSourceCount = try inputSources.enabledSelectableInputSourceCount()
+        guard inputSourceCount == 2 else {
+            throw InputEngineError.invalidInputSourceCount(inputSourceCount)
+        }
+        return CapsLockEnablePlan(
+            hid: try hid.prepareEnable(),
+            hotkey60: try hotkey.prepareEnable()
+        )
+    }
+
+    /// Completes a previously persisted plan. Each component must still equal
+    /// either its exact before or after value; unrelated live changes are
+    /// never overwritten. Hotkey activation is repeated when its plist write
+    /// survived because a crash may have happened before activation.
+    public func completePreparedEnable(_ plan: CapsLockEnablePlan) throws -> CapsLockFeatureOwnership {
+        guard let ownership = plan.ownership else {
+            throw TransactionFailure(primaryDescription: "missing ownership in prepared enable")
+        }
+
+        let liveHID = try hid.currentMappings()
+        if liveHID == plan.hid.before {
+            try hid.commit(plan.hid)
+        } else if liveHID != plan.hid.after {
+            throw InputEngineError.staleSystemState(.hidMappings)
+        }
+
         do {
-            try hotkey.commit(hotkeyChange)
+            let liveHotkey = try hotkey.currentDomain()
+            if liveHotkey == plan.hotkey60.before {
+                try hotkey.commit(plan.hotkey60)
+            } else if liveHotkey == plan.hotkey60.after {
+                try hotkey.activateCurrentSettings()
+            } else {
+                throw InputEngineError.staleSystemState(.symbolicHotkey60)
+            }
+        } catch {
+            // The prepared journal proves ownership of the exact `after`
+            // value even when HID was committed by the previous process.
+            // Restore it before surfacing a stale/failed hotkey recovery.
+            let issues = rollbackIssues(for: [
+                (.hidMappings, { try self.hid.rollbackIfApplied(plan.hid) })
+            ])
+            if issues.isEmpty, let engineError = error as? InputEngineError {
+                throw engineError
+            }
+            throw TransactionFailure(
+                primaryDescription: String(describing: error),
+                rollbackIssues: issues
+            )
+        }
+        return ownership
+    }
+
+    /// Reboots clear hidutil's volatile mapping while the symbolic hotkey and
+    /// durable ownership survive. Only that exact state is repaired.
+    public func recoverHIDAfterReset(ownership: CapsLockFeatureOwnership) throws {
+        guard ownership.hid == .current else {
+            throw InputEngineError.capsLockOwnershipConflict
+        }
+        let inputSourceCount = try inputSources.enabledSelectableInputSourceCount()
+        guard inputSourceCount == 2 else {
+            throw InputEngineError.invalidInputSourceCount(inputSourceCount)
+        }
+        guard try hotkey.hasTidyTapHotkey() else {
+            throw InputEngineError.symbolicHotkeyOwnershipConflict
+        }
+        try hid.commit(hid.prepareEnable())
+    }
+
+    /// Restores the exact owned enabled state after an interrupted disable.
+    /// A live value must be either the owned value or the recorded backup;
+    /// anything else is an external conflict and remains untouched.
+    public func restoreOwnedState(ownership: CapsLockFeatureOwnership) throws {
+        guard ownership.hid == .current else {
+            throw InputEngineError.capsLockOwnershipConflict
+        }
+        let inputSourceCount = try inputSources.enabledSelectableInputSourceCount()
+        guard inputSourceCount == 2 else {
+            throw InputEngineError.invalidInputSourceCount(inputSourceCount)
+        }
+
+        let hidChange: HIDMappingChange
+        if try hid.hasTidyTapMapping() {
+            hidChange = try hid.prepareEnable(existingOwnership: ownership.hid)
+        } else {
+            hidChange = try hid.prepareEnable()
+        }
+
+        let hotkeyChange: Hotkey60Change
+        if try hotkey.hasTidyTapHotkey() {
+            hotkeyChange = try hotkey.prepareEnable(existingOwnership: ownership.hotkey60)
+        } else {
+            hotkeyChange = try hotkey.prepareEnable()
+            guard hotkeyChange.ownershipAfterCommit == ownership.hotkey60 else {
+                throw InputEngineError.symbolicHotkeyOwnershipConflict
+            }
+        }
+
+        _ = try completePreparedEnable(CapsLockEnablePlan(
+            hid: hidChange,
+            hotkey60: hotkeyChange
+        ))
+    }
+
+    /// Computes the durable ownership record without changing the system.
+    public func prepareOwnershipForEnable() throws -> CapsLockFeatureOwnership {
+        guard let ownership = try prepareEnablePlan().ownership else {
+            throw TransactionFailure(primaryDescription: "missing ownership after prepare")
+        }
+        return ownership
+    }
+
+    public func isApplied(_ ownership: CapsLockFeatureOwnership) throws -> Bool {
+        guard ownership.hid == .current else {
+            throw InputEngineError.capsLockOwnershipConflict
+        }
+        return try hid.hasTidyTapMapping() && hotkey.hasTidyTapHotkey()
+    }
+
+    public func disable(ownership: CapsLockFeatureOwnership) throws {
+        let hotkeyChange = try hotkey.hasTidyTapHotkey()
+            ? hotkey.prepareDisable(ownership: ownership.hotkey60) : nil
+        let hidChange = try hid.hasTidyTapMapping()
+            ? hid.prepareDisable(ownership: ownership.hid) : nil
+        guard hotkeyChange != nil || hidChange != nil else { return }
+        do {
+            if let hotkeyChange { try hotkey.commit(hotkeyChange) }
             do {
-                try hid.commit(hidChange)
+                if let hidChange { try hid.commit(hidChange) }
             } catch {
                 var actions: [(InputEngineComponent, () throws -> Void)] = []
-                if !Self.isPreWriteRejection(error, for: .hidMappings) {
+                if let hidChange, !Self.isPreWriteRejection(error, for: .hidMappings) {
                     actions.append((.hidMappings, { try self.hid.rollbackIfApplied(hidChange) }))
                 }
-                actions.append((.symbolicHotkey60, { try self.hotkey.rollbackIfApplied(hotkeyChange) }))
+                if let hotkeyChange { actions.append((.symbolicHotkey60, { try self.hotkey.rollbackIfApplied(hotkeyChange) })) }
                 let rollbackIssues = rollbackIssues(for: actions)
                 throw TransactionFailure(
                     primaryDescription: String(describing: error),
@@ -357,10 +521,10 @@ public final class CapsLockFeatureController: @unchecked Sendable {
         } catch let failure as TransactionFailure {
             throw failure
         } catch {
-            let actions: [(InputEngineComponent, () throws -> Void)] =
-                Self.isPreWriteRejection(error, for: .symbolicHotkey60)
-                ? []
-                : [(.symbolicHotkey60, { try self.hotkey.rollbackIfApplied(hotkeyChange) })]
+            var actions: [(InputEngineComponent, () throws -> Void)] = []
+            if let hotkeyChange, !Self.isPreWriteRejection(error, for: .symbolicHotkey60) {
+                actions.append((.symbolicHotkey60, { try self.hotkey.rollbackIfApplied(hotkeyChange) }))
+            }
             let rollbackIssues = rollbackIssues(for: actions)
             throw TransactionFailure(
                 primaryDescription: String(describing: error),

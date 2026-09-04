@@ -439,6 +439,109 @@ final class CapsLockFeatureControllerTests: XCTestCase {
         )
     }
 
+    func testPreparedEnableCompletesAfterHIDOnlyCrash() throws {
+        let system = FakeSystemApplyAdapter(hotkeyDomain: originalDomain)
+        let feature = makeFeature(system)
+        let plan = try feature.prepareEnablePlan()
+        system.hidMappings = plan.hid.after
+
+        let ownership = try feature.completePreparedEnable(plan)
+
+        XCTAssertEqual(ownership, plan.ownership)
+        XCTAssertEqual(system.hidMappings, [.tidyTapCapsLock])
+        XCTAssertEqual(
+            InputSourceShortcutController.hotkey60(in: system.hotkeyDomain),
+            .tidyTapHotkey60
+        )
+        XCTAssertEqual(system.hotkeyApplyCount, 1)
+        XCTAssertEqual(system.activationCount, 1)
+    }
+
+    func testPreparedEnableReactivatesAfterHotkeyWriteBeforeActivateCrash() throws {
+        let system = FakeSystemApplyAdapter(hotkeyDomain: originalDomain)
+        let feature = makeFeature(system)
+        let plan = try feature.prepareEnablePlan()
+        system.hidMappings = plan.hid.after
+        system.hotkeyDomain = plan.hotkey60.after
+
+        _ = try feature.completePreparedEnable(plan)
+
+        XCTAssertEqual(system.hidApplyCount, 0)
+        XCTAssertEqual(system.hotkeyApplyCount, 0)
+        XCTAssertEqual(system.activationCount, 1)
+    }
+
+    func testRebootRecoveryReappliesOnlyMissingHIDWhenHotkeySurvives() throws {
+        let system = FakeSystemApplyAdapter(hotkeyDomain: originalDomain)
+        let feature = makeFeature(system)
+        let ownership = try feature.enable()
+        system.hidMappings = []
+        let hotkeyWritesBeforeRecovery = system.hotkeyApplyCount
+
+        try feature.recoverHIDAfterReset(ownership: ownership)
+
+        XCTAssertEqual(system.hidMappings, [.tidyTapCapsLock])
+        XCTAssertEqual(system.hotkeyApplyCount, hotkeyWritesBeforeRecovery)
+        XCTAssertEqual(
+            InputSourceShortcutController.hotkey60(in: system.hotkeyDomain),
+            .tidyTapHotkey60
+        )
+    }
+
+    func testPreparedRecoveryRollsBackJournalOwnedHIDWhenHotkeyIsStale() throws {
+        let staleDomain = InputSourceShortcutController.replacingHotkey60(
+            in: originalDomain,
+            with: .dictionary(["external": .bool(true)])
+        )
+        let system = FakeSystemApplyAdapter(hotkeyDomain: originalDomain)
+        let feature = makeFeature(system)
+        let plan = try feature.prepareEnablePlan()
+        system.hidMappings = plan.hid.after
+        system.hotkeyDomain = staleDomain
+
+        XCTAssertThrowsError(try feature.completePreparedEnable(plan)) {
+            XCTAssertEqual($0 as? InputEngineError, .staleSystemState(.symbolicHotkey60))
+        }
+        XCTAssertEqual(system.hidMappings, plan.hid.before)
+        XCTAssertEqual(system.hotkeyDomain, staleDomain)
+    }
+
+    func testUnknownOwnershipVersionCannotRecoverRebootHID() {
+        let domain = InputSourceShortcutController.replacingHotkey60(
+            in: originalDomain,
+            with: .tidyTapHotkey60
+        )
+        let system = FakeSystemApplyAdapter(hotkeyDomain: domain)
+        let ownership = CapsLockFeatureOwnership(
+            hid: CapsHIDOwnership(version: 99),
+            hotkey60: Hotkey60Ownership(backup: nil)
+        )
+
+        XCTAssertThrowsError(try makeFeature(system).recoverHIDAfterReset(ownership: ownership)) {
+            XCTAssertEqual($0 as? InputEngineError, .capsLockOwnershipConflict)
+        }
+        XCTAssertTrue(system.hidMappings.isEmpty)
+    }
+
+    func testUnknownOwnershipVersionCannotBeReportedAsApplied() {
+        let domain = InputSourceShortcutController.replacingHotkey60(
+            in: originalDomain,
+            with: .tidyTapHotkey60
+        )
+        let system = FakeSystemApplyAdapter(
+            hidMappings: [.tidyTapCapsLock],
+            hotkeyDomain: domain
+        )
+        let ownership = CapsLockFeatureOwnership(
+            hid: CapsHIDOwnership(version: 99),
+            hotkey60: Hotkey60Ownership(backup: nil)
+        )
+
+        XCTAssertThrowsError(try makeFeature(system).isApplied(ownership)) {
+            XCTAssertEqual($0 as? InputEngineError, .capsLockOwnershipConflict)
+        }
+    }
+
     private func makeFeature(_ system: FakeSystemApplyAdapter) -> CapsLockFeatureController {
         CapsLockFeatureController(
             hid: CapsLockController(system: system),
