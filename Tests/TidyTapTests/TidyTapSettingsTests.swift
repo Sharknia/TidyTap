@@ -1,6 +1,7 @@
 import XCTest
 import TidyTapInputEngine
 
+@MainActor
 final class TidyTapSettingsTests: XCTestCase {
     func testDefaultSettingsKeepEveryCapabilityDisabled() {
         XCTAssertEqual(TidyTapSettings.defaults, TidyTapSettings(

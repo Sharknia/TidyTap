@@ -9,13 +9,17 @@ final class HelperAppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let preferences = TidyTapPreferencesStore()
+        let inputFeatures = InputFeaturesAdapter()
         let coordinator = ApplyCoordinator(
             preferences: preferences,
             capsFeature: CapsLockFeatureAdapter(system: MacOSSystemApplyAdapter(), ownershipStore: preferences),
-            inputFeatures: InputFeaturesAdapter(),
+            inputFeatures: inputFeatures,
             menuBar: MenuBarController(),
             terminator: ApplicationTerminator()
         )
+        inputFeatures.runtimeStatusHandler = { [weak coordinator] result, error in
+            coordinator?.reportRuntimeInput(result, error: error)
+        }
         let lifecycle = HelperLifecycle(coordinator: coordinator)
         self.lifecycle = lifecycle
         lifecycle.start()

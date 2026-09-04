@@ -2,6 +2,7 @@
 
 /// The helper owns the optional status item. Its menu intentionally has just
 /// one action; feature controls remain in the Dock application's settings UI.
+@MainActor
 final class MenuBarController: NSObject, TidyTapMenuBarApplying {
     private var statusItem: NSStatusItem?
 

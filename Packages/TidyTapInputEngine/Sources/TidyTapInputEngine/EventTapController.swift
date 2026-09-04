@@ -80,6 +80,7 @@ public final class EventTapController: @unchecked Sendable {
     private let permissions: any InputPermissionChecking
     private let backend: any EventTapBackend
     private let sideButtons: SideButtonController
+    private let statusObserver: (@Sendable (EventTapStatus) -> Void)?
     private let lock = NSLock()
     private var scroll = ScrollController()
     private var configuration = EventTapConfiguration(
@@ -91,11 +92,13 @@ public final class EventTapController: @unchecked Sendable {
     public init(
         permissions: any InputPermissionChecking,
         backend: any EventTapBackend,
-        sideButtons: SideButtonController
+        sideButtons: SideButtonController,
+        statusObserver: (@Sendable (EventTapStatus) -> Void)? = nil
     ) {
         self.permissions = permissions
         self.backend = backend
         self.sideButtons = sideButtons
+        self.statusObserver = statusObserver
     }
 
     public var status: EventTapStatus {
@@ -379,6 +382,7 @@ public final class EventTapController: @unchecked Sendable {
         lock.lock()
         storedStatus = status
         lock.unlock()
+        statusObserver?(status)
         return status
     }
 }

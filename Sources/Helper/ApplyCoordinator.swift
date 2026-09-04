@@ -16,6 +16,7 @@ enum TidyTapInputFeatureApplyResult: Equatable {
     case partiallyApplied(unavailablePermissions: Set<TidyTapPermission>)
 }
 
+@MainActor
 protocol TidyTapMenuBarApplying: AnyObject {
     func applyMenuBar(visible: Bool) throws
 }
@@ -26,6 +27,7 @@ protocol TidyTapTerminating: AnyObject {
 
 /// Runs the whole settings snapshot as one serial transaction. On any failure,
 /// it reapplies the last known-good snapshot in reverse component order.
+@MainActor
 final class ApplyCoordinator {
     private let preferences: TidyTapPreferencesStoring
     private let capsFeature: TidyTapCapsFeatureApplying
@@ -52,6 +54,29 @@ final class ApplyCoordinator {
     @discardableResult
     func applyLatestSettings() -> TidyTapApplyStatus {
         apply(preferences.readRequest())
+    }
+
+    /// Runtime permission revocation/recovery happens outside a settings write;
+    /// persist a correlated result so a running Dock app updates immediately.
+    func reportRuntimeInput(
+        _ result: TidyTapInputFeatureApplyResult?,
+        error: TidyTapInputFeatureAdapterError?
+    ) {
+        lock.lock(); defer { lock.unlock() }
+        let request = preferences.readRequest()
+        let status: TidyTapApplyStatus
+        if let result {
+            switch result {
+            case .applied: status = .applied(request.applyRequestID)
+            case .partiallyApplied(let permissions):
+                status = TidyTapApplyStatus(applyRequestID: request.applyRequestID, outcome: .partiallyApplied, failedComponent: .eventTap, errorCode: "eventTap.permissionPartial.\(permissions.map(\.rawValue).sorted().joined(separator: "."))")
+            }
+        } else {
+            status = failure(request.applyRequestID, component: .eventTap, error: error ?? .eventTapFailed)
+        }
+        let effective = effectiveSettings(request.settings, status: status)
+        if effective != request.settings { try? preferences.write(settings: effective, applyRequestID: request.applyRequestID) }
+        report(status)
     }
 
     @discardableResult

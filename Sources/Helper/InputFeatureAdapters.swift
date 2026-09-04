@@ -70,7 +70,10 @@ final class CapsLockFeatureAdapter: TidyTapCapsFeatureApplying {
 }
 
 final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
+    private final class RuntimeSink: @unchecked Sendable { var handler: ((EventTapStatus) -> Void)? }
     private let controller: EventTapController
+    private let runtimeSink: RuntimeSink
+    var runtimeStatusHandler: ((TidyTapInputFeatureApplyResult?, TidyTapInputFeatureAdapterError?) -> Void)?
 
     init(
         permissionChecker: any InputPermissionChecking = CGInputPermissionChecker(),
@@ -80,11 +83,15 @@ final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
             synthesizer: CGNavigationSynthesizer()
         )
     ) {
+        let sink = RuntimeSink()
+        runtimeSink = sink
         controller = EventTapController(
             permissions: permissionChecker,
             backend: backend,
-            sideButtons: sideButtons
+            sideButtons: sideButtons,
+            statusObserver: { status in sink.handler?(status) }
         )
+        sink.handler = { [weak self] status in self?.report(status) }
     }
 
     func apply(
@@ -115,6 +122,19 @@ final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
         switch permission {
         case .accessibility: .accessibility
         case .inputMonitoring: .inputMonitoring
+        }
+    }
+
+    private func report(_ status: EventTapStatus) {
+        switch status {
+        case .running, .stopped, .drainingButtonPresses:
+            runtimeStatusHandler?(.applied, nil)
+        case .partiallyRunning(_, let missing):
+            runtimeStatusHandler?(.partiallyApplied(unavailablePermissions: Set(missing.map(Self.permission))), nil)
+        case .permissionDenied(let missing):
+            runtimeStatusHandler?(nil, .permissionDenied(Set(missing.map(Self.permission))))
+        case .failed:
+            runtimeStatusHandler?(nil, .eventTapFailed)
         }
     }
 }

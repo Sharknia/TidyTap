@@ -21,7 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsCoordinator.restoreSession()
 
         let controller = SettingsViewController(
-            settings: settingsCoordinator.persistedSettings(),
+            settings: settingsCoordinator.settingsForUI(),
             delegate: self
         )
         let window = NSWindow(contentViewController: controller)
@@ -57,6 +57,10 @@ extension AppDelegate: SettingsViewControllerDelegate {
         guard let coordinator = settingsCoordinator else { return false }
         do {
             let requestID = try coordinator.save(settings)
+            if coordinator.loginItemStatus() != .enabled, settings.launchAtLogin {
+                controller.apply(coordinator.settingsForUI())
+                controller.showPermissionMessage(nil)
+            }
             controller.showApplyStatus(.pending(requestID))
         } catch {
             controller.apply(coordinator.persistedSettings())

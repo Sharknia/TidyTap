@@ -49,6 +49,14 @@ final class SettingsCoordinator {
         preferences.readRequest().settings
     }
 
+    func settingsForUI() -> TidyTapSettings {
+        var settings = persistedSettings()
+        settings.launchAtLogin = loginItemManager.status() == .enabled
+        return settings
+    }
+
+    func loginItemStatus() -> TidyTapLoginItemStatus { loginItemManager.status() }
+
     @discardableResult
     func save(_ settings: TidyTapSettings) throws -> UUID {
         let previousRequest = preferences.readRequest()
