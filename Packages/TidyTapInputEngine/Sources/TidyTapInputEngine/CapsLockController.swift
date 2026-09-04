@@ -108,6 +108,10 @@ public final class CapsLockController: @unchecked Sendable {
         }
         try rollback(change)
     }
+
+    public func hasTidyTapMapping() throws -> Bool {
+        try system.readHIDMappings().contains(.tidyTapCapsLock)
+    }
 }
 
 public struct Hotkey60Ownership: Codable, Equatable, Sendable {
@@ -235,6 +239,10 @@ public final class InputSourceShortcutController: @unchecked Sendable {
         return hotkeys[hotkey60Key]
     }
 
+    public func hasTidyTapHotkey() throws -> Bool {
+        try Self.checkedHotkey60(in: system.readSymbolicHotkeyDomain()) == .tidyTapHotkey60
+    }
+
     private static func checkedHotkey60(
         in domain: PropertyListDictionary
     ) throws -> PropertyListValue? {
@@ -335,19 +343,40 @@ public final class CapsLockFeatureController: @unchecked Sendable {
         return CapsLockFeatureOwnership(hid: hidOwnership, hotkey60: hotkeyOwnership)
     }
 
+    /// Computes the durable ownership record without changing the system.
+    public func prepareOwnershipForEnable() throws -> CapsLockFeatureOwnership {
+        let inputSourceCount = try inputSources.enabledSelectableInputSourceCount()
+        guard inputSourceCount == 2 else { throw InputEngineError.invalidInputSourceCount(inputSourceCount) }
+        let hidChange = try hid.prepareEnable()
+        let hotkeyChange = try hotkey.prepareEnable()
+        guard let hidOwnership = hidChange.ownershipAfterCommit,
+              let hotkeyOwnership = hotkeyChange.ownershipAfterCommit else {
+            throw TransactionFailure(primaryDescription: "missing ownership after prepare")
+        }
+        return CapsLockFeatureOwnership(hid: hidOwnership, hotkey60: hotkeyOwnership)
+    }
+
+    public func isApplied(_ ownership: CapsLockFeatureOwnership) throws -> Bool {
+        _ = ownership
+        return try hid.hasTidyTapMapping() && hotkey.hasTidyTapHotkey()
+    }
+
     public func disable(ownership: CapsLockFeatureOwnership) throws {
-        let hotkeyChange = try hotkey.prepareDisable(ownership: ownership.hotkey60)
-        let hidChange = try hid.prepareDisable(ownership: ownership.hid)
+        let hotkeyChange = try hotkey.hasTidyTapHotkey()
+            ? hotkey.prepareDisable(ownership: ownership.hotkey60) : nil
+        let hidChange = try hid.hasTidyTapMapping()
+            ? hid.prepareDisable(ownership: ownership.hid) : nil
+        guard hotkeyChange != nil || hidChange != nil else { return }
         do {
-            try hotkey.commit(hotkeyChange)
+            if let hotkeyChange { try hotkey.commit(hotkeyChange) }
             do {
-                try hid.commit(hidChange)
+                if let hidChange { try hid.commit(hidChange) }
             } catch {
                 var actions: [(InputEngineComponent, () throws -> Void)] = []
-                if !Self.isPreWriteRejection(error, for: .hidMappings) {
+                if let hidChange, !Self.isPreWriteRejection(error, for: .hidMappings) {
                     actions.append((.hidMappings, { try self.hid.rollbackIfApplied(hidChange) }))
                 }
-                actions.append((.symbolicHotkey60, { try self.hotkey.rollbackIfApplied(hotkeyChange) }))
+                if let hotkeyChange { actions.append((.symbolicHotkey60, { try self.hotkey.rollbackIfApplied(hotkeyChange) })) }
                 let rollbackIssues = rollbackIssues(for: actions)
                 throw TransactionFailure(
                     primaryDescription: String(describing: error),
@@ -357,10 +386,10 @@ public final class CapsLockFeatureController: @unchecked Sendable {
         } catch let failure as TransactionFailure {
             throw failure
         } catch {
-            let actions: [(InputEngineComponent, () throws -> Void)] =
-                Self.isPreWriteRejection(error, for: .symbolicHotkey60)
-                ? []
-                : [(.symbolicHotkey60, { try self.hotkey.rollbackIfApplied(hotkeyChange) })]
+            var actions: [(InputEngineComponent, () throws -> Void)] = []
+            if let hotkeyChange, !Self.isPreWriteRejection(error, for: .symbolicHotkey60) {
+                actions.append((.symbolicHotkey60, { try self.hotkey.rollbackIfApplied(hotkeyChange) }))
+            }
             let rollbackIssues = rollbackIssues(for: actions)
             throw TransactionFailure(
                 primaryDescription: String(describing: error),

@@ -38,13 +38,18 @@ final class CapsLockFeatureAdapter: TidyTapCapsFeatureApplying {
     func apply(capsLockEnabled: Bool) throws {
         if capsLockEnabled {
             if let journal = try readJournal(), journal.enabled {
-                if journal.phase == .applied { return }
-                // A crash after mutation is finalized on restart; a pre-mutation
-                // journal is retried safely by the engine's ownership checks.
+                if try controller.isApplied(journal.ownership) {
+                    if journal.phase == .prepared { try writeJournal(.init(enabled: true, phase: .applied, ownership: journal.ownership)) }
+                    return
+                }
+                // A reboot removes HID state but not this durable journal. The
+                // ownership record lets the engine safely apply a fresh mapping.
                 let ownership = try controller.enable(existingOwnership: nil)
                 try writeJournal(.init(enabled: true, phase: .applied, ownership: ownership))
                 return
             }
+            let preparedOwnership = try controller.prepareOwnershipForEnable()
+            try writeJournal(.init(enabled: true, phase: .prepared, ownership: preparedOwnership))
             let ownership = try controller.enable(existingOwnership: nil)
             try writeJournal(.init(enabled: true, phase: .applied, ownership: ownership))
         } else if let journal = try readJournal() {
