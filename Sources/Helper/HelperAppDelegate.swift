@@ -1,4 +1,5 @@
 import AppKit
+import TidyTapInputEngine
 
 /// A background-only helper. It owns the process lifetime and applies the
 /// complete persisted snapshot at launch and after each change notification.
@@ -10,8 +11,8 @@ final class HelperAppDelegate: NSObject, NSApplicationDelegate {
         let preferences = TidyTapPreferencesStore()
         let coordinator = ApplyCoordinator(
             preferences: preferences,
-            capsFeature: NoopCapsFeature(),
-            inputFeatures: NoopInputFeatures(),
+            capsFeature: CapsLockFeatureAdapter(system: MacOSSystemApplyAdapter(), ownershipStore: preferences),
+            inputFeatures: InputFeaturesAdapter(),
             menuBar: MenuBarController(),
             terminator: ApplicationTerminator()
         )

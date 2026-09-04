@@ -39,6 +39,8 @@ final class LoginItemCoordinator: TidyTapLoginItemManaging {
             .disabled
         case .requiresApproval:
             .requiresApproval
+        case .notFound:
+            .unavailable
         @unknown default:
             .unavailable
         }

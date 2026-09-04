@@ -87,6 +87,9 @@ struct TidyTapSettingsRequest: Codable, Equatable {
 enum TidyTapApplyOutcome: String, Codable, Equatable {
     case pending
     case applied
+    /// A requested input feature could not run because a required permission is
+    /// unavailable, but an independent requested feature remains active.
+    case partiallyApplied
     case failed
     case recoveryRequired
 }
@@ -134,13 +137,21 @@ protocol TidyTapPreferencesStoring: AnyObject {
     func writeApplyStatus(_ status: TidyTapApplyStatus) throws
 }
 
+/// Caps Lock changes system-owned values, so the helper persists the exact
+/// engine ownership token in the same durable domain as the settings snapshot.
+/// The token stays helper-private; the Dock app never interprets it.
+protocol TidyTapCapsOwnershipStoring: AnyObject {
+    func readCapsLockOwnershipData() -> Data?
+    func writeCapsLockOwnershipData(_ data: Data?) throws
+}
+
 enum TidyTapPreferencesError: Error {
     case encodingFailed
 }
 
 /// Both processes explicitly use this suite rather than `UserDefaults.standard`
 /// so they always address exactly one preferences domain.
-final class TidyTapPreferencesStore: TidyTapPreferencesStoring {
+final class TidyTapPreferencesStore: TidyTapPreferencesStoring, TidyTapCapsOwnershipStoring {
     private let defaults: UserDefaults
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
@@ -188,6 +199,16 @@ final class TidyTapPreferencesStore: TidyTapPreferencesStoring {
         synchronize()
     }
 
+    func readCapsLockOwnershipData() -> Data? {
+        synchronize()
+        return defaults.data(forKey: TidyTapPreferences.capsLockOwnershipKey)
+    }
+
+    func writeCapsLockOwnershipData(_ data: Data?) throws {
+        defaults.set(data, forKey: TidyTapPreferences.capsLockOwnershipKey)
+        synchronize()
+    }
+
     private func encode<T: Encodable>(_ value: T) throws -> Data {
         guard let data = try? encoder.encode(value) else {
             throw TidyTapPreferencesError.encodingFailed
@@ -205,4 +226,5 @@ enum TidyTapPreferences {
     static let settingsKey = "settings"
     static let applyRequestIDKey = "applyRequestID"
     static let applyStatusKey = "applyStatus"
+    static let capsLockOwnershipKey = "capsLockOwnership"
 }

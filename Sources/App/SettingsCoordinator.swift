@@ -23,6 +23,7 @@ final class SettingsCoordinator {
 
     private(set) var latestRequestID: UUID?
     private(set) var latestApplyStatus: TidyTapApplyStatus?
+    private var settingsBeforeLatestRequest: TidyTapSettings?
 
     init(
         preferences: TidyTapPreferencesStoring = TidyTapPreferencesStore(),
@@ -42,6 +43,10 @@ final class SettingsCoordinator {
         if request.settings.requiresHelper {
             helperLauncher.launchOrActivateHelper()
         }
+    }
+
+    func persistedSettings() -> TidyTapSettings {
+        preferences.readRequest().settings
     }
 
     @discardableResult
@@ -72,6 +77,7 @@ final class SettingsCoordinator {
 
         latestRequestID = requestID
         latestApplyStatus = .pending(requestID)
+        settingsBeforeLatestRequest = previousRequest.settings
 
         // A running helper must receive an all-off request so it can restore
         // state and exit. If it is not running, no helper is necessary.
@@ -94,5 +100,16 @@ final class SettingsCoordinator {
 
         latestApplyStatus = status
         return status
+    }
+
+    /// A rejected helper request has already been restored by the helper. Keep
+    /// the visible UI truthful without issuing a second settings submission.
+    func visibleSettings(for status: TidyTapApplyStatus) -> TidyTapSettings {
+        switch status.outcome {
+        case .failed, .recoveryRequired:
+            return settingsBeforeLatestRequest ?? persistedSettings()
+        case .pending, .applied, .partiallyApplied:
+            return persistedSettings()
+        }
     }
 }

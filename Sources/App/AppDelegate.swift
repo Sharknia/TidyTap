@@ -1,6 +1,7 @@
 import AppKit
 
 @main
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowController: NSWindowController?
     private var settingsCoordinator: SettingsCoordinator?
@@ -20,7 +21,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         observesApplyResults = true
 
-        let controller = SettingsViewController()
+        let controller = SettingsViewController(
+            settings: settingsCoordinator.persistedSettings(),
+            delegate: self
+        )
         let window = NSWindow(contentViewController: controller)
         window.title = TidyTapStrings.appName
         window.setContentSize(NSSize(width: 520, height: 420))
@@ -39,6 +43,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func applyResultDidArrive(_ notification: Notification) {
-        _ = settingsCoordinator?.receiveApplyResult()
+        guard let coordinator = settingsCoordinator,
+              let status = coordinator.receiveApplyResult(),
+              let controller = windowController?.contentViewController as? SettingsViewController else {
+            return
+        }
+        controller.apply(coordinator.visibleSettings(for: status))
+        controller.showApplyStatus(status)
+    }
+}
+
+extension AppDelegate: SettingsViewControllerDelegate {
+    func settingsViewController(_ controller: SettingsViewController, didChange settings: TidyTapSettings) -> Bool {
+        guard let coordinator = settingsCoordinator else { return false }
+        do {
+            let requestID = try coordinator.save(settings)
+            controller.showApplyStatus(.pending(requestID))
+        } catch {
+            controller.apply(coordinator.persistedSettings())
+            controller.showPermissionMessage(TidyTapStrings.changesCouldNotBeApplied)
+        }
+        return true
+    }
+
+    func settingsViewControllerRequestsPermissionSettings(_ controller: SettingsViewController) -> Bool {
+        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+        NSWorkspace.shared.open(url)
+        return true
     }
 }

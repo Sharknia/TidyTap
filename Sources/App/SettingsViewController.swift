@@ -48,6 +48,22 @@ final class SettingsViewController: NSViewController {
         self.settings = settings; guard isViewLoaded else { return }
         capsButton.state = settings.capsLockInputSourceSwitching ? .on : .off; wheelButton.state = settings.reverseMouseWheelVertically ? .on : .off; sideButton.state = settings.sideButtonNavigation ? .on : .off; loginButton.state = settings.launchAtLogin ? .on : .off; menuBarButton.state = settings.showInMenuBar ? .on : .off
     }
+    func showApplyStatus(_ status: TidyTapApplyStatus) {
+        let isPending = status.outcome == .pending
+        [capsButton, wheelButton, sideButton, loginButton, menuBarButton].forEach { $0.isEnabled = !isPending }
+        switch status.outcome {
+        case .pending:
+            showPermissionMessage(TidyTapStrings.applyingChanges)
+        case .applied:
+            showPermissionMessage(TidyTapStrings.changesApplied)
+        case .partiallyApplied:
+            showPermissionMessage(TidyTapStrings.permissionRequired)
+        case .failed:
+            showPermissionMessage(status.errorCode?.contains("permissionDenied") == true ? TidyTapStrings.permissionRequired : TidyTapStrings.changesCouldNotBeApplied)
+        case .recoveryRequired:
+            showPermissionMessage(TidyTapStrings.changesCouldNotBeApplied)
+        }
+    }
     /// Displays the inline permission/error area; pass nil to hide it.
     func showPermissionMessage(_ message: String?) { permissionMessage.stringValue = message ?? ""; permissionContainer.isHidden = message == nil }
     private func versionText() -> String { let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0"; return String(format: TidyTapStrings.versionFormat, version) }
@@ -69,6 +85,7 @@ final class SettingsViewController: NSViewController {
     @objc private func openLink(_ sender: NSButton) { guard let value = sender.identifier?.rawValue, let url = URL(string: value) else { return }; NSWorkspace.shared.open(url) }
 }
 
+@MainActor
 protocol SettingsViewControllerDelegate: AnyObject {
     /// Return true when the delegate handled the action; false selects the
     /// controller's closure fallback.

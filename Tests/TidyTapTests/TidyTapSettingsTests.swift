@@ -1,4 +1,5 @@
 import XCTest
+import TidyTapInputEngine
 
 final class TidyTapSettingsTests: XCTestCase {
     func testDefaultSettingsKeepEveryCapabilityDisabled() {
@@ -273,6 +274,95 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(loginItem.values, [false, true])
     }
 
+    func testCorrelatedFailedApplyRestoresVisiblePersistedSnapshotWithoutSecondSubmission() throws {
+        let original = TidyTapSettings.defaults
+        let store = InMemoryPreferences(request: .init(settings: original, applyRequestID: UUID()))
+        let coordinator = SettingsCoordinator(
+            preferences: store,
+            helperLauncher: RecordingHelperLauncher(),
+            loginItemManager: FailingLoginItem(failingValues: [])
+        )
+        var requested = original
+        requested.sideButtonNavigation = true
+        let requestID = try coordinator.save(requested)
+        let failed = TidyTapApplyStatus(
+            applyRequestID: requestID,
+            outcome: .failed,
+            failedComponent: .eventTap,
+            errorCode: "eventTap.permissionDenied.accessibility"
+        )
+        try store.writeApplyStatus(failed)
+
+        XCTAssertEqual(coordinator.receiveApplyResult(), failed)
+        XCTAssertEqual(coordinator.visibleSettings(for: failed), original)
+        XCTAssertEqual(store.request.settings, requested, "UI rollback must not submit a second request")
+    }
+
+    func testPartialInputPermissionIsReportedWithTheRequestID() {
+        let requestID = UUID()
+        let settings = TidyTapSettings(
+            capsLockInputSourceSwitching: false,
+            reverseMouseWheelVertically: true,
+            sideButtonNavigation: true,
+            launchAtLogin: false,
+            showInMenuBar: false
+        )
+        let store = InMemoryPreferences(request: .init(settings: settings, applyRequestID: requestID))
+        let coordinator = ApplyCoordinator(
+            preferences: store,
+            capsFeature: RecordingCaps(calls: CallLog()),
+            inputFeatures: PartialInput(),
+            menuBar: RecordingMenu(calls: CallLog()),
+            terminator: RecordingTerminator(calls: CallLog())
+        )
+
+        let result = coordinator.applyLatestSettings()
+
+        XCTAssertEqual(result.applyRequestID, requestID)
+        XCTAssertEqual(result.outcome, .partiallyApplied)
+        XCTAssertEqual(result.errorCode, "eventTap.permissionPartial.inputMonitoring")
+    }
+
+    func testInputAdapterRetainsSideButtonsForInputMonitoringPartialState() throws {
+        let permissions = FakeInputPermissions(accessibility: true, inputMonitoring: false)
+        let backend = FakeEventTapBackend()
+        let adapter = InputFeaturesAdapter(
+            permissionChecker: permissions,
+            backend: backend,
+            sideButtons: SideButtonController(
+                applicationProvider: FakeFocusedProvider(),
+                synthesizer: FakeNavigationSynthesizer()
+            )
+        )
+
+        let result = try adapter.apply(reverseMouseWheel: true, sideButtonNavigation: true)
+
+        XCTAssertEqual(result, .partiallyApplied(unavailablePermissions: [.inputMonitoring]))
+        XCTAssertEqual(backend.configurations, [.init(reverseMouseScroll: false, sideButtonNavigation: true)])
+        XCTAssertEqual(backend.captureSideButtons, [true])
+    }
+
+    func testCapsAdapterPersistsEngineOwnershipThenRestoresOnlyItsOwnedValues() throws {
+        let system = FakeCapsSystem()
+        let ownership = InMemoryCapsOwnership()
+        let controller = CapsLockFeatureController(
+            hid: CapsLockController(system: system),
+            hotkey: InputSourceShortcutController(system: system),
+            inputSources: system
+        )
+        let adapter = CapsLockFeatureAdapter(controller: controller, ownershipStore: ownership)
+
+        try adapter.apply(capsLockEnabled: true)
+        XCTAssertEqual(system.mappings, [.tidyTapCapsLock])
+        XCTAssertEqual(InputSourceShortcutController.hotkey60(in: system.domain), .tidyTapHotkey60)
+        XCTAssertNotNil(ownership.data)
+
+        try adapter.apply(capsLockEnabled: false)
+        XCTAssertTrue(system.mappings.isEmpty)
+        XCTAssertNil(InputSourceShortcutController.hotkey60(in: system.domain))
+        XCTAssertNil(ownership.data)
+    }
+
     private func enabledSettings(showInMenuBar: Bool) -> TidyTapSettings {
         TidyTapSettings(
             capsLockInputSourceSwitching: true,
@@ -319,8 +409,9 @@ private final class RecordingCaps: TidyTapCapsFeatureApplying {
 private final class RecordingInput: TidyTapInputFeaturesApplying {
     let calls: CallLog
     init(calls: CallLog) { self.calls = calls }
-    func apply(reverseMouseWheel: Bool, sideButtonNavigation: Bool) throws {
+    func apply(reverseMouseWheel: Bool, sideButtonNavigation: Bool) throws -> TidyTapInputFeatureApplyResult {
         calls.values.append("input:\(reverseMouseWheel):\(sideButtonNavigation)")
+        return .applied
     }
     func forcePassThrough() throws { calls.values.append("input:passThrough") }
 }
@@ -328,11 +419,12 @@ private final class RecordingInput: TidyTapInputFeaturesApplying {
 private final class FailingInput: TidyTapInputFeaturesApplying {
     let calls: CallLog
     init(calls: CallLog) { self.calls = calls }
-    func apply(reverseMouseWheel: Bool, sideButtonNavigation: Bool) throws {
+    func apply(reverseMouseWheel: Bool, sideButtonNavigation: Bool) throws -> TidyTapInputFeatureApplyResult {
         calls.values.append("input:\(reverseMouseWheel):\(sideButtonNavigation)")
         if reverseMouseWheel {
             throw TestError.failure
         }
+        return .applied
     }
     func forcePassThrough() throws { calls.values.append("input:passThrough") }
 }
@@ -340,13 +432,66 @@ private final class FailingInput: TidyTapInputFeaturesApplying {
 private final class FailingRollbackInput: TidyTapInputFeaturesApplying {
     let calls: CallLog
     init(calls: CallLog) { self.calls = calls }
-    func apply(reverseMouseWheel: Bool, sideButtonNavigation: Bool) throws {
+    func apply(reverseMouseWheel: Bool, sideButtonNavigation: Bool) throws -> TidyTapInputFeatureApplyResult {
         calls.values.append("input:\(reverseMouseWheel):\(sideButtonNavigation)")
         if !reverseMouseWheel {
             throw TestError.failure
         }
+        return .applied
     }
     func forcePassThrough() throws { calls.values.append("input:passThrough") }
+}
+
+private final class PartialInput: TidyTapInputFeaturesApplying {
+    func apply(reverseMouseWheel: Bool, sideButtonNavigation: Bool) throws -> TidyTapInputFeatureApplyResult {
+        .partiallyApplied(unavailablePermissions: [.inputMonitoring])
+    }
+    func forcePassThrough() throws {}
+}
+
+private struct FakeInputPermissions: InputPermissionChecking {
+    let accessibilityAllowed: Bool
+    let inputMonitoringAllowed: Bool
+    init(accessibility: Bool, inputMonitoring: Bool) {
+        accessibilityAllowed = accessibility
+        inputMonitoringAllowed = inputMonitoring
+    }
+}
+
+private final class FakeEventTapBackend: EventTapBackend, @unchecked Sendable {
+    var configurations = [EventTapConfiguration]()
+    var captureSideButtons = [Bool]()
+    func install(configuration: EventTapConfiguration, captureSideButtons: Bool, handler: @escaping EventTapHandler) throws {
+        configurations.append(configuration)
+        self.captureSideButtons.append(captureSideButtons)
+    }
+    func enable() throws {}
+    func uninstall() {}
+}
+
+private struct FakeFocusedProvider: FocusedApplicationProviding {
+    func focusedApplication() -> FocusedApplication? { nil }
+}
+
+private struct FakeNavigationSynthesizer: NavigationSynthesizing {
+    func synthesize(_ direction: NavigationDirection, for target: FocusedApplication) -> Bool { false }
+}
+
+private final class InMemoryCapsOwnership: TidyTapCapsOwnershipStoring {
+    var data: Data?
+    func readCapsLockOwnershipData() -> Data? { data }
+    func writeCapsLockOwnershipData(_ data: Data?) throws { self.data = data }
+}
+
+private final class FakeCapsSystem: HIDMappingApplying, SymbolicHotkeyApplying, InputSourceCounting, @unchecked Sendable {
+    var mappings = [HIDMapping]()
+    var domain = PropertyListDictionary()
+    func readHIDMappings() throws -> [HIDMapping] { mappings }
+    func applyHIDMappings(_ mappings: [HIDMapping]) throws { self.mappings = mappings }
+    func readSymbolicHotkeyDomain() throws -> PropertyListDictionary { domain }
+    func applySymbolicHotkeyDomain(_ domain: PropertyListDictionary) throws { self.domain = domain }
+    func activateSymbolicHotkeySettings() throws {}
+    func enabledSelectableInputSourceCount() throws -> Int { 2 }
 }
 
 private final class RecordingMenu: TidyTapMenuBarApplying {

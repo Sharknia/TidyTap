@@ -13,6 +13,9 @@ enum TidyTapStrings {
     static let openSystemSettings = String(localized: "Open System Settings", bundle: .main)
     static let versionFormat = String(localized: "Version %@", bundle: .main)
     static let permissionRequired = String(localized: "Permission is required for this feature.", bundle: .main)
+    static let applyingChanges = String(localized: "Applying changes…", bundle: .main)
+    static let changesApplied = String(localized: "Changes applied.", bundle: .main)
+    static let changesCouldNotBeApplied = String(localized: "Changes could not be applied.", bundle: .main)
     static let email = "zel@kakao.com"
     static let emailURL = URL(string: "mailto:zel@kakao.com")!
     static let github = "github.com/Sharknia/TidyTap"
