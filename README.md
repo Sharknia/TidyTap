@@ -16,6 +16,8 @@ TidyTap will use a regular Dock app for configuration and a lightweight backgrou
 
 Initial development.
 
+The scope for `0.1.0` is frozen in the [MVP work plan](docs/MVP_PLAN.md).
+
 ## Contact
 
 - Email: zel@kakao.com
