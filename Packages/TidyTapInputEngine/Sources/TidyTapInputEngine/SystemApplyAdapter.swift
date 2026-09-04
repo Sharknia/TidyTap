@@ -1,3 +1,4 @@
+import Carbon
 import Foundation
 
 public protocol ProcessRunning: Sendable {
@@ -73,7 +74,7 @@ private final class LockedData: @unchecked Sendable {
 
 /// Production adapter for the narrow, stage-0-validated command-line system surface.
 /// It never invokes IOHID APIs and always writes complete freshly prepared payloads.
-public final class MacOSSystemApplyAdapter: HIDMappingApplying, SymbolicHotkeyApplying, @unchecked Sendable {
+public final class MacOSSystemApplyAdapter: HIDMappingApplying, SymbolicHotkeyApplying, InputSourceCounting, @unchecked Sendable {
     public static let hotkeyDomain = "com.apple.symbolichotkeys"
     public static let activateSettingsPath =
         "/System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings"
@@ -148,6 +149,17 @@ public final class MacOSSystemApplyAdapter: HIDMappingApplying, SymbolicHotkeyAp
             arguments: ["-u"],
             input: nil
         )
+    }
+
+    public func enabledSelectableInputSourceCount() throws -> Int {
+        let properties: [CFString: Any] = [
+            kTISPropertyInputSourceCategory: kTISCategoryKeyboardInputSource!,
+            kTISPropertyInputSourceIsSelectCapable: true
+        ]
+        guard let sources = TISCreateInputSourceList(properties as CFDictionary, false) else {
+            throw InputEngineError.invalidSystemData(.inputSources)
+        }
+        return CFArrayGetCount(sources.takeRetainedValue())
     }
 
     static func decodeHIDMappings(_ data: Data) throws -> [HIDMapping] {

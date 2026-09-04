@@ -9,11 +9,18 @@ public enum NavigationDirection: String, Equatable, Sendable {
 
 public struct FocusedApplication: Equatable, Sendable {
     public let bundleIdentifier: String
+    public let processIdentifier: pid_t
     public let isActive: Bool
     public let hasFocusedWindow: Bool
 
-    public init(bundleIdentifier: String, isActive: Bool, hasFocusedWindow: Bool) {
+    public init(
+        bundleIdentifier: String,
+        processIdentifier: pid_t,
+        isActive: Bool,
+        hasFocusedWindow: Bool
+    ) {
         self.bundleIdentifier = bundleIdentifier
+        self.processIdentifier = processIdentifier
         self.isActive = isActive
         self.hasFocusedWindow = hasFocusedWindow
     }
@@ -30,7 +37,11 @@ public protocol FocusedApplicationProviding: Sendable {
 }
 
 public protocol NavigationSynthesizing: Sendable {
-    func synthesize(_ direction: NavigationDirection) -> Bool
+    func synthesize(_ direction: NavigationDirection, for target: FocusedApplication) -> Bool
+}
+
+public protocol ProcessTargetedNavigationPosting: Sendable {
+    func post(_ direction: NavigationDirection, to processIdentifier: pid_t) -> Bool
 }
 
 public enum ButtonEventDisposition: Equatable, Sendable {
@@ -70,6 +81,8 @@ private struct ButtonPressOwnership {
         pressedButtons.removeAll()
         ownedButtons.removeAll()
     }
+
+    var hasActivePresses: Bool { !pressedButtons.isEmpty }
 }
 
 public final class SideButtonController: @unchecked Sendable {
@@ -86,7 +99,16 @@ public final class SideButtonController: @unchecked Sendable {
         self.synthesizer = synthesizer
     }
 
-    public func handleButtonDown(_ button: Int64) -> ButtonEventDisposition {
+    public var hasActivePresses: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return ownership.hasActivePresses
+    }
+
+    public func handleButtonDown(
+        _ button: Int64,
+        navigationEnabled: Bool = true
+    ) -> ButtonEventDisposition {
         guard let direction = Self.direction(for: button) else { return .passThrough }
 
         lock.lock()
@@ -101,10 +123,11 @@ public final class SideButtonController: @unchecked Sendable {
             break
         }
 
-        guard applicationProvider.focusedApplication()?.isSupportedNavigationTarget == true else {
+        guard navigationEnabled else { return .passThrough }
+        guard let target = applicationProvider.focusedApplication(), target.isSupportedNavigationTarget else {
             return .passThrough
         }
-        guard synthesizer.synthesize(direction) else {
+        guard synthesizer.synthesize(direction, for: target) else {
             return .passThrough
         }
         let claimed = ownership.claim(button: button)
@@ -154,6 +177,7 @@ public struct MacOSFocusedApplicationProvider: FocusedApplicationProviding {
         )
         return FocusedApplication(
             bundleIdentifier: bundleIdentifier,
+            processIdentifier: application.processIdentifier,
             isActive: application.isActive,
             hasFocusedWindow: result == .success && focusedWindow != nil
         )
@@ -161,9 +185,32 @@ public struct MacOSFocusedApplicationProvider: FocusedApplicationProviding {
 }
 
 public struct CGNavigationSynthesizer: NavigationSynthesizing {
+    private let applicationProvider: any FocusedApplicationProviding
+    private let eventPoster: any ProcessTargetedNavigationPosting
+
+    public init(
+        applicationProvider: any FocusedApplicationProviding = MacOSFocusedApplicationProvider(),
+        eventPoster: any ProcessTargetedNavigationPosting = CGNavigationEventPoster()
+    ) {
+        self.applicationProvider = applicationProvider
+        self.eventPoster = eventPoster
+    }
+
+    public func synthesize(_ direction: NavigationDirection, for target: FocusedApplication) -> Bool {
+        guard
+            target.isSupportedNavigationTarget,
+            applicationProvider.focusedApplication() == target
+        else {
+            return false
+        }
+        return eventPoster.post(direction, to: target.processIdentifier)
+    }
+}
+
+public struct CGNavigationEventPoster: ProcessTargetedNavigationPosting {
     public init() {}
 
-    public func synthesize(_ direction: NavigationDirection) -> Bool {
+    public func post(_ direction: NavigationDirection, to processIdentifier: pid_t) -> Bool {
         guard
             CGPreflightPostEventAccess(),
             let down = CGEvent(
@@ -181,8 +228,8 @@ public struct CGNavigationSynthesizer: NavigationSynthesizing {
         }
         down.flags = .maskCommand
         up.flags = .maskCommand
-        down.post(tap: .cghidEventTap)
-        up.post(tap: .cghidEventTap)
+        down.postToPid(processIdentifier)
+        up.postToPid(processIdentifier)
         return true
     }
 

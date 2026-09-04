@@ -20,6 +20,7 @@ public final class CGEventTapBackend: EventTapBackend, @unchecked Sendable {
 
     public func install(
         configuration: EventTapConfiguration,
+        captureSideButtons: Bool,
         handler: @escaping EventTapHandler
     ) throws {
         uninstall()
@@ -31,7 +32,7 @@ public final class CGEventTapBackend: EventTapBackend, @unchecked Sendable {
         if configuration.reverseMouseScroll {
             eventMask |= Self.mask(for: .scrollWheel)
         }
-        if configuration.sideButtonNavigation {
+        if captureSideButtons {
             eventMask |= Self.mask(for: .otherMouseDown)
             eventMask |= Self.mask(for: .otherMouseUp)
         }

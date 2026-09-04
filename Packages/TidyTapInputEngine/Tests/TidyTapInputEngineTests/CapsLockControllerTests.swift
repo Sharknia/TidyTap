@@ -1,7 +1,7 @@
 import XCTest
 @testable import TidyTapInputEngine
 
-final class FakeSystemApplyAdapter: HIDMappingApplying, SymbolicHotkeyApplying, @unchecked Sendable {
+final class FakeSystemApplyAdapter: HIDMappingApplying, SymbolicHotkeyApplying, InputSourceCounting, @unchecked Sendable {
     var hidMappings: [HIDMapping]
     var hotkeyDomain: PropertyListDictionary
     var hidApplyCount = 0
@@ -10,6 +10,11 @@ final class FakeSystemApplyAdapter: HIDMappingApplying, SymbolicHotkeyApplying, 
     var failHIDApplyNumbers: Set<Int> = []
     var failHotkeyApplyNumbers: Set<Int> = []
     var failActivationNumbers: Set<Int> = []
+    var inputSourceCount = 2
+    var hidReadCount = 0
+    var hotkeyReadCount = 0
+    var onHIDRead: ((Int) -> Void)?
+    var onHotkeyRead: ((Int) -> Void)?
 
     init(
         hidMappings: [HIDMapping] = [],
@@ -19,7 +24,11 @@ final class FakeSystemApplyAdapter: HIDMappingApplying, SymbolicHotkeyApplying, 
         self.hotkeyDomain = hotkeyDomain
     }
 
-    func readHIDMappings() throws -> [HIDMapping] { hidMappings }
+    func readHIDMappings() throws -> [HIDMapping] {
+        hidReadCount += 1
+        onHIDRead?(hidReadCount)
+        return hidMappings
+    }
 
     func applyHIDMappings(_ mappings: [HIDMapping]) throws {
         hidApplyCount += 1
@@ -27,7 +36,11 @@ final class FakeSystemApplyAdapter: HIDMappingApplying, SymbolicHotkeyApplying, 
         hidMappings = mappings
     }
 
-    func readSymbolicHotkeyDomain() throws -> PropertyListDictionary { hotkeyDomain }
+    func readSymbolicHotkeyDomain() throws -> PropertyListDictionary {
+        hotkeyReadCount += 1
+        onHotkeyRead?(hotkeyReadCount)
+        return hotkeyDomain
+    }
 
     func applySymbolicHotkeyDomain(_ domain: PropertyListDictionary) throws {
         hotkeyApplyCount += 1
@@ -39,6 +52,8 @@ final class FakeSystemApplyAdapter: HIDMappingApplying, SymbolicHotkeyApplying, 
         activationCount += 1
         if failActivationNumbers.contains(activationCount) { throw TestFailure.requested }
     }
+
+    func enabledSelectableInputSourceCount() throws -> Int { inputSourceCount }
 }
 
 private enum TestFailure: Error {
@@ -117,7 +132,7 @@ final class CapsLockControllerTests: XCTestCase {
         system.hidMappings.append(HIDMapping(source: 7, destination: 8))
 
         XCTAssertThrowsError(try controller.commit(change)) {
-            XCTAssertEqual($0 as? InputEngineError, .staleSystemState(.hidMappings))
+            XCTAssertEqual($0 as? InputEngineError, .preWriteStateChanged(.hidMappings))
         }
         XCTAssertEqual(system.hidApplyCount, 0)
     }
@@ -244,7 +259,7 @@ final class InputSourceShortcutControllerTests: XCTestCase {
         system.hotkeyDomain["B"] = .integer(2)
 
         XCTAssertThrowsError(try controller.commit(change)) {
-            XCTAssertEqual($0 as? InputEngineError, .staleSystemState(.symbolicHotkey60))
+            XCTAssertEqual($0 as? InputEngineError, .preWriteStateChanged(.symbolicHotkey60))
         }
 
         system.hotkeyDomain = change.before
@@ -310,6 +325,62 @@ final class CapsLockFeatureControllerTests: XCTestCase {
         XCTAssertEqual(system.hotkeyDomain, originalDomain)
     }
 
+    func testEnableRequiresExactlyTwoInputSourcesBeforeMutation() throws {
+        for count in [1, 3] {
+            let system = FakeSystemApplyAdapter(hotkeyDomain: originalDomain)
+            system.inputSourceCount = count
+            let feature = makeFeature(system)
+
+            XCTAssertThrowsError(try feature.enable()) {
+                XCTAssertEqual($0 as? InputEngineError, .invalidInputSourceCount(count))
+            }
+            XCTAssertEqual(system.hidApplyCount, 0)
+            XCTAssertEqual(system.hotkeyApplyCount, 0)
+            XCTAssertEqual(system.activationCount, 0)
+        }
+
+        let system = FakeSystemApplyAdapter(hotkeyDomain: originalDomain)
+        system.inputSourceCount = 2
+        _ = try makeFeature(system).enable()
+        XCTAssertEqual(system.hidApplyCount, 1)
+        XCTAssertEqual(system.hotkeyApplyCount, 1)
+    }
+
+    func testHIDPreWriteStateChangeDoesNotReportFalseRecoveryRequirement() {
+        let external = HIDMapping(source: 8, destination: 9)
+        let system = FakeSystemApplyAdapter(hotkeyDomain: originalDomain)
+        system.onHIDRead = { read in
+            if read == 2 { system.hidMappings = [external] }
+        }
+
+        XCTAssertThrowsError(try makeFeature(system).enable()) {
+            let failure = $0 as? TransactionFailure
+            XCTAssertEqual(failure?.recoveryRequired, false)
+            XCTAssertEqual(failure?.rollbackIssues, [])
+        }
+        XCTAssertEqual(system.hidApplyCount, 0)
+        XCTAssertEqual(system.hotkeyApplyCount, 0)
+        XCTAssertEqual(system.hidMappings, [external])
+    }
+
+    func testHotkeyPreWriteStateChangeRollsBackOnlyPriorHIDChange() {
+        let externalDomain: PropertyListDictionary = ["External": .integer(1)]
+        let system = FakeSystemApplyAdapter(hotkeyDomain: originalDomain)
+        system.onHotkeyRead = { read in
+            if read == 2 { system.hotkeyDomain = externalDomain }
+        }
+
+        XCTAssertThrowsError(try makeFeature(system).enable()) {
+            let failure = $0 as? TransactionFailure
+            XCTAssertEqual(failure?.recoveryRequired, false)
+            XCTAssertEqual(failure?.rollbackIssues, [])
+        }
+        XCTAssertEqual(system.hidApplyCount, 2, "the earlier HID commit is rolled back")
+        XCTAssertEqual(system.hotkeyApplyCount, 0, "the rejected hotkey write needs no rollback")
+        XCTAssertEqual(system.hidMappings, [])
+        XCTAssertEqual(system.hotkeyDomain, externalDomain)
+    }
+
     func testHotkeyApplyFailureRollsBackHID() {
         let system = FakeSystemApplyAdapter(hotkeyDomain: originalDomain)
         system.failHotkeyApplyNumbers = [1]
@@ -371,7 +442,8 @@ final class CapsLockFeatureControllerTests: XCTestCase {
     private func makeFeature(_ system: FakeSystemApplyAdapter) -> CapsLockFeatureController {
         CapsLockFeatureController(
             hid: CapsLockController(system: system),
-            hotkey: InputSourceShortcutController(system: system)
+            hotkey: InputSourceShortcutController(system: system),
+            inputSources: system
         )
     }
 }

@@ -18,14 +18,43 @@ private final class FakeFocusedApplicationProvider: FocusedApplicationProviding,
 private final class FakeNavigationSynthesizer: NavigationSynthesizing, @unchecked Sendable {
     var succeeds = true
     var directions: [NavigationDirection] = []
+    var targets: [FocusedApplication] = []
 
-    func synthesize(_ direction: NavigationDirection) -> Bool {
+    func synthesize(_ direction: NavigationDirection, for target: FocusedApplication) -> Bool {
         directions.append(direction)
+        targets.append(target)
         return succeeds
     }
 }
 
+private final class FakeTargetedPoster: ProcessTargetedNavigationPosting, @unchecked Sendable {
+    var posts: [(NavigationDirection, pid_t)] = []
+
+    func post(_ direction: NavigationDirection, to processIdentifier: pid_t) -> Bool {
+        posts.append((direction, processIdentifier))
+        return true
+    }
+}
+
 final class SideButtonControllerTests: XCTestCase {
+    func testProductionSynthesizerRevalidatesFocusAndTargetsValidatedPID() {
+        let provider = FakeFocusedApplicationProvider(Self.otherApp)
+        let poster = FakeTargetedPoster()
+        let synthesizer = CGNavigationSynthesizer(
+            applicationProvider: provider,
+            eventPoster: poster
+        )
+
+        XCTAssertFalse(synthesizer.synthesize(.back, for: Self.safari))
+        XCTAssertTrue(poster.posts.isEmpty, "focus changed before synthesis")
+
+        provider.application = Self.safari
+        XCTAssertTrue(synthesizer.synthesize(.back, for: Self.safari))
+        XCTAssertEqual(poster.posts.count, 1)
+        XCTAssertEqual(poster.posts[0].0, .back)
+        XCTAssertEqual(poster.posts[0].1, Self.safari.processIdentifier)
+    }
+
     func testSafariPressSynthesizesOnceAndOwnsRepeatsAndUpAcrossFocusChange() {
         let provider = FakeFocusedApplicationProvider(Self.safari)
         let synthesizer = FakeNavigationSynthesizer()
@@ -74,15 +103,34 @@ final class SideButtonControllerTests: XCTestCase {
         XCTAssertEqual(synthesizer.directions, [.back])
     }
 
+    func testFocusRaceRejectedBySynthesizerNeverClaimsOrConsumesPress() {
+        let provider = FakeFocusedApplicationProvider(Self.safari)
+        let synthesizer = FakeNavigationSynthesizer()
+        synthesizer.succeeds = false // Production returns false when its immediate PID recheck differs.
+        let controller = SideButtonController(
+            applicationProvider: provider,
+            synthesizer: synthesizer
+        )
+
+        XCTAssertEqual(controller.handleButtonDown(4), .passThrough)
+        provider.application = Self.otherApp
+        XCTAssertEqual(controller.handleButtonDown(4), .passThrough)
+        XCTAssertEqual(controller.handleButtonUp(4), .passThrough)
+        XCTAssertEqual(synthesizer.directions, [.forward])
+        XCTAssertEqual(synthesizer.targets.map(\.processIdentifier), [101])
+    }
+
     func testInactiveOrUnfocusedSupportedAppPassesThrough() {
         for application in [
             FocusedApplication(
                 bundleIdentifier: "com.apple.Safari",
+                processIdentifier: 101,
                 isActive: false,
                 hasFocusedWindow: true
             ),
             FocusedApplication(
                 bundleIdentifier: "com.apple.finder",
+                processIdentifier: 102,
                 isActive: true,
                 hasFocusedWindow: false
             )
@@ -130,16 +178,19 @@ final class SideButtonControllerTests: XCTestCase {
 
     private static let safari = FocusedApplication(
         bundleIdentifier: "com.apple.Safari",
+        processIdentifier: 101,
         isActive: true,
         hasFocusedWindow: true
     )
     private static let finder = FocusedApplication(
         bundleIdentifier: "com.apple.finder",
+        processIdentifier: 102,
         isActive: true,
         hasFocusedWindow: true
     )
     private static let otherApp = FocusedApplication(
         bundleIdentifier: "com.example.Other",
+        processIdentifier: 103,
         isActive: true,
         hasFocusedWindow: true
     )

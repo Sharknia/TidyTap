@@ -1,6 +1,7 @@
 import Foundation
 
 public enum InputEngineComponent: String, Equatable, Sendable {
+    case inputSources
     case hidMappings
     case symbolicHotkey60
     case eventTap
@@ -10,6 +11,8 @@ public enum InputEngineError: Error, Equatable, Sendable {
     case capsLockAlreadyMapped
     case capsLockOwnershipConflict
     case symbolicHotkeyOwnershipConflict
+    case invalidInputSourceCount(Int)
+    case preWriteStateChanged(InputEngineComponent)
     case staleSystemState(InputEngineComponent)
     case verificationFailed(InputEngineComponent)
     case invalidSystemData(InputEngineComponent)
@@ -36,6 +39,8 @@ public struct TransactionFailure: Error, Equatable, Sendable {
         self.primaryDescription = primaryDescription
         self.rollbackIssues = rollbackIssues
     }
+
+    public var recoveryRequired: Bool { !rollbackIssues.isEmpty }
 }
 
 public struct HIDMapping: Codable, Equatable, Hashable, Sendable {
@@ -150,4 +155,8 @@ public protocol SymbolicHotkeyApplying: Sendable {
     func readSymbolicHotkeyDomain() throws -> PropertyListDictionary
     func applySymbolicHotkeyDomain(_ domain: PropertyListDictionary) throws
     func activateSymbolicHotkeySettings() throws
+}
+
+public protocol InputSourceCounting: Sendable {
+    func enabledSelectableInputSourceCount() throws -> Int
 }

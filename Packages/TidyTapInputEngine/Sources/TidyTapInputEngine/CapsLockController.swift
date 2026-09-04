@@ -78,7 +78,7 @@ public final class CapsLockController: @unchecked Sendable {
 
     public func commit(_ change: HIDMappingChange) throws {
         guard try system.readHIDMappings() == change.before else {
-            throw InputEngineError.staleSystemState(.hidMappings)
+            throw InputEngineError.preWriteStateChanged(.hidMappings)
         }
         guard change.before != change.after else { return }
         try system.applyHIDMappings(change.after)
@@ -198,7 +198,7 @@ public final class InputSourceShortcutController: @unchecked Sendable {
 
     public func commit(_ change: Hotkey60Change) throws {
         guard try system.readSymbolicHotkeyDomain() == change.before else {
-            throw InputEngineError.staleSystemState(.symbolicHotkey60)
+            throw InputEngineError.preWriteStateChanged(.symbolicHotkey60)
         }
         guard change.before != change.after else { return }
         try system.applySymbolicHotkeyDomain(change.after)
@@ -275,15 +275,25 @@ public struct CapsLockFeatureOwnership: Codable, Equatable, Sendable {
 public final class CapsLockFeatureController: @unchecked Sendable {
     private let hid: CapsLockController
     private let hotkey: InputSourceShortcutController
+    private let inputSources: any InputSourceCounting
 
-    public init(hid: CapsLockController, hotkey: InputSourceShortcutController) {
+    public init(
+        hid: CapsLockController,
+        hotkey: InputSourceShortcutController,
+        inputSources: any InputSourceCounting
+    ) {
         self.hid = hid
         self.hotkey = hotkey
+        self.inputSources = inputSources
     }
 
     public func enable(
         existingOwnership: CapsLockFeatureOwnership? = nil
     ) throws -> CapsLockFeatureOwnership {
+        let inputSourceCount = try inputSources.enabledSelectableInputSourceCount()
+        guard inputSourceCount == 2 else {
+            throw InputEngineError.invalidInputSourceCount(inputSourceCount)
+        }
         let hidChange = try hid.prepareEnable(existingOwnership: existingOwnership?.hid)
         let hotkeyChange = try hotkey.prepareEnable(existingOwnership: existingOwnership?.hotkey60)
         do {
@@ -291,10 +301,12 @@ public final class CapsLockFeatureController: @unchecked Sendable {
             do {
                 try hotkey.commit(hotkeyChange)
             } catch {
-                let rollbackIssues = rollbackIssues(for: [
-                    (InputEngineComponent.symbolicHotkey60, { try self.hotkey.rollbackIfApplied(hotkeyChange) }),
-                    (InputEngineComponent.hidMappings, { try self.hid.rollbackIfApplied(hidChange) })
-                ])
+                var actions: [(InputEngineComponent, () throws -> Void)] = []
+                if !Self.isPreWriteRejection(error, for: .symbolicHotkey60) {
+                    actions.append((.symbolicHotkey60, { try self.hotkey.rollbackIfApplied(hotkeyChange) }))
+                }
+                actions.append((.hidMappings, { try self.hid.rollbackIfApplied(hidChange) }))
+                let rollbackIssues = rollbackIssues(for: actions)
                 throw TransactionFailure(
                     primaryDescription: String(describing: error),
                     rollbackIssues: rollbackIssues
@@ -303,9 +315,11 @@ public final class CapsLockFeatureController: @unchecked Sendable {
         } catch let failure as TransactionFailure {
             throw failure
         } catch {
-            let rollbackIssues = rollbackIssues(for: [
-                (InputEngineComponent.hidMappings, { try self.hid.rollbackIfApplied(hidChange) })
-            ])
+            let actions: [(InputEngineComponent, () throws -> Void)] =
+                Self.isPreWriteRejection(error, for: .hidMappings)
+                ? []
+                : [(.hidMappings, { try self.hid.rollbackIfApplied(hidChange) })]
+            let rollbackIssues = rollbackIssues(for: actions)
             throw TransactionFailure(
                 primaryDescription: String(describing: error),
                 rollbackIssues: rollbackIssues
@@ -329,10 +343,12 @@ public final class CapsLockFeatureController: @unchecked Sendable {
             do {
                 try hid.commit(hidChange)
             } catch {
-                let rollbackIssues = rollbackIssues(for: [
-                    (InputEngineComponent.hidMappings, { try self.hid.rollbackIfApplied(hidChange) }),
-                    (InputEngineComponent.symbolicHotkey60, { try self.hotkey.rollbackIfApplied(hotkeyChange) })
-                ])
+                var actions: [(InputEngineComponent, () throws -> Void)] = []
+                if !Self.isPreWriteRejection(error, for: .hidMappings) {
+                    actions.append((.hidMappings, { try self.hid.rollbackIfApplied(hidChange) }))
+                }
+                actions.append((.symbolicHotkey60, { try self.hotkey.rollbackIfApplied(hotkeyChange) }))
+                let rollbackIssues = rollbackIssues(for: actions)
                 throw TransactionFailure(
                     primaryDescription: String(describing: error),
                     rollbackIssues: rollbackIssues
@@ -341,9 +357,11 @@ public final class CapsLockFeatureController: @unchecked Sendable {
         } catch let failure as TransactionFailure {
             throw failure
         } catch {
-            let rollbackIssues = rollbackIssues(for: [
-                (InputEngineComponent.symbolicHotkey60, { try self.hotkey.rollbackIfApplied(hotkeyChange) })
-            ])
+            let actions: [(InputEngineComponent, () throws -> Void)] =
+                Self.isPreWriteRejection(error, for: .symbolicHotkey60)
+                ? []
+                : [(.symbolicHotkey60, { try self.hotkey.rollbackIfApplied(hotkeyChange) })]
+            let rollbackIssues = rollbackIssues(for: actions)
             throw TransactionFailure(
                 primaryDescription: String(describing: error),
                 rollbackIssues: rollbackIssues
@@ -362,5 +380,12 @@ public final class CapsLockFeatureController: @unchecked Sendable {
                 return RollbackIssue(component: component, description: String(describing: error))
             }
         }
+    }
+
+    private static func isPreWriteRejection(
+        _ error: Error,
+        for component: InputEngineComponent
+    ) -> Bool {
+        (error as? InputEngineError) == .preWriteStateChanged(component)
     }
 }

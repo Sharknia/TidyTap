@@ -55,13 +55,18 @@ public enum EventTapOutput: Equatable, Sendable {
 public typealias EventTapHandler = @Sendable (EventTapInput) -> EventTapOutput
 
 public protocol EventTapBackend: AnyObject, Sendable {
-    func install(configuration: EventTapConfiguration, handler: @escaping EventTapHandler) throws
+    func install(
+        configuration: EventTapConfiguration,
+        captureSideButtons: Bool,
+        handler: @escaping EventTapHandler
+    ) throws
     func enable() throws
     func uninstall()
 }
 
 public enum EventTapStatus: Equatable, Sendable {
     case stopped
+    case drainingButtonPresses
     case running(EventTapConfiguration)
     case permissionDenied(Set<InputPermission>)
     case failed(InputEngineError)
@@ -98,25 +103,37 @@ public final class EventTapController: @unchecked Sendable {
     @discardableResult
     public func start(configuration: EventTapConfiguration) -> EventTapStatus {
         backend.uninstall()
-        sideButtons.reset()
         lock.lock()
         self.configuration = configuration
         scroll = ScrollController()
         lock.unlock()
 
-        guard configuration.isEnabled else {
+        let drainingSideButtons = sideButtons.hasActivePresses
+        guard configuration.isEnabled || drainingSideButtons else {
             return updateStatus(.stopped)
         }
-        let missing = missingPermissions(for: configuration)
+        let missing = missingPermissions(
+            for: configuration,
+            includeSideButtonDrain: drainingSideButtons
+        )
         guard missing.isEmpty else {
+            if !configuration.isEnabled {
+                sideButtons.reset()
+                return updateStatus(.stopped)
+            }
             return updateStatus(.permissionDenied(missing))
         }
 
         do {
-            try backend.install(configuration: configuration) { [weak self] input in
+            try backend.install(
+                configuration: configuration,
+                captureSideButtons: configuration.sideButtonNavigation || drainingSideButtons
+            ) { [weak self] input in
                 self?.handle(input) ?? .passThrough
             }
-            return updateStatus(.running(configuration))
+            return updateStatus(
+                configuration.isEnabled ? .running(configuration) : .drainingButtonPresses
+            )
         } catch let error as InputEngineError {
             return updateStatus(.failed(error))
         } catch {
@@ -134,6 +151,17 @@ public final class EventTapController: @unchecked Sendable {
         switch input {
         case .gesture(let timestamp):
             lock.lock()
+            let enabled = configuration.reverseMouseScroll
+            lock.unlock()
+            guard enabled else { return .passThrough }
+            let missing = missingPermissions(
+                required: [.accessibility, .inputMonitoring]
+            )
+            guard missing.isEmpty else {
+                _ = updateStatus(.permissionDenied(missing))
+                return .passThrough
+            }
+            lock.lock()
             if configuration.reverseMouseScroll {
                 scroll.observeGesture(at: timestamp)
             }
@@ -146,6 +174,20 @@ public final class EventTapController: @unchecked Sendable {
                 lock.unlock()
                 return .passThrough
             }
+            let currentConfiguration = configuration
+            lock.unlock()
+            let missing = missingPermissions(
+                required: [.accessibility, .inputMonitoring]
+            )
+            guard missing.isEmpty else {
+                _ = updateStatus(.permissionDenied(missing))
+                return .passThrough
+            }
+            lock.lock()
+            guard configuration == currentConfiguration, configuration.reverseMouseScroll else {
+                lock.unlock()
+                return .passThrough
+            }
             let result = scroll.process(observation)
             lock.unlock()
             return result.didInvert ? .replaceScrollDeltas(result.outputDeltas) : .passThrough
@@ -154,15 +196,33 @@ public final class EventTapController: @unchecked Sendable {
             lock.lock()
             let enabled = configuration.sideButtonNavigation
             lock.unlock()
-            guard enabled else { return .passThrough }
-            return sideButtons.handleButtonDown(button) == .consume ? .consume : .passThrough
+            guard enabled || sideButtons.hasActivePresses else { return .passThrough }
+            let missing = missingPermissions(required: [.accessibility])
+            guard missing.isEmpty else {
+                sideButtons.reset()
+                handleButtonPermissionLoss(missing)
+                return .passThrough
+            }
+            let disposition = sideButtons.handleButtonDown(
+                button,
+                navigationEnabled: enabled
+            )
+            return disposition == .consume ? .consume : .passThrough
 
         case .buttonUp(let button):
             lock.lock()
             let enabled = configuration.sideButtonNavigation
             lock.unlock()
-            guard enabled else { return .passThrough }
-            return sideButtons.handleButtonUp(button) == .consume ? .consume : .passThrough
+            guard enabled || sideButtons.hasActivePresses else { return .passThrough }
+            let missing = missingPermissions(required: [.accessibility])
+            guard missing.isEmpty else {
+                sideButtons.reset()
+                handleButtonPermissionLoss(missing)
+                return .passThrough
+            }
+            let disposition = sideButtons.handleButtonUp(button)
+            finishDrainingIfNeeded()
+            return disposition == .consume ? .consume : .passThrough
 
         case .disabled:
             return recoverDisabledTap()
@@ -173,26 +233,76 @@ public final class EventTapController: @unchecked Sendable {
         lock.lock()
         let currentConfiguration = configuration
         lock.unlock()
-        let missing = missingPermissions(for: currentConfiguration)
+        let missing = missingPermissions(
+            for: currentConfiguration,
+            includeSideButtonDrain: sideButtons.hasActivePresses
+        )
         guard missing.isEmpty else {
-            _ = updateStatus(.permissionDenied(missing))
+            if missing.contains(.accessibility) {
+                sideButtons.reset()
+            }
+            if currentConfiguration.isEnabled {
+                _ = updateStatus(.permissionDenied(missing))
+            } else {
+                backend.uninstall()
+                _ = updateStatus(.stopped)
+            }
             return .passThrough
         }
         do {
             try backend.enable()
-            _ = updateStatus(.running(currentConfiguration))
+            _ = updateStatus(
+                currentConfiguration.isEnabled ? .running(currentConfiguration) : .drainingButtonPresses
+            )
         } catch {
             _ = updateStatus(.failed(.eventTapRecoveryFailed))
         }
         return .passThrough
     }
 
-    private func missingPermissions(for configuration: EventTapConfiguration) -> Set<InputPermission> {
-        configuration.requiredPermissions.filter { permission in
+    private func missingPermissions(
+        for configuration: EventTapConfiguration,
+        includeSideButtonDrain: Bool = false
+    ) -> Set<InputPermission> {
+        var required = configuration.requiredPermissions
+        if includeSideButtonDrain { required.insert(.accessibility) }
+        return missingPermissions(required: required)
+    }
+
+    private func missingPermissions(
+        required: Set<InputPermission>
+    ) -> Set<InputPermission> {
+        required.filter { permission in
             switch permission {
             case .accessibility: !permissions.accessibilityAllowed
             case .inputMonitoring: !permissions.inputMonitoringAllowed
             }
+        }
+    }
+
+    private func finishDrainingIfNeeded() {
+        guard !sideButtons.hasActivePresses else { return }
+        lock.lock()
+        let currentConfiguration = configuration
+        lock.unlock()
+        guard !currentConfiguration.sideButtonNavigation else { return }
+        if currentConfiguration.isEnabled {
+            _ = updateStatus(.running(currentConfiguration))
+        } else {
+            backend.uninstall()
+            _ = updateStatus(.stopped)
+        }
+    }
+
+    private func handleButtonPermissionLoss(_ missing: Set<InputPermission>) {
+        lock.lock()
+        let currentConfiguration = configuration
+        lock.unlock()
+        if currentConfiguration.isEnabled {
+            _ = updateStatus(.permissionDenied(missing))
+        } else {
+            backend.uninstall()
+            _ = updateStatus(.stopped)
         }
     }
 
