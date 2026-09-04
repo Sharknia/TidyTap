@@ -17,6 +17,7 @@ private final class FakeEventTapBackend: EventTapBackend, @unchecked Sendable {
     var enableCount = 0
     var uninstallCount = 0
     var captureSideButtonsValues: [Bool] = []
+    var installedConfigurations: [EventTapConfiguration] = []
     var installError: Error?
     var enableError: Error?
 
@@ -27,6 +28,7 @@ private final class FakeEventTapBackend: EventTapBackend, @unchecked Sendable {
     ) throws {
         installCount += 1
         captureSideButtonsValues.append(captureSideButtons)
+        installedConfigurations.append(configuration)
         if let installError { throw installError }
         self.handler = handler
     }
@@ -286,6 +288,100 @@ final class EventTapControllerTests: XCTestCase {
 
         XCTAssertEqual(backend.send(.disabled(.timeout)), .passThrough)
         XCTAssertEqual(controller.status, .failed(.eventTapRecoveryFailed))
+    }
+
+    func testCombinedTapRecoversSideButtonsWhenInputMonitoringIsRevoked() {
+        let (controller, permissions, backend, synthesizer) = makeController(
+            accessibility: true,
+            inputMonitoring: true
+        )
+        let combined = EventTapConfiguration(
+            reverseMouseScroll: true,
+            sideButtonNavigation: true
+        )
+        _ = controller.start(configuration: combined)
+        XCTAssertEqual(backend.send(.buttonDown(3)), .consume)
+        permissions.inputMonitoringAllowed = false
+
+        XCTAssertEqual(backend.send(.disabled(.userInput)), .passThrough)
+        XCTAssertEqual(
+            controller.status,
+            .partiallyRunning(combined, unavailablePermissions: [.inputMonitoring])
+        )
+        XCTAssertEqual(
+            backend.installedConfigurations.last,
+            EventTapConfiguration(reverseMouseScroll: false, sideButtonNavigation: true)
+        )
+        XCTAssertEqual(backend.captureSideButtonsValues.last, true)
+        XCTAssertEqual(backend.enableCount, 0)
+
+        let wheel = ScrollObservation(
+            timestampNanoseconds: 1,
+            isContinuous: false,
+            deltas: .init(
+                verticalLine: 1,
+                verticalPoint: 10,
+                verticalFixed: 65_536,
+                horizontalLine: 0,
+                horizontalPoint: 0,
+                horizontalFixed: 0
+            ),
+            phase: [],
+            momentumPhase: []
+        )
+        XCTAssertEqual(backend.send(.scroll(wheel)), .passThrough)
+        XCTAssertEqual(backend.send(.buttonDown(3)), .consume)
+        XCTAssertEqual(backend.send(.buttonUp(3)), .consume)
+        XCTAssertEqual(backend.send(.buttonDown(4)), .consume)
+        XCTAssertEqual(backend.send(.buttonUp(4)), .consume)
+        XCTAssertEqual(synthesizer.directions, [.back, .forward])
+    }
+
+    func testCombinedStartWithMissingInputMonitoringRunsSideButtonsOnly() {
+        let (controller, _, backend, synthesizer) = makeController(
+            accessibility: true,
+            inputMonitoring: false
+        )
+        let combined = EventTapConfiguration(
+            reverseMouseScroll: true,
+            sideButtonNavigation: true
+        )
+
+        XCTAssertEqual(
+            controller.start(configuration: combined),
+            .partiallyRunning(combined, unavailablePermissions: [.inputMonitoring])
+        )
+        XCTAssertEqual(
+            backend.installedConfigurations,
+            [EventTapConfiguration(reverseMouseScroll: false, sideButtonNavigation: true)]
+        )
+        XCTAssertEqual(backend.send(.buttonDown(3)), .consume)
+        XCTAssertEqual(backend.send(.buttonUp(3)), .consume)
+        XCTAssertEqual(synthesizer.directions, [.back])
+    }
+
+    func testRecoveryFailureResetsOwnedPressBeforeLaterSuccessfulStart() {
+        let (controller, _, backend, synthesizer) = makeController(
+            accessibility: true,
+            inputMonitoring: false
+        )
+        let navigation = EventTapConfiguration(
+            reverseMouseScroll: false,
+            sideButtonNavigation: true
+        )
+        _ = controller.start(configuration: navigation)
+        XCTAssertEqual(backend.send(.buttonDown(3)), .consume)
+        backend.enableError = TestTapError.failure
+
+        XCTAssertEqual(backend.send(.disabled(.timeout)), .passThrough)
+        XCTAssertEqual(controller.status, .failed(.eventTapRecoveryFailed))
+        XCTAssertEqual(backend.send(.buttonUp(3)), .passThrough)
+
+        backend.enableError = nil
+        XCTAssertEqual(controller.start(configuration: navigation), .running(navigation))
+        XCTAssertEqual(backend.send(.buttonDown(3)), .consume)
+        XCTAssertEqual(backend.send(.buttonUp(3)), .consume)
+        XCTAssertEqual(synthesizer.directions, [.back, .back])
     }
 
     func testStopClearsClaimedButtonOwnership() {

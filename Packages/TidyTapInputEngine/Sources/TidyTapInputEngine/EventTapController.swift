@@ -68,6 +68,10 @@ public enum EventTapStatus: Equatable, Sendable {
     case stopped
     case drainingButtonPresses
     case running(EventTapConfiguration)
+    case partiallyRunning(
+        EventTapConfiguration,
+        unavailablePermissions: Set<InputPermission>
+    )
     case permissionDenied(Set<InputPermission>)
     case failed(InputEngineError)
 }
@@ -117,6 +121,21 @@ public final class EventTapController: @unchecked Sendable {
             includeSideButtonDrain: drainingSideButtons
         )
         guard missing.isEmpty else {
+            if missing == [.inputMonitoring], configuration.sideButtonNavigation {
+                do {
+                    try installBackend(
+                        configuration: Self.sideButtonOnlyConfiguration,
+                        captureSideButtons: true
+                    )
+                    return updateStatus(.partiallyRunning(
+                        configuration,
+                        unavailablePermissions: missing
+                    ))
+                } catch {
+                    sideButtons.reset()
+                    return updateStatus(.failed(.eventTapCreationFailed))
+                }
+            }
             if !configuration.isEnabled {
                 sideButtons.reset()
                 return updateStatus(.stopped)
@@ -125,12 +144,10 @@ public final class EventTapController: @unchecked Sendable {
         }
 
         do {
-            try backend.install(
+            try installBackend(
                 configuration: configuration,
                 captureSideButtons: configuration.sideButtonNavigation || drainingSideButtons
-            ) { [weak self] input in
-                self?.handle(input) ?? .passThrough
-            }
+            )
             return updateStatus(
                 configuration.isEnabled ? .running(configuration) : .drainingButtonPresses
             )
@@ -158,7 +175,7 @@ public final class EventTapController: @unchecked Sendable {
                 required: [.accessibility, .inputMonitoring]
             )
             guard missing.isEmpty else {
-                _ = updateStatus(.permissionDenied(missing))
+                updatePermissionLossStatus(missing)
                 return .passThrough
             }
             lock.lock()
@@ -180,7 +197,7 @@ public final class EventTapController: @unchecked Sendable {
                 required: [.accessibility, .inputMonitoring]
             )
             guard missing.isEmpty else {
-                _ = updateStatus(.permissionDenied(missing))
+                updatePermissionLossStatus(missing)
                 return .passThrough
             }
             lock.lock()
@@ -238,6 +255,25 @@ public final class EventTapController: @unchecked Sendable {
             includeSideButtonDrain: sideButtons.hasActivePresses
         )
         guard missing.isEmpty else {
+            if
+                missing == [.inputMonitoring],
+                currentConfiguration.sideButtonNavigation
+            {
+                do {
+                    try installBackend(
+                        configuration: Self.sideButtonOnlyConfiguration,
+                        captureSideButtons: true
+                    )
+                    _ = updateStatus(.partiallyRunning(
+                        currentConfiguration,
+                        unavailablePermissions: missing
+                    ))
+                } catch {
+                    sideButtons.reset()
+                    _ = updateStatus(.failed(.eventTapRecoveryFailed))
+                }
+                return .passThrough
+            }
             if missing.contains(.accessibility) {
                 sideButtons.reset()
             }
@@ -255,6 +291,7 @@ public final class EventTapController: @unchecked Sendable {
                 currentConfiguration.isEnabled ? .running(currentConfiguration) : .drainingButtonPresses
             )
         } catch {
+            sideButtons.reset()
             _ = updateStatus(.failed(.eventTapRecoveryFailed))
         }
         return .passThrough
@@ -305,6 +342,37 @@ public final class EventTapController: @unchecked Sendable {
             _ = updateStatus(.stopped)
         }
     }
+
+    private func updatePermissionLossStatus(_ missing: Set<InputPermission>) {
+        lock.lock()
+        let currentConfiguration = configuration
+        lock.unlock()
+        if missing == [.inputMonitoring], currentConfiguration.sideButtonNavigation {
+            _ = updateStatus(.partiallyRunning(
+                currentConfiguration,
+                unavailablePermissions: missing
+            ))
+        } else {
+            _ = updateStatus(.permissionDenied(missing))
+        }
+    }
+
+    private func installBackend(
+        configuration: EventTapConfiguration,
+        captureSideButtons: Bool
+    ) throws {
+        try backend.install(
+            configuration: configuration,
+            captureSideButtons: captureSideButtons
+        ) { [weak self] input in
+            self?.handle(input) ?? .passThrough
+        }
+    }
+
+    private static let sideButtonOnlyConfiguration = EventTapConfiguration(
+        reverseMouseScroll: false,
+        sideButtonNavigation: true
+    )
 
     @discardableResult
     private func updateStatus(_ status: EventTapStatus) -> EventTapStatus {
