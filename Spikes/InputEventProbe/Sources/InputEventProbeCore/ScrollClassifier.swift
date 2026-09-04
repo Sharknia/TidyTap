@@ -106,18 +106,84 @@ public struct ScrollClassifier: Sendable {
     }
 }
 
-public struct ButtonPressGate: Sendable {
+public enum ButtonDownOwnership: Equatable, Sendable {
+    case firstDown
+    case repeatedUnowned
+    case repeatedOwned
+}
+
+public enum ButtonDownDisposition: Equatable, Sendable {
+    case passThrough
+    case attemptNavigation
+    case consume
+}
+
+public enum ButtonUpDisposition: Equatable, Sendable {
+    case passThrough
+    case consume
+}
+
+/// Tracks whether a callback has claimed an entire physical button press.
+/// Claiming happens only after the first down successfully triggers navigation.
+public struct ButtonPressOwnership: Sendable {
     private var pressedButtons: Set<Int64> = []
+    private var ownedButtons: Set<Int64> = []
 
     public init() {}
 
-    /// Returns true exactly once for a button until its matching up event.
-    public mutating func registerDown(button: Int64) -> Bool {
-        pressedButtons.insert(button).inserted
+    public mutating func registerDown(button: Int64) -> ButtonDownOwnership {
+        if ownedButtons.contains(button) {
+            return .repeatedOwned
+        }
+        if pressedButtons.contains(button) {
+            return .repeatedUnowned
+        }
+        pressedButtons.insert(button)
+        return .firstDown
     }
 
-    /// Returns whether the button had a matching accepted down event.
+    /// Claims future repeats and the matching up. Call only after synthesis succeeds.
+    @discardableResult
+    public mutating func claimPress(button: Int64) -> Bool {
+        guard pressedButtons.contains(button) else { return false }
+        ownedButtons.insert(button)
+        return true
+    }
+
+    /// Returns true when the callback owns and must consume this up event.
     public mutating func registerUp(button: Int64) -> Bool {
-        pressedButtons.remove(button) != nil
+        pressedButtons.remove(button)
+        return ownedButtons.remove(button) != nil
+    }
+}
+
+/// Pure callback policy used by the Core Graphics event tap.
+public struct ButtonCallbackState: Sendable {
+    private var ownership = ButtonPressOwnership()
+
+    public init() {}
+
+    public mutating func buttonDown(
+        button: Int64,
+        isEligibleNavigationTarget: Bool
+    ) -> ButtonDownDisposition {
+        switch ownership.registerDown(button: button) {
+        case .firstDown:
+            return isEligibleNavigationTarget ? .attemptNavigation : .passThrough
+        case .repeatedUnowned:
+            return .passThrough
+        case .repeatedOwned:
+            return .consume
+        }
+    }
+
+    /// Commits ownership only after the callback successfully posts navigation.
+    @discardableResult
+    public mutating func navigationDidSucceed(button: Int64) -> Bool {
+        ownership.claimPress(button: button)
+    }
+
+    public mutating func buttonUp(button: Int64) -> ButtonUpDisposition {
+        ownership.registerUp(button: button) ? .consume : .passThrough
     }
 }

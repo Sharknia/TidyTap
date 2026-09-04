@@ -99,23 +99,99 @@ final class ScrollClassifierTests: XCTestCase {
     }
 }
 
-final class ButtonPressGateTests: XCTestCase {
-    func testOneDownPerPressAndMatchingUp() {
-        var gate = ButtonPressGate()
+final class ButtonPressOwnershipTests: XCTestCase {
+    func testOwnedCallbackConsumesFirstDownRepeatsAndMatchingUp() {
+        var ownership = ButtonPressOwnership()
 
-        XCTAssertTrue(gate.registerDown(button: 3))
-        XCTAssertFalse(gate.registerDown(button: 3))
-        XCTAssertTrue(gate.registerUp(button: 3))
-        XCTAssertFalse(gate.registerUp(button: 3))
-        XCTAssertTrue(gate.registerDown(button: 3))
+        XCTAssertEqual(ownership.registerDown(button: 3), .firstDown)
+        XCTAssertTrue(ownership.claimPress(button: 3))
+        XCTAssertEqual(ownership.registerDown(button: 3), .repeatedOwned)
+        XCTAssertEqual(ownership.registerDown(button: 3), .repeatedOwned)
+        XCTAssertTrue(ownership.registerUp(button: 3))
+        XCTAssertEqual(ownership.registerDown(button: 3), .firstDown)
     }
 
-    func testButtonsHaveIndependentState() {
-        var gate = ButtonPressGate()
+    func testUnownedCallbackPassesEveryEventThrough() {
+        var ownership = ButtonPressOwnership()
 
-        XCTAssertTrue(gate.registerDown(button: 3))
-        XCTAssertTrue(gate.registerDown(button: 4))
-        XCTAssertTrue(gate.registerUp(button: 4))
-        XCTAssertTrue(gate.registerUp(button: 3))
+        XCTAssertEqual(ownership.registerDown(button: 3), .firstDown)
+        XCTAssertEqual(ownership.registerDown(button: 3), .repeatedUnowned)
+        XCTAssertEqual(ownership.registerDown(button: 3), .repeatedUnowned)
+        XCTAssertFalse(ownership.registerUp(button: 3))
+    }
+
+    func testCannotClaimWithoutFirstDown() {
+        var ownership = ButtonPressOwnership()
+
+        XCTAssertFalse(ownership.claimPress(button: 3))
+        XCTAssertFalse(ownership.registerUp(button: 3))
+    }
+
+    func testButtonsHaveIndependentOwnership() {
+        var ownership = ButtonPressOwnership()
+
+        XCTAssertEqual(ownership.registerDown(button: 3), .firstDown)
+        XCTAssertTrue(ownership.claimPress(button: 3))
+        XCTAssertEqual(ownership.registerDown(button: 4), .firstDown)
+        XCTAssertEqual(ownership.registerDown(button: 3), .repeatedOwned)
+        XCTAssertEqual(ownership.registerDown(button: 4), .repeatedUnowned)
+        XCTAssertFalse(ownership.registerUp(button: 4))
+        XCTAssertTrue(ownership.registerUp(button: 3))
+    }
+}
+
+final class ButtonCallbackStateTests: XCTestCase {
+    func testClaimedSafariOrFinderPressSynthesizesOnceAndConsumesWholePair() {
+        var callbacks = ButtonCallbackState()
+        var synthesisAttempts = 0
+
+        XCTAssertEqual(
+            callbacks.buttonDown(button: 3, isEligibleNavigationTarget: true),
+            .attemptNavigation
+        )
+        synthesisAttempts += 1
+        XCTAssertTrue(callbacks.navigationDidSucceed(button: 3))
+
+        XCTAssertEqual(
+            callbacks.buttonDown(button: 3, isEligibleNavigationTarget: true),
+            .consume
+        )
+        XCTAssertEqual(
+            callbacks.buttonDown(button: 3, isEligibleNavigationTarget: false),
+            .consume,
+            "a claimed press remains owned even if focus changes before release"
+        )
+        XCTAssertEqual(callbacks.buttonUp(button: 3), .consume)
+        XCTAssertEqual(synthesisAttempts, 1)
+    }
+
+    func testOtherAppPressPassesEveryCallbackThroughEvenIfFocusChangesMidPress() {
+        var callbacks = ButtonCallbackState()
+
+        XCTAssertEqual(
+            callbacks.buttonDown(button: 4, isEligibleNavigationTarget: false),
+            .passThrough
+        )
+        XCTAssertEqual(
+            callbacks.buttonDown(button: 4, isEligibleNavigationTarget: true),
+            .passThrough,
+            "a repeat may not claim a press that began in another app"
+        )
+        XCTAssertEqual(callbacks.buttonUp(button: 4), .passThrough)
+    }
+
+    func testFailedSynthesisDoesNotClaimRepeatsOrUp() {
+        var callbacks = ButtonCallbackState()
+
+        XCTAssertEqual(
+            callbacks.buttonDown(button: 3, isEligibleNavigationTarget: true),
+            .attemptNavigation
+        )
+        // The callback intentionally does not call navigationDidSucceed.
+        XCTAssertEqual(
+            callbacks.buttonDown(button: 3, isEligibleNavigationTarget: true),
+            .passThrough
+        )
+        XCTAssertEqual(callbacks.buttonUp(button: 3), .passThrough)
     }
 }

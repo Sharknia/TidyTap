@@ -52,8 +52,7 @@ private enum ProbeError: Error, CustomStringConvertible {
 private final class LockedState {
     private let lock = NSLock()
     private var classifier = ScrollClassifier()
-    private var buttonGate = ButtonPressGate()
-    private var handledButtons: Set<Int64> = []
+    private var buttonCallbacks = ButtonCallbackState()
     private var scrollCounts: [InputDeviceClass: Int] = [:]
     private var buttonCounts: [Int64: Int] = [:]
 
@@ -71,24 +70,29 @@ private final class LockedState {
         return result
     }
 
-    func acceptButtonDown(_ button: Int64) -> Bool {
+    func registerButtonDown(
+        _ button: Int64,
+        isEligibleNavigationTarget: Bool
+    ) -> ButtonDownDisposition {
         lock.lock()
         defer { lock.unlock() }
         buttonCounts[button, default: 0] += 1
-        return buttonGate.registerDown(button: button)
+        return buttonCallbacks.buttonDown(
+            button: button,
+            isEligibleNavigationTarget: isEligibleNavigationTarget
+        )
     }
 
-    func markHandled(_ button: Int64) {
-        lock.lock()
-        handledButtons.insert(button)
-        lock.unlock()
-    }
-
-    func releaseButton(_ button: Int64) -> Bool {
+    func claimButtonPress(_ button: Int64) -> Bool {
         lock.lock()
         defer { lock.unlock() }
-        _ = buttonGate.registerUp(button: button)
-        return handledButtons.remove(button) != nil
+        return buttonCallbacks.navigationDidSucceed(button: button)
+    }
+
+    func releaseButton(_ button: Int64) -> ButtonUpDisposition {
+        lock.lock()
+        defer { lock.unlock() }
+        return buttonCallbacks.buttonUp(button: button)
     }
 
     func summary() -> String {
@@ -233,27 +237,38 @@ private final class EventProbe {
 
     private func handleButtonDown(_ event: CGEvent) -> Unmanaged<CGEvent>? {
         let button = event.getIntegerValueField(.mouseEventButtonNumber)
-        let firstDown = state.acceptButtonDown(button)
-        print("button direction=down number=\(button) firstDown=\(firstDown)")
+        let direction = Self.direction(for: button)
+        let target = options.synthesizeNavigation ? Self.focusedNavigationTarget() : nil
+        let disposition = state.registerButtonDown(
+            button,
+            isEligibleNavigationTarget: options.synthesizeNavigation && direction != nil && target != nil
+        )
+        print("button direction=down number=\(button) disposition=\(disposition)")
 
-        guard options.synthesizeNavigation,
-              firstDown,
-              let direction = Self.direction(for: button),
-              let target = Self.focusedNavigationTarget(),
-              postNavigation(direction) else {
+        switch disposition {
+        case .passThrough:
             return Unmanaged.passUnretained(event)
+        case .consume:
+            return nil
+        case .attemptNavigation:
+            break
         }
 
-        state.markHandled(button)
+        guard let direction, let target, postNavigation(direction) else {
+            return Unmanaged.passUnretained(event)
+        }
+        guard state.claimButtonPress(button) else {
+            return Unmanaged.passUnretained(event)
+        }
         print("navigation sent=\(direction.rawValue) target=\(target)")
         return nil
     }
 
     private func handleButtonUp(_ event: CGEvent) -> Unmanaged<CGEvent>? {
         let button = event.getIntegerValueField(.mouseEventButtonNumber)
-        let wasHandled = state.releaseButton(button)
-        print("button direction=up number=\(button) consumed=\(wasHandled)")
-        return wasHandled ? nil : Unmanaged.passUnretained(event)
+        let disposition = state.releaseButton(button)
+        print("button direction=up number=\(button) disposition=\(disposition)")
+        return disposition == .consume ? nil : Unmanaged.passUnretained(event)
     }
 
     private func postNavigation(_ direction: NavigationDirection) -> Bool {
