@@ -218,6 +218,61 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(launcher.launchCount, 0)
     }
 
+    func testPersistenceFailureAndRegisterCompensationFailureReportsBothErrors() {
+        let original = TidyTapSettings.defaults
+        let store = InMemoryPreferences(
+            request: TidyTapSettingsRequest(settings: original, applyRequestID: UUID()),
+            writeError: TestError.persistence
+        )
+        let loginItem = FailingLoginItem(failingValues: [false])
+        let coordinator = SettingsCoordinator(
+            preferences: store,
+            helperLauncher: RecordingHelperLauncher(),
+            loginItemManager: loginItem
+        )
+
+        var requested = original
+        requested.launchAtLogin = true
+
+        XCTAssertThrowsError(try coordinator.save(requested)) { error in
+            guard let recoveryError = error as? TidyTapSettingsRecoveryRequiredError else {
+                return XCTFail("Expected TidyTapSettingsRecoveryRequiredError, got \(error)")
+            }
+            XCTAssertEqual(recoveryError.persistenceError as? TestError, .persistence)
+            XCTAssertEqual(recoveryError.loginItemRecoveryError as? TestError, .recovery)
+        }
+        XCTAssertEqual(store.request.settings, original)
+        XCTAssertEqual(loginItem.values, [true, false])
+    }
+
+    func testPersistenceFailureAndUnregisterCompensationFailureReportsBothErrors() {
+        var original = TidyTapSettings.defaults
+        original.launchAtLogin = true
+        let store = InMemoryPreferences(
+            request: TidyTapSettingsRequest(settings: original, applyRequestID: UUID()),
+            writeError: TestError.persistence
+        )
+        let loginItem = FailingLoginItem(failingValues: [true])
+        let coordinator = SettingsCoordinator(
+            preferences: store,
+            helperLauncher: RecordingHelperLauncher(),
+            loginItemManager: loginItem
+        )
+
+        var requested = original
+        requested.launchAtLogin = false
+
+        XCTAssertThrowsError(try coordinator.save(requested)) { error in
+            guard let recoveryError = error as? TidyTapSettingsRecoveryRequiredError else {
+                return XCTFail("Expected TidyTapSettingsRecoveryRequiredError, got \(error)")
+            }
+            XCTAssertEqual(recoveryError.persistenceError as? TestError, .persistence)
+            XCTAssertEqual(recoveryError.loginItemRecoveryError as? TestError, .recovery)
+        }
+        XCTAssertEqual(store.request.settings, original)
+        XCTAssertEqual(loginItem.values, [false, true])
+    }
+
     private func enabledSettings(showInMenuBar: Bool) -> TidyTapSettings {
         TidyTapSettings(
             capsLockInputSourceSwitching: true,
@@ -232,13 +287,18 @@ final class TidyTapSettingsTests: XCTestCase {
 private final class InMemoryPreferences: TidyTapPreferencesStoring {
     var request: TidyTapSettingsRequest
     var status: TidyTapApplyStatus?
+    var writeError: Error?
 
-    init(request: TidyTapSettingsRequest) {
+    init(request: TidyTapSettingsRequest, writeError: Error? = nil) {
         self.request = request
+        self.writeError = writeError
     }
 
     func readRequest() -> TidyTapSettingsRequest { request }
     func write(settings: TidyTapSettings, applyRequestID: UUID) throws {
+        if let writeError {
+            throw writeError
+        }
         request = TidyTapSettingsRequest(settings: settings, applyRequestID: applyRequestID)
         status = .pending(applyRequestID)
     }
@@ -262,6 +322,7 @@ private final class RecordingInput: TidyTapInputFeaturesApplying {
     func apply(reverseMouseWheel: Bool, sideButtonNavigation: Bool) throws {
         calls.values.append("input:\(reverseMouseWheel):\(sideButtonNavigation)")
     }
+    func forcePassThrough() throws { calls.values.append("input:passThrough") }
 }
 
 private final class FailingInput: TidyTapInputFeaturesApplying {
@@ -273,6 +334,7 @@ private final class FailingInput: TidyTapInputFeaturesApplying {
             throw TestError.failure
         }
     }
+    func forcePassThrough() throws { calls.values.append("input:passThrough") }
 }
 
 private final class FailingRollbackInput: TidyTapInputFeaturesApplying {
@@ -324,23 +386,29 @@ private final class RecordingHelperLauncher: TidyTapHelperLaunching {
 }
 
 private final class FailingLoginItem: TidyTapLoginItemManaging {
-    let failingEnabledValue: Bool
+    let failingValues: Set<Bool>
     private(set) var values = [Bool]()
 
-    init(failingEnabledValue: Bool) {
-        self.failingEnabledValue = failingEnabledValue
+    convenience init(failingEnabledValue: Bool) {
+        self.init(failingValues: [failingEnabledValue])
+    }
+
+    init(failingValues: Set<Bool>) {
+        self.failingValues = failingValues
     }
 
     func setEnabled(_ enabled: Bool) throws {
         values.append(enabled)
-        if enabled == failingEnabledValue {
-            throw TestError.failure
+        if failingValues.contains(enabled) {
+            throw enabled ? TestError.recovery : TestError.recovery
         }
     }
 
     func status() -> TidyTapLoginItemStatus { .disabled }
 }
 
-private enum TestError: Error {
+private enum TestError: Error, Equatable {
     case failure
+    case persistence
+    case recovery
 }

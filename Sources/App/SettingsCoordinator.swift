@@ -6,6 +6,14 @@ protocol TidyTapHelperLaunching: AnyObject {
     func launchOrActivateHelper()
 }
 
+/// A completed ServiceManagement mutation could not be reconciled after the
+/// preferences write failed. Both underlying failures are retained so the UI
+/// can tell the user that login registration needs manual recovery.
+struct TidyTapSettingsRecoveryRequiredError: Error {
+    let persistenceError: Error
+    let loginItemRecoveryError: Error
+}
+
 /// Coordinates a settings write with the only IPC contract the helper accepts:
 /// a correlated request ID. It deliberately does not contain AppKit controls.
 final class SettingsCoordinator {
@@ -48,11 +56,18 @@ final class SettingsCoordinator {
 
         do {
             try preferences.write(settings: settings, applyRequestID: requestID)
-        } catch {
+        } catch let persistenceError {
             // A preferences failure must not leave the login registration out
             // of sync with the still-persisted snapshot.
-            try? loginItemManager.setEnabled(previousRequest.settings.launchAtLogin)
-            throw error
+            do {
+                try loginItemManager.setEnabled(previousRequest.settings.launchAtLogin)
+            } catch let loginItemRecoveryError {
+                throw TidyTapSettingsRecoveryRequiredError(
+                    persistenceError: persistenceError,
+                    loginItemRecoveryError: loginItemRecoveryError
+                )
+            }
+            throw persistenceError
         }
 
         latestRequestID = requestID

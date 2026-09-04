@@ -11,12 +11,6 @@ protocol TidyTapInputFeaturesApplying: AnyObject {
     func forcePassThrough() throws
 }
 
-extension TidyTapInputFeaturesApplying {
-    /// Implementations with an event tap should remove it or otherwise ensure
-    /// the original input is passed through if normal restoration failed.
-    func forcePassThrough() throws {}
-}
-
 protocol TidyTapMenuBarApplying: AnyObject {
     func applyMenuBar(visible: Bool) throws
 }
