@@ -396,11 +396,9 @@ public final class CapsLockFeatureController: @unchecked Sendable {
             throw TransactionFailure(primaryDescription: "missing ownership in prepared enable")
         }
 
-        var hidWasApplied = false
         let liveHID = try hid.currentMappings()
         if liveHID == plan.hid.before {
             try hid.commit(plan.hid)
-            hidWasApplied = true
         } else if liveHID != plan.hid.after {
             throw InputEngineError.staleSystemState(.hidMappings)
         }
@@ -415,11 +413,12 @@ public final class CapsLockFeatureController: @unchecked Sendable {
                 throw InputEngineError.staleSystemState(.symbolicHotkey60)
             }
         } catch {
-            let issues = hidWasApplied
-                ? rollbackIssues(for: [
-                    (.hidMappings, { try self.hid.rollbackIfApplied(plan.hid) })
-                ])
-                : []
+            // The prepared journal proves ownership of the exact `after`
+            // value even when HID was committed by the previous process.
+            // Restore it before surfacing a stale/failed hotkey recovery.
+            let issues = rollbackIssues(for: [
+                (.hidMappings, { try self.hid.rollbackIfApplied(plan.hid) })
+            ])
             if issues.isEmpty, let engineError = error as? InputEngineError {
                 throw engineError
             }
@@ -434,7 +433,9 @@ public final class CapsLockFeatureController: @unchecked Sendable {
     /// Reboots clear hidutil's volatile mapping while the symbolic hotkey and
     /// durable ownership survive. Only that exact state is repaired.
     public func recoverHIDAfterReset(ownership: CapsLockFeatureOwnership) throws {
-        _ = ownership
+        guard ownership.hid == .current else {
+            throw InputEngineError.capsLockOwnershipConflict
+        }
         let inputSourceCount = try inputSources.enabledSelectableInputSourceCount()
         guard inputSourceCount == 2 else {
             throw InputEngineError.invalidInputSourceCount(inputSourceCount)
@@ -443,6 +444,41 @@ public final class CapsLockFeatureController: @unchecked Sendable {
             throw InputEngineError.symbolicHotkeyOwnershipConflict
         }
         try hid.commit(hid.prepareEnable())
+    }
+
+    /// Restores the exact owned enabled state after an interrupted disable.
+    /// A live value must be either the owned value or the recorded backup;
+    /// anything else is an external conflict and remains untouched.
+    public func restoreOwnedState(ownership: CapsLockFeatureOwnership) throws {
+        guard ownership.hid == .current else {
+            throw InputEngineError.capsLockOwnershipConflict
+        }
+        let inputSourceCount = try inputSources.enabledSelectableInputSourceCount()
+        guard inputSourceCount == 2 else {
+            throw InputEngineError.invalidInputSourceCount(inputSourceCount)
+        }
+
+        let hidChange: HIDMappingChange
+        if try hid.hasTidyTapMapping() {
+            hidChange = try hid.prepareEnable(existingOwnership: ownership.hid)
+        } else {
+            hidChange = try hid.prepareEnable()
+        }
+
+        let hotkeyChange: Hotkey60Change
+        if try hotkey.hasTidyTapHotkey() {
+            hotkeyChange = try hotkey.prepareEnable(existingOwnership: ownership.hotkey60)
+        } else {
+            hotkeyChange = try hotkey.prepareEnable()
+            guard hotkeyChange.ownershipAfterCommit == ownership.hotkey60 else {
+                throw InputEngineError.symbolicHotkeyOwnershipConflict
+            }
+        }
+
+        _ = try completePreparedEnable(CapsLockEnablePlan(
+            hid: hidChange,
+            hotkey60: hotkeyChange
+        ))
     }
 
     /// Computes the durable ownership record without changing the system.
@@ -454,7 +490,9 @@ public final class CapsLockFeatureController: @unchecked Sendable {
     }
 
     public func isApplied(_ ownership: CapsLockFeatureOwnership) throws -> Bool {
-        _ = ownership
+        guard ownership.hid == .current else {
+            throw InputEngineError.capsLockOwnershipConflict
+        }
         return try hid.hasTidyTapMapping() && hotkey.hasTidyTapHotkey()
     }
 

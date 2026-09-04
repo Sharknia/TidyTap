@@ -50,19 +50,24 @@ final class CapsLockFeatureAdapter: TidyTapCapsFeatureApplying {
 
     func apply(capsLockEnabled: Bool) throws {
         if capsLockEnabled {
-            if let journal = try readJournal(), journal.enabled {
-                if journal.phase == .prepared, let plan = journal.enablePlan {
-                    let ownership = try controller.completePreparedEnable(plan)
-                    try writeJournal(.init(enabled: true, phase: .applied, ownership: ownership))
-                    return
-                }
-                if try controller.isApplied(journal.ownership) {
-                    if journal.phase == .prepared {
-                        try writeJournal(.init(enabled: true, phase: .applied, ownership: journal.ownership))
+            if let journal = try readJournal() {
+                if journal.enabled {
+                    if journal.phase == .prepared, let plan = journal.enablePlan {
+                        let ownership = try controller.completePreparedEnable(plan)
+                        try writeJournal(.init(enabled: true, phase: .applied, ownership: ownership))
+                        return
                     }
+                    if try controller.isApplied(journal.ownership) {
+                        if journal.phase == .prepared {
+                            try writeJournal(.init(enabled: true, phase: .applied, ownership: journal.ownership))
+                        }
+                        return
+                    }
+                    try controller.recoverHIDAfterReset(ownership: journal.ownership)
+                    try writeJournal(.init(enabled: true, phase: .applied, ownership: journal.ownership))
                     return
                 }
-                try controller.recoverHIDAfterReset(ownership: journal.ownership)
+                try controller.restoreOwnedState(ownership: journal.ownership)
                 try writeJournal(.init(enabled: true, phase: .applied, ownership: journal.ownership))
                 return
             }
@@ -86,11 +91,7 @@ final class CapsLockFeatureAdapter: TidyTapCapsFeatureApplying {
     }
 
     func currentCapsLockEnabled() throws -> Bool {
-        guard let journal = try readJournal(),
-              journal.enabled,
-              journal.phase == .applied else {
-            return false
-        }
+        guard let journal = try readJournal() else { return false }
         return try controller.isApplied(journal.ownership)
     }
 

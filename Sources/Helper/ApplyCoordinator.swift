@@ -85,20 +85,18 @@ final class ApplyCoordinator {
         // the event callback without mutating the live backend. This method is
         // dispatched to the main actor after the callback returns, so it is the
         // safe point to uninstall/reinstall the tap to match that configuration.
-        if result != nil {
-            do {
-                _ = try inputFeatures.apply(
-                    reverseMouseWheel: inputConfiguration.reverseMouseWheel,
-                    sideButtonNavigation: inputConfiguration.sideButtonNavigation,
-                    requestID: requestID
-                )
-            } catch let adapterError as TidyTapInputFeatureAdapterError {
-                runtimeResult = nil
-                runtimeError = adapterError
-            } catch {
-                runtimeResult = nil
-                runtimeError = .eventTapFailed
-            }
+        do {
+            _ = try inputFeatures.apply(
+                reverseMouseWheel: inputConfiguration.reverseMouseWheel,
+                sideButtonNavigation: inputConfiguration.sideButtonNavigation,
+                requestID: requestID
+            )
+        } catch let adapterError as TidyTapInputFeatureAdapterError {
+            runtimeResult = nil
+            runtimeError = adapterError
+        } catch {
+            runtimeResult = nil
+            runtimeError = .eventTapFailed
         }
         let normalizedInputConfiguration = inputFeatures.currentConfiguration()
         var effective = activeRequest.settings
@@ -141,10 +139,11 @@ final class ApplyCoordinator {
         do {
             previousState = try captureControllerState()
         } catch {
+            let captureError = error as? ControllerStateCaptureError
             let result = failure(
                 request.applyRequestID,
-                component: .lifecycle,
-                error: error,
+                component: captureError?.component ?? .lifecycle,
+                error: captureError?.underlying ?? error,
                 effectiveSettings: request.settings
             )
             report(result)
@@ -198,6 +197,7 @@ final class ApplyCoordinator {
     private func apply(_ settings: TidyTapSettings, requestID: UUID) -> ApplyAttempt {
         var touchedComponents = [TidyTapApplyComponent]()
 
+        touchedComponents.append(.capsLock)
         do {
             try capsFeature.apply(capsLockEnabled: settings.capsLockInputSourceSwitching)
         } catch {
@@ -206,8 +206,6 @@ final class ApplyCoordinator {
                 touchedComponents: touchedComponents
             )
         }
-        touchedComponents.append(.capsLock)
-
         touchedComponents.append(.eventTap)
         let inputResult: TidyTapInputFeatureApplyResult
         do {
@@ -310,23 +308,29 @@ final class ApplyCoordinator {
         effectiveSettings: TidyTapSettings? = nil
     ) -> TidyTapApplyStatus {
         let code: String
+        let outcome: TidyTapApplyOutcome
         if case TidyTapInputFeatureAdapterError.permissionDenied(let permissions) = error {
             code = permissionCode(prefix: "\(component.rawValue).permissionDenied", permissions: permissions)
+            outcome = .failed
         } else if case TidyTapInputFeatureAdapterError.eventTapFailed = error {
             code = "\(component.rawValue).recoveryFailed"
+            outcome = .failed
         } else if let engineError = error as? InputEngineError {
             code = capsErrorCode(engineError, component: component)
+            outcome = .failed
         } else if let transaction = error as? TransactionFailure {
             let components = transaction.rollbackIssues.map(\.component.rawValue).joined(separator: ".")
             code = transaction.recoveryRequired
                 ? "\(component.rawValue).recoveryRequired.\(components)"
                 : "\(component.rawValue).transactionFailed"
+            outcome = transaction.recoveryRequired ? .recoveryRequired : .failed
         } else {
             code = "\(component.rawValue).applyFailed"
+            outcome = .failed
         }
         return TidyTapApplyStatus(
             applyRequestID: requestID,
-            outcome: .failed,
+            outcome: outcome,
             failedComponent: component,
             errorCode: code,
             effectiveSettings: effectiveSettings
@@ -352,9 +356,20 @@ final class ApplyCoordinator {
         let menuBarVisible: Bool
     }
 
+    private struct ControllerStateCaptureError: Error {
+        let component: TidyTapApplyComponent
+        let underlying: Error
+    }
+
     private func captureControllerState() throws -> ControllerState {
-        ControllerState(
-            capsLockEnabled: try capsFeature.currentCapsLockEnabled(),
+        let capsLockEnabled: Bool
+        do {
+            capsLockEnabled = try capsFeature.currentCapsLockEnabled()
+        } catch {
+            throw ControllerStateCaptureError(component: .capsLock, underlying: error)
+        }
+        return ControllerState(
+            capsLockEnabled: capsLockEnabled,
             input: inputFeatures.currentConfiguration(),
             menuBarVisible: menuBar.isMenuBarVisible
         )
@@ -385,8 +400,13 @@ final class ApplyCoordinator {
         case .capsLockAlreadyMapped: return "\(prefix).conflict.sourceMapping"
         case .capsLockOwnershipConflict: return "\(prefix).conflict.hidOwnership"
         case .symbolicHotkeyOwnershipConflict: return "\(prefix).conflict.symbolicHotkey"
+        case .preWriteStateChanged(let engineComponent): return "\(prefix).preWriteStateChanged.\(engineComponent.rawValue)"
         case .staleSystemState(let engineComponent): return "\(prefix).recoveryRequired.\(engineComponent.rawValue)"
-        default: return "\(prefix).applyFailed.\(String(describing: error))"
+        case .verificationFailed(let engineComponent): return "\(prefix).verificationFailed.\(engineComponent.rawValue)"
+        case .invalidSystemData(let engineComponent): return "\(prefix).invalidSystemData.\(engineComponent.rawValue)"
+        case .commandFailed: return "\(prefix).commandFailed"
+        case .eventTapCreationFailed: return "\(prefix).creationFailed"
+        case .eventTapRecoveryFailed: return "\(prefix).recoveryFailed"
         }
     }
 }

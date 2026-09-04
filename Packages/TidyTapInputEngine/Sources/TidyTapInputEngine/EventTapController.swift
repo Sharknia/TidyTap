@@ -149,6 +149,7 @@ public final class EventTapController: @unchecked Sendable {
                     ))
                 } catch {
                     sideButtons.reset()
+                    setEffectiveConfiguration(Self.disabledConfiguration)
                     return updateStatus(.failed(.eventTapCreationFailed))
                 }
             }
@@ -172,8 +173,10 @@ public final class EventTapController: @unchecked Sendable {
                 configuration.isEnabled ? .running(configuration) : .drainingButtonPresses
             )
         } catch let error as InputEngineError {
+            setEffectiveConfiguration(Self.disabledConfiguration)
             return updateStatus(.failed(error))
         } catch {
+            setEffectiveConfiguration(Self.disabledConfiguration)
             return updateStatus(.failed(.eventTapCreationFailed))
         }
     }
@@ -303,6 +306,7 @@ public final class EventTapController: @unchecked Sendable {
                     ))
                 } catch {
                     sideButtons.reset()
+                    setEffectiveConfiguration(Self.disabledConfiguration)
                     _ = updateStatus(.failed(.eventTapRecoveryFailed))
                 }
                 return .passThrough
@@ -328,6 +332,7 @@ public final class EventTapController: @unchecked Sendable {
             )
         } catch {
             sideButtons.reset()
+            setEffectiveConfiguration(Self.disabledConfiguration)
             _ = updateStatus(.failed(.eventTapRecoveryFailed))
         }
         return .passThrough
@@ -438,6 +443,11 @@ public final class EventTapController: @unchecked Sendable {
     private static let sideButtonOnlyConfiguration = EventTapConfiguration(
         reverseMouseScroll: false,
         sideButtonNavigation: true
+    )
+
+    private static let disabledConfiguration = EventTapConfiguration(
+        reverseMouseScroll: false,
+        sideButtonNavigation: false
     )
 
     @discardableResult
