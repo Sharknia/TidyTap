@@ -13,15 +13,25 @@
 		A10000000000000000000015 /* TidyTapProduct.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000113 /* TidyTapProduct.swift */; };
 		A10000000000000000000016 /* TidyTapStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000114 /* TidyTapStrings.swift */; };
 		A10000000000000000000017 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000115 /* Localizable.xcstrings */; };
+		A10000000000000000000018 /* SettingsCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000116 /* SettingsCoordinator.swift */; };
+		A10000000000000000000019 /* HelperLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000117 /* HelperLauncher.swift */; };
+		A1000000000000000000001A /* LoginItemCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000118 /* LoginItemCoordinator.swift */; };
 		A10000000000000000000021 /* HelperAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000121 /* HelperAppDelegate.swift */; };
 		A10000000000000000000022 /* TidyTapSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000111 /* TidyTapSettings.swift */; };
 		A10000000000000000000023 /* TidyTapIPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000112 /* TidyTapIPC.swift */; };
 		A10000000000000000000024 /* TidyTapProduct.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000113 /* TidyTapProduct.swift */; };
 		A10000000000000000000025 /* TidyTapStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000114 /* TidyTapStrings.swift */; };
 		A10000000000000000000026 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000115 /* Localizable.xcstrings */; };
+		A10000000000000000000027 /* ApplyCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000122 /* ApplyCoordinator.swift */; };
+		A10000000000000000000028 /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000123 /* MenuBarController.swift */; };
+		A10000000000000000000029 /* HelperLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000124 /* HelperLifecycle.swift */; };
 		A10000000000000000000031 /* TidyTapSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000131 /* TidyTapSettingsTests.swift */; };
 		A10000000000000000000032 /* TidyTapSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000111 /* TidyTapSettings.swift */; };
 		A10000000000000000000033 /* TidyTapProduct.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000113 /* TidyTapProduct.swift */; };
+		A10000000000000000000034 /* TidyTapIPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000112 /* TidyTapIPC.swift */; };
+		A10000000000000000000035 /* ApplyCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000122 /* ApplyCoordinator.swift */; };
+		A10000000000000000000036 /* SettingsCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000116 /* SettingsCoordinator.swift */; };
+		A10000000000000000000037 /* LoginItemCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000118 /* LoginItemCoordinator.swift */; };
 		A10000000000000000000041 /* TidyTapHelper.app in Embed Login Item */ = {isa = PBXBuildFile; fileRef = A10000000000000000000202 /* TidyTapHelper.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -38,7 +48,13 @@
 		A10000000000000000000113 /* TidyTapProduct.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TidyTapProduct.swift; sourceTree = "<group>"; };
 		A10000000000000000000114 /* TidyTapStrings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TidyTapStrings.swift; sourceTree = "<group>"; };
 		A10000000000000000000115 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		A10000000000000000000116 /* SettingsCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsCoordinator.swift; sourceTree = "<group>"; };
+		A10000000000000000000117 /* HelperLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperLauncher.swift; sourceTree = "<group>"; };
+		A10000000000000000000118 /* LoginItemCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemCoordinator.swift; sourceTree = "<group>"; };
 		A10000000000000000000121 /* HelperAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperAppDelegate.swift; sourceTree = "<group>"; };
+		A10000000000000000000122 /* ApplyCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplyCoordinator.swift; sourceTree = "<group>"; };
+		A10000000000000000000123 /* MenuBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
+		A10000000000000000000124 /* HelperLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperLifecycle.swift; sourceTree = "<group>"; };
 		A10000000000000000000131 /* TidyTapSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TidyTapSettingsTests.swift; sourceTree = "<group>"; };
 		A10000000000000000000141 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
 		A10000000000000000000142 /* LocalSigning.xcconfig.example */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "LocalSigning.xcconfig.example"; sourceTree = "<group>"; };
@@ -57,8 +73,8 @@
 /* Begin PBXGroup section */
 		A10000000000000000000401 = {isa = PBXGroup; children = (A10000000000000000000402 /* Sources */, A10000000000000000000405 /* Tests */, A10000000000000000000409 /* Config */, A10000000000000000000410 /* Scripts */, A10000000000000000000406 /* Products */, ); sourceTree = "<group>"; };
 		A10000000000000000000402 /* Sources */ = {isa = PBXGroup; children = (A10000000000000000000403 /* App */, A10000000000000000000404 /* Helper */, A10000000000000000000407 /* Shared */, ); path = Sources; sourceTree = "<group>"; };
-		A10000000000000000000403 /* App */ = {isa = PBXGroup; children = (A10000000000000000000101 /* AppDelegate.swift */, A10000000000000000000102 /* SettingsViewController.swift */, ); path = App; sourceTree = "<group>"; };
-		A10000000000000000000404 /* Helper */ = {isa = PBXGroup; children = (A10000000000000000000121 /* HelperAppDelegate.swift */, ); path = Helper; sourceTree = "<group>"; };
+		A10000000000000000000403 /* App */ = {isa = PBXGroup; children = (A10000000000000000000101 /* AppDelegate.swift */, A10000000000000000000102 /* SettingsViewController.swift */, A10000000000000000000116 /* SettingsCoordinator.swift */, A10000000000000000000117 /* HelperLauncher.swift */, A10000000000000000000118 /* LoginItemCoordinator.swift */, ); path = App; sourceTree = "<group>"; };
+		A10000000000000000000404 /* Helper */ = {isa = PBXGroup; children = (A10000000000000000000121 /* HelperAppDelegate.swift */, A10000000000000000000122 /* ApplyCoordinator.swift */, A10000000000000000000123 /* MenuBarController.swift */, A10000000000000000000124 /* HelperLifecycle.swift */, ); path = Helper; sourceTree = "<group>"; };
 		A10000000000000000000405 /* Tests */ = {isa = PBXGroup; children = (A10000000000000000000408 /* TidyTapTests */, ); path = Tests; sourceTree = "<group>"; };
 		A10000000000000000000406 /* Products */ = {isa = PBXGroup; children = (A10000000000000000000201 /* TidyTap.app */, A10000000000000000000202 /* TidyTapHelper.app */, A10000000000000000000203 /* TidyTapTests.xctest */, ); name = Products; sourceTree = "<group>"; };
 		A10000000000000000000407 /* Shared */ = {isa = PBXGroup; children = (A10000000000000000000111 /* TidyTapSettings.swift */, A10000000000000000000112 /* TidyTapIPC.swift */, A10000000000000000000113 /* TidyTapProduct.swift */, A10000000000000000000114 /* TidyTapStrings.swift */, A10000000000000000000115 /* Localizable.xcstrings */, ); path = Shared; sourceTree = "<group>"; };
@@ -83,9 +99,9 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		A10000000000000000000311 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000011 /* AppDelegate.swift in Sources */, A10000000000000000000012 /* SettingsViewController.swift in Sources */, A10000000000000000000013 /* TidyTapSettings.swift in Sources */, A10000000000000000000014 /* TidyTapIPC.swift in Sources */, A10000000000000000000015 /* TidyTapProduct.swift in Sources */, A10000000000000000000016 /* TidyTapStrings.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
-		A10000000000000000000321 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000021 /* HelperAppDelegate.swift in Sources */, A10000000000000000000022 /* TidyTapSettings.swift in Sources */, A10000000000000000000023 /* TidyTapIPC.swift in Sources */, A10000000000000000000024 /* TidyTapProduct.swift in Sources */, A10000000000000000000025 /* TidyTapStrings.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
-		A10000000000000000000331 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000031 /* TidyTapSettingsTests.swift in Sources */, A10000000000000000000032 /* TidyTapSettings.swift in Sources */, A10000000000000000000033 /* TidyTapProduct.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
+		A10000000000000000000311 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000011 /* AppDelegate.swift in Sources */, A10000000000000000000012 /* SettingsViewController.swift in Sources */, A10000000000000000000018 /* SettingsCoordinator.swift in Sources */, A10000000000000000000019 /* HelperLauncher.swift in Sources */, A1000000000000000000001A /* LoginItemCoordinator.swift in Sources */, A10000000000000000000013 /* TidyTapSettings.swift in Sources */, A10000000000000000000014 /* TidyTapIPC.swift in Sources */, A10000000000000000000015 /* TidyTapProduct.swift in Sources */, A10000000000000000000016 /* TidyTapStrings.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
+		A10000000000000000000321 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000021 /* HelperAppDelegate.swift in Sources */, A10000000000000000000027 /* ApplyCoordinator.swift in Sources */, A10000000000000000000028 /* MenuBarController.swift in Sources */, A10000000000000000000029 /* HelperLifecycle.swift in Sources */, A10000000000000000000022 /* TidyTapSettings.swift in Sources */, A10000000000000000000023 /* TidyTapIPC.swift in Sources */, A10000000000000000000024 /* TidyTapProduct.swift in Sources */, A10000000000000000000025 /* TidyTapStrings.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
+		A10000000000000000000331 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000031 /* TidyTapSettingsTests.swift in Sources */, A10000000000000000000032 /* TidyTapSettings.swift in Sources */, A10000000000000000000034 /* TidyTapIPC.swift in Sources */, A10000000000000000000035 /* ApplyCoordinator.swift in Sources */, A10000000000000000000036 /* SettingsCoordinator.swift in Sources */, A10000000000000000000037 /* LoginItemCoordinator.swift in Sources */, A10000000000000000000033 /* TidyTapProduct.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXCopyFilesBuildPhase section */
