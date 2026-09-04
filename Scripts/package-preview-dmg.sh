@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Build an unsigned local preview DMG. It is deliberately not a public release.
+# Build an ad-hoc-signed local preview DMG. It is deliberately not a public release.
 set -euo pipefail
 
 project_root="${0:A:h:h}"
@@ -12,8 +12,13 @@ mkdir -p "$build_root"
 candidate_dir=$(mktemp -d "$build_root/.preview-candidate.XXXXXX")
 step_number=0
 publication_lock=""
+mount_dir="$candidate_dir/mounted-dmg"
+mounted_image=false
 
 cleanup() {
+  if $mounted_image; then
+    /usr/bin/hdiutil detach -force "$mount_dir" >/dev/null 2>&1 || true
+  fi
   if [[ -n "$publication_lock" && -d "$publication_lock" ]]; then
     rmdir "$publication_lock"
   fi
@@ -70,13 +75,40 @@ if [[ ! -d "$app_path" || ! -d "$helper_path" ]]; then
   exit 1
 fi
 
+sign_preview_bundle() {
+  local bundle_path="$1"
+  local label="$2"
+  run_step \
+    "$label ad-hoc signing" \
+    "Check that the bundle contains only signable local build output." \
+    /usr/bin/codesign --force --sign - --timestamp=none "$bundle_path"
+}
+
+verify_preview_bundle() {
+  local bundle_path="$1"
+  local label="$2"
+  run_step \
+    "$label signature verification" \
+    "The ad-hoc resource seal or executable signature is invalid." \
+    /usr/bin/codesign --verify --strict --verbose=2 "$bundle_path"
+}
+
+# Sign nested code first so the parent app's resource seal includes it.
+sign_preview_bundle "$helper_path" "Preview helper"
+sign_preview_bundle "$app_path" "Preview app"
+verify_preview_bundle "$helper_path" "Preview helper"
+run_step \
+  "Preview app deep signature verification" \
+  "The app or its embedded helper is not a valid sealed bundle." \
+  /usr/bin/codesign --verify --deep --strict --verbose=2 "$app_path"
+
 version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app_path/Contents/Info.plist")
 if [[ -z "$version" ]]; then
   print -u2 -- "Could not determine the app version."
   exit 1
 fi
 
-dmg_name="TidyTap-$version-preview-unsigned.dmg"
+dmg_name="TidyTap-$version-preview-adhoc.dmg"
 candidate_dmg="$candidate_dir/$dmg_name"
 staging_dir="$candidate_dir/staging"
 mkdir "$staging_dir"
@@ -85,6 +117,35 @@ run_step \
   "Preview DMG creation" \
   "Check available disk space and the built app bundle." \
   /usr/bin/hdiutil create -volname "TidyTap Preview" -srcfolder "$staging_dir" -ov -format UDZO "$candidate_dmg"
+
+mkdir "$mount_dir"
+run_step \
+  "Preview DMG mount" \
+  "The candidate DMG could not be mounted read-only for install verification." \
+  /usr/bin/hdiutil attach -readonly -nobrowse -mountpoint "$mount_dir" "$candidate_dmg"
+mounted_image=true
+
+copied_app_path="$candidate_dir/installed-copy/TidyTap.app"
+mkdir "${copied_app_path:h}"
+run_step \
+  "Preview app copy verification" \
+  "The app could not be copied from the mounted DMG." \
+  /usr/bin/ditto "$mount_dir/TidyTap.app" "$copied_app_path"
+copied_helper_path="$copied_app_path/Contents/Library/LoginItems/TidyTapHelper.app"
+if [[ ! -d "$copied_helper_path" ]]; then
+  print -u2 -- "Mounted preview DMG did not contain TidyTap.app with its embedded helper."
+  exit 1
+fi
+verify_preview_bundle "$copied_helper_path" "Copied preview helper"
+run_step \
+  "Copied preview app deep signature verification" \
+  "The copied app or embedded helper did not retain a valid resource seal." \
+  /usr/bin/codesign --verify --deep --strict --verbose=2 "$copied_app_path"
+run_step \
+  "Preview DMG detach" \
+  "The isolated preview mount could not be detached." \
+  /usr/bin/hdiutil detach "$mount_dir"
+mounted_image=false
 
 candidate_sidecar="$candidate_dmg.sha256"
 (
@@ -104,7 +165,7 @@ if ! mkdir "$publication_lock"; then
   exit 1
 fi
 if [[ -e "$final_dir" || -L "$final_dir" ]]; then
-  print -u2 -- "A preview package for this version already exists; it was left unchanged."
+  print -u2 -- "An ad-hoc preview package for this version already exists; it was left unchanged."
   exit 1
 fi
 
@@ -118,5 +179,5 @@ publication_lock=""
 
 relative_dmg="build/artifacts/${dmg_name:r}/$dmg_name"
 checksum=$(cut -d ' ' -f 1 "$final_dir/${dmg_name}.sha256")
-print -- "Created unsigned preview DMG: $relative_dmg"
+print -- "Created ad-hoc preview DMG: $relative_dmg"
 print -- "SHA-256: $checksum"

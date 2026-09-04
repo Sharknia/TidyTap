@@ -4,16 +4,20 @@
 repository never contains a certificate, private key, Apple ID, app-specific
 password, App Store Connect API key, or a notarytool profile export.
 
-## Local unsigned preview
+## Local ad-hoc preview
 
-Build a Release-optimized package without any signing identity:
+Build a Release-optimized package without a Developer ID signing identity:
 
 ```sh
 Scripts/package-preview-dmg.sh
 ```
 
 The script creates the pair together at
-`build/artifacts/TidyTap-<version>-preview-unsigned/`. Its `.sha256` sidecar
+`build/artifacts/TidyTap-<version>-preview-adhoc/`. It uses a local ad-hoc
+signature: the embedded helper is signed first, then the parent app is sealed.
+Before publication it verifies the helper and parent app, mounts the DMG
+read-only, copies the app to an isolated temporary location, and verifies both
+signatures again. Its `.sha256` sidecar
 contains only the DMG basename, so the two files can be copied to another
 directory and checked there with `shasum -a 256 -c <sidecar>`. It is only
 suitable for local development: Gatekeeper will not accept it as a public
