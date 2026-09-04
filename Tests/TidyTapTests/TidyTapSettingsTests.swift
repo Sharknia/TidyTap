@@ -479,8 +479,8 @@ private struct FakeNavigationSynthesizer: NavigationSynthesizing {
 
 private final class InMemoryCapsOwnership: TidyTapCapsOwnershipStoring {
     var data: Data?
-    func readCapsLockOwnershipData() -> Data? { data }
-    func writeCapsLockOwnershipData(_ data: Data?) throws { self.data = data }
+    func readCapsLockJournalData() -> Data? { data }
+    func writeCapsLockJournalData(_ data: Data?) throws { self.data = data }
 }
 
 private final class FakeCapsSystem: HIDMappingApplying, SymbolicHotkeyApplying, InputSourceCounting, @unchecked Sendable {

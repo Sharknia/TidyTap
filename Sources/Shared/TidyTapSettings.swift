@@ -141,8 +141,8 @@ protocol TidyTapPreferencesStoring: AnyObject {
 /// engine ownership token in the same durable domain as the settings snapshot.
 /// The token stays helper-private; the Dock app never interprets it.
 protocol TidyTapCapsOwnershipStoring: AnyObject {
-    func readCapsLockOwnershipData() -> Data?
-    func writeCapsLockOwnershipData(_ data: Data?) throws
+    func readCapsLockJournalData() -> Data?
+    func writeCapsLockJournalData(_ data: Data?) throws
 }
 
 enum TidyTapPreferencesError: Error {
@@ -199,12 +199,12 @@ final class TidyTapPreferencesStore: TidyTapPreferencesStoring, TidyTapCapsOwner
         synchronize()
     }
 
-    func readCapsLockOwnershipData() -> Data? {
+    func readCapsLockJournalData() -> Data? {
         synchronize()
         return defaults.data(forKey: TidyTapPreferences.capsLockOwnershipKey)
     }
 
-    func writeCapsLockOwnershipData(_ data: Data?) throws {
+    func writeCapsLockJournalData(_ data: Data?) throws {
         defaults.set(data, forKey: TidyTapPreferences.capsLockOwnershipKey)
         synchronize()
     }

@@ -63,7 +63,11 @@ final class ApplyCoordinator {
         let attempt = apply(request.settings, requestID: request.applyRequestID)
         let result = attempt.status
         if result.outcome == .applied || result.outcome == .partiallyApplied {
-            activeSettings = request.settings
+            let effective = effectiveSettings(request.settings, status: result)
+            activeSettings = effective
+            if effective != request.settings {
+                try? preferences.write(settings: effective, applyRequestID: request.applyRequestID)
+            }
         } else {
             let rollbackFailures = restore(previousSettings, touchedComponents: attempt.touchedComponents)
             if !rollbackFailures.isEmpty {
@@ -215,6 +219,19 @@ final class ApplyCoordinator {
     private func report(_ status: TidyTapApplyStatus) {
         try? preferences.writeApplyStatus(status)
         TidyTapIPC.postApplyResult(status)
+    }
+
+    private func effectiveSettings(_ requested: TidyTapSettings, status: TidyTapApplyStatus) -> TidyTapSettings {
+        guard status.outcome == .partiallyApplied else { return requested }
+        var effective = requested
+        if status.errorCode?.contains(TidyTapPermission.inputMonitoring.rawValue) == true {
+            effective.reverseMouseWheelVertically = false
+        }
+        if status.errorCode?.contains(TidyTapPermission.accessibility.rawValue) == true {
+            effective.reverseMouseWheelVertically = false
+            effective.sideButtonNavigation = false
+        }
+        return effective
     }
 }
 

@@ -9,6 +9,13 @@ enum TidyTapInputFeatureAdapterError: Error {
     case eventTapFailed
 }
 
+private enum CapsJournalPhase: String, Codable { case prepared, applied }
+private struct CapsJournal: Codable {
+    let enabled: Bool
+    let phase: CapsJournalPhase
+    let ownership: CapsLockFeatureOwnership
+}
+
 final class CapsLockFeatureAdapter: TidyTapCapsFeatureApplying {
     private let controller: CapsLockFeatureController
     private let ownershipStore: TidyTapCapsOwnershipStoring
@@ -29,19 +36,31 @@ final class CapsLockFeatureAdapter: TidyTapCapsFeatureApplying {
     }
 
     func apply(capsLockEnabled: Bool) throws {
-        let ownership = try readOwnership()
         if capsLockEnabled {
-            let updatedOwnership = try controller.enable(existingOwnership: ownership)
-            try ownershipStore.writeCapsLockOwnershipData(try encoder.encode(updatedOwnership))
-        } else if let ownership {
-            try controller.disable(ownership: ownership)
-            try ownershipStore.writeCapsLockOwnershipData(nil)
+            if let journal = try readJournal(), journal.enabled {
+                if journal.phase == .applied { return }
+                // A crash after mutation is finalized on restart; a pre-mutation
+                // journal is retried safely by the engine's ownership checks.
+                let ownership = try controller.enable(existingOwnership: nil)
+                try writeJournal(.init(enabled: true, phase: .applied, ownership: ownership))
+                return
+            }
+            let ownership = try controller.enable(existingOwnership: nil)
+            try writeJournal(.init(enabled: true, phase: .applied, ownership: ownership))
+        } else if let journal = try readJournal() {
+            try writeJournal(.init(enabled: false, phase: .prepared, ownership: journal.ownership))
+            try controller.disable(ownership: journal.ownership)
+            try ownershipStore.writeCapsLockJournalData(nil)
         }
     }
 
-    private func readOwnership() throws -> CapsLockFeatureOwnership? {
-        guard let data = ownershipStore.readCapsLockOwnershipData() else { return nil }
-        return try decoder.decode(CapsLockFeatureOwnership.self, from: data)
+    private func readJournal() throws -> CapsJournal? {
+        guard let data = ownershipStore.readCapsLockJournalData() else { return nil }
+        return try decoder.decode(CapsJournal.self, from: data)
+    }
+
+    private func writeJournal(_ journal: CapsJournal) throws {
+        try ownershipStore.writeCapsLockJournalData(try encoder.encode(journal))
     }
 }
 

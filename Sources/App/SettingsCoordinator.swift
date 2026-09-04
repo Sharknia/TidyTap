@@ -40,9 +40,9 @@ final class SettingsCoordinator {
     func restoreSession() {
         let request = preferences.readRequest()
         try? loginItemManager.setEnabled(request.settings.launchAtLogin)
-        if request.settings.requiresHelper {
-            helperLauncher.launchOrActivateHelper()
-        }
+        latestRequestID = request.applyRequestID
+        latestApplyStatus = preferences.readApplyStatus()
+        helperLauncher.launchOrActivateHelper()
     }
 
     func persistedSettings() -> TidyTapSettings {
@@ -81,9 +81,7 @@ final class SettingsCoordinator {
 
         // A running helper must receive an all-off request so it can restore
         // state and exit. If it is not running, no helper is necessary.
-        if settings.requiresHelper {
-            helperLauncher.launchOrActivateHelper()
-        }
+        helperLauncher.launchOrActivateHelper()
         TidyTapIPC.postSettingsDidChange(requestID: requestID)
         return requestID
     }
@@ -92,12 +90,12 @@ final class SettingsCoordinator {
     /// helper result cannot make a newer UI toggle appear successful.
     @discardableResult
     func receiveApplyResult() -> TidyTapApplyStatus? {
-        guard let expectedID = latestRequestID,
-              let status = preferences.readApplyStatus(),
-              status.applyRequestID == expectedID else {
+        let request = preferences.readRequest()
+        guard let status = preferences.readApplyStatus(),
+              status.applyRequestID == request.applyRequestID else {
             return nil
         }
-
+        latestRequestID = request.applyRequestID
         latestApplyStatus = status
         return status
     }

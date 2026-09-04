@@ -10,8 +10,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         let settingsCoordinator = SettingsCoordinator(helperLauncher: HelperLauncher())
         self.settingsCoordinator = settingsCoordinator
-        settingsCoordinator.restoreSession()
-
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(applyResultDidArrive(_:)),
@@ -20,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             suspensionBehavior: .deliverImmediately
         )
         observesApplyResults = true
+        settingsCoordinator.restoreSession()
 
         let controller = SettingsViewController(
             settings: settingsCoordinator.persistedSettings(),
@@ -66,8 +65,9 @@ extension AppDelegate: SettingsViewControllerDelegate {
         return true
     }
 
-    func settingsViewControllerRequestsPermissionSettings(_ controller: SettingsViewController) -> Bool {
-        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+    func settingsViewControllerRequestsPermissionSettings(_ controller: SettingsViewController, permission: TidyTapPermission) -> Bool {
+        let anchor = permission == .accessibility ? "Privacy_Accessibility" : "Privacy_ListenEvent"
+        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)")!
         NSWorkspace.shared.open(url)
         return true
     }
