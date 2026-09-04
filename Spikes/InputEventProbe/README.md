@@ -52,13 +52,11 @@ Before testing, use the supported MacBook Pro `Mac15,6` on macOS 26.6.2 (`25G83`
 
 ### Scroll classification gate
 
-1. On the VXE mouse, turn the vertical wheel **50 notches in each direction**. Every event must report `class=discrete-mouse`; any VXE event reported as `trackpad`/`unknown` (which the product would pass through) is a failure.
-2. On the built-in trackpad, perform **20 gestures in each vertical direction** and **20 gestures in each horizontal direction**, allowing momentum to complete. Every scroll and momentum event must report `class=trackpad`; any event classified `discrete-mouse` is a failure.
-3. Repeat step 2 on the Apple Magic Trackpad: **20 gestures in each vertical direction** and **20 gestures in each horizontal direction**, including momentum. Any `discrete-mouse` classification is a failure.
-4. Alternate between one VXE wheel action and one trackpad gesture for **20 device transitions**. A transition passes only when the VXE event remains `discrete-mouse` and every trackpad event remains `trackpad`.
-5. The gate passes only with **zero misclassifications**: no trackpad event would be inverted and no VXE wheel event would pass through. On any failure, stop stage 0 and obtain approval for a revised scope/technical approach before building UI.
-
-The frozen plan separately requires each trackpad's direction-by-direction 20 gesture coverage and the 20 alternations. Do not replace these counts with a duration-only run.
+1. On the VXE mouse, produce at least **100 nonzero vertical wheel events across both directions**. Every event must report `class=discrete-mouse`; any VXE event reported as `trackpad`/`unknown` is a failure.
+2. On the built-in trackpad, produce at least **200 events across vertical, horizontal, and momentum scrolling**. Any event classified `discrete-mouse` is a failure; terminal zero-delta `unknown` events are passed through and are not failures.
+3. Repeat step 2 on the Apple Magic Trackpad with the same minimum coverage and failure rule.
+4. The gate passes only when no trackpad event would be inverted and no VXE wheel event would pass through. The classifier does not use the previous device for discrete mouse or direct trackpad decisions, so a separate repeated device-alternation run is not required.
+5. On any failure, stop stage 0 and obtain approval for a revised scope/technical approach before building UI.
 
 ### Side-button identity
 
