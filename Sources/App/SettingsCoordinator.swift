@@ -38,9 +38,22 @@ final class SettingsCoordinator {
 
     @discardableResult
     func save(_ settings: TidyTapSettings) throws -> UUID {
+        let previousRequest = preferences.readRequest()
         let requestID = UUID()
-        try preferences.write(settings: settings, applyRequestID: requestID)
+
+        // ServiceManagement is the only external mutation in this transaction.
+        // Do it before writing a new snapshot so a rejected register/unregister
+        // request cannot be picked up by a future helper launch.
         try loginItemManager.setEnabled(settings.launchAtLogin)
+
+        do {
+            try preferences.write(settings: settings, applyRequestID: requestID)
+        } catch {
+            // A preferences failure must not leave the login registration out
+            // of sync with the still-persisted snapshot.
+            try? loginItemManager.setEnabled(previousRequest.settings.launchAtLogin)
+            throw error
+        }
 
         latestRequestID = requestID
         latestApplyStatus = .pending(requestID)

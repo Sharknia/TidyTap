@@ -8,6 +8,13 @@ protocol TidyTapCapsFeatureApplying: AnyObject {
 
 protocol TidyTapInputFeaturesApplying: AnyObject {
     func apply(reverseMouseWheel: Bool, sideButtonNavigation: Bool) throws
+    func forcePassThrough() throws
+}
+
+extension TidyTapInputFeaturesApplying {
+    /// Implementations with an event tap should remove it or otherwise ensure
+    /// the original input is passed through if normal restoration failed.
+    func forcePassThrough() throws {}
 }
 
 protocol TidyTapMenuBarApplying: AnyObject {
@@ -54,18 +61,23 @@ final class ApplyCoordinator {
         defer { lock.unlock() }
 
         let previousSettings = activeSettings
-        let result = apply(request.settings, requestID: request.applyRequestID)
+        let attempt = apply(request.settings, requestID: request.applyRequestID)
+        let result = attempt.status
         if result.outcome == .applied {
             activeSettings = request.settings
-        } else if !restore(previousSettings) {
-            let recoveryResult = TidyTapApplyStatus(
-                applyRequestID: request.applyRequestID,
-                outcome: .recoveryRequired,
-                failedComponent: result.failedComponent,
-                errorCode: "lifecycle.rollbackFailed"
-            )
-            report(recoveryResult)
-            return recoveryResult
+        } else {
+            let rollbackFailures = restore(previousSettings, touchedComponents: attempt.touchedComponents)
+            if !rollbackFailures.isEmpty {
+                let failureCodes = rollbackFailures.map(\.rawValue).joined(separator: ".")
+                let recoveryResult = TidyTapApplyStatus(
+                    applyRequestID: request.applyRequestID,
+                    outcome: .recoveryRequired,
+                    failedComponent: result.failedComponent,
+                    errorCode: "lifecycle.rollbackFailed.\(failureCodes)"
+                )
+                report(recoveryResult)
+                return recoveryResult
+            }
         }
 
         report(result)
@@ -75,45 +87,95 @@ final class ApplyCoordinator {
         return result
     }
 
-    private func apply(_ settings: TidyTapSettings, requestID: UUID) -> TidyTapApplyStatus {
+    private func apply(_ settings: TidyTapSettings, requestID: UUID) -> ApplyAttempt {
+        var touchedComponents = [TidyTapApplyComponent]()
+
+        touchedComponents.append(.capsLock)
         do {
             try capsFeature.apply(capsLockEnabled: settings.capsLockInputSourceSwitching)
         } catch {
-            return failure(requestID, component: .capsLock)
+            return ApplyAttempt(
+                status: failure(requestID, component: .capsLock),
+                touchedComponents: touchedComponents
+            )
         }
 
+        touchedComponents.append(.eventTap)
         do {
             try inputFeatures.apply(
                 reverseMouseWheel: settings.reverseMouseWheelVertically,
                 sideButtonNavigation: settings.sideButtonNavigation
             )
         } catch {
-            return failure(requestID, component: .eventTap)
+            return ApplyAttempt(
+                status: failure(requestID, component: .eventTap),
+                touchedComponents: touchedComponents
+            )
         }
 
+        touchedComponents.append(.menuBar)
         do {
             try menuBar.applyMenuBar(visible: settings.showInMenuBar)
         } catch {
-            return failure(requestID, component: .menuBar)
+            return ApplyAttempt(
+                status: failure(requestID, component: .menuBar),
+                touchedComponents: touchedComponents
+            )
         }
 
-        return .applied(requestID)
+        return ApplyAttempt(status: .applied(requestID), touchedComponents: touchedComponents)
     }
 
     /// The controllers themselves own their exact restoration details. Applying
     /// the captured previous snapshot in reverse order retains that ownership.
-    private func restore(_ settings: TidyTapSettings) -> Bool {
-        do {
-            try menuBar.applyMenuBar(visible: settings.showInMenuBar)
-            try inputFeatures.apply(
-                reverseMouseWheel: settings.reverseMouseWheelVertically,
-                sideButtonNavigation: settings.sideButtonNavigation
-            )
-            try capsFeature.apply(capsLockEnabled: settings.capsLockInputSourceSwitching)
-            return true
-        } catch {
-            return false
+    /// Every touched component is attempted even when an earlier restoration
+    /// step fails, leaving input in pass-through state wherever possible.
+    private func restore(
+        _ settings: TidyTapSettings,
+        touchedComponents: [TidyTapApplyComponent]
+    ) -> [TidyTapApplyComponent] {
+        var failures = [TidyTapApplyComponent]()
+
+        if touchedComponents.contains(.menuBar) {
+            do {
+                try menuBar.applyMenuBar(visible: settings.showInMenuBar)
+            } catch {
+                failures.append(.menuBar)
+            }
         }
+
+        if touchedComponents.contains(.eventTap) {
+            do {
+                try inputFeatures.apply(
+                    reverseMouseWheel: settings.reverseMouseWheelVertically,
+                    sideButtonNavigation: settings.sideButtonNavigation
+                )
+            } catch {
+                failures.append(.eventTap)
+                do {
+                    try inputFeatures.forcePassThrough()
+                } catch {
+                    // The tap controller could not even enter its safe mode.
+                    // Keep one component code while retaining that fact in the
+                    // recovery-required result.
+                }
+            }
+        }
+
+        if touchedComponents.contains(.capsLock) {
+            do {
+                try capsFeature.apply(capsLockEnabled: settings.capsLockInputSourceSwitching)
+            } catch {
+                failures.append(.capsLock)
+            }
+        }
+
+        return failures
+    }
+
+    private struct ApplyAttempt {
+        let status: TidyTapApplyStatus
+        let touchedComponents: [TidyTapApplyComponent]
     }
 
     private func failure(_ requestID: UUID, component: TidyTapApplyComponent) -> TidyTapApplyStatus {
@@ -137,6 +199,7 @@ final class NoopCapsFeature: TidyTapCapsFeatureApplying {
 
 final class NoopInputFeatures: TidyTapInputFeaturesApplying {
     func apply(reverseMouseWheel: Bool, sideButtonNavigation: Bool) throws {}
+    func forcePassThrough() throws {}
 }
 
 final class ApplicationTerminator: TidyTapTerminating {
