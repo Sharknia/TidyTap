@@ -1,0 +1,9 @@
+// Shared Release signing configuration for TidyTap and TidyTapHelper.
+//
+// `LocalSigning.xcconfig` is intentionally ignored. Copy the adjacent example
+// and provide real credentials locally before signing a distribution archive.
+#include? "LocalSigning.xcconfig"
+
+CODE_SIGN_STYLE = Manual
+DEVELOPMENT_TEAM = $(TIDYTAP_DEVELOPMENT_TEAM)
+CODE_SIGN_IDENTITY = $(TIDYTAP_DEVELOPER_ID_APPLICATION)

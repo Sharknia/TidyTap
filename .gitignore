@@ -12,6 +12,7 @@ xcuserdata/
 .DS_Store
 
 # Local signing and notarization
+Config/LocalSigning.xcconfig
 *.p12
 *.provisionprofile
 notarytool-profile*
