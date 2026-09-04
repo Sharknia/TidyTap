@@ -3,14 +3,14 @@
 TidyTap is a small macOS utility for three input annoyances:
 
 - Use Caps Lock as a two-input-source switch (mapped to F18), without toggling Caps Lock.
-- Reverse vertical, line-based scrolling from the supported VXE mouse while leaving the built-in and Magic Trackpad unchanged.
+- Reverse vertical scrolling for any non-continuous, line-based mouse-wheel event while leaving trackpad scrolling unchanged. Only the VXE Mouse 1K Dongle is physically verified and supported for `0.1.0`; the implementation does not filter by vendor.
 - Use mouse buttons 3/4 for back/forward in the active Safari or Finder window.
 
 Each feature has its own toggle. The settings window also offers **Start at login** and **Show in menu bar**. The menu-bar item contains only **Open TidyTap**; feature controls remain in the Dock app. Quitting the settings app with `Command-Q` does not stop an enabled helper.
 
 ## Support and status
 
-The MVP is verified on MacBook Pro `Mac15,6` (Apple M3 Pro), macOS 26.6.2 (`25G83`), with a VXE Mouse 1K Dongle, the built-in trackpad, and Apple Magic Trackpad. The UI is available in English and Korean. Other Macs or macOS versions may run, but are not compatibility claims for `0.1.0`.
+The development build is being checked on MacBook Pro `Mac15,6` (Apple M3 Pro) and macOS 26.6.2 (`25G83`). Physical validation so far covers scroll-device classification (VXE versus the built-in and Magic Trackpad) and that the VXE side buttons report as Core Graphics buttons 3/4. Remaining integrated live validation includes Caps Lock/input-source backup and restore, permission grant/revocation behavior, end-to-end wheel and Safari/Finder navigation, helper lifetime/login behavior, and the supported removal sequence; these are not claimed complete. The UI is available in English and Korean. Other Macs or macOS versions may run, but are not compatibility claims for `0.1.0`.
 
 Status: development build. A notarized or distributable `0.1.0` release does not exist yet.
 
@@ -22,7 +22,7 @@ See the [MVP work plan](docs/MVP_PLAN.md) and [Korean README](README.ko.md).
 - Mouse wheel reversal: Accessibility **and** Input Monitoring.
 - Safari/Finder side-button navigation: Accessibility only.
 
-If a required permission is missing or later revoked, the affected feature is not applied and the settings window shows a link to the relevant macOS System Settings pane. Side-button events pass through in unsupported apps; scrolling that cannot be confidently classified as the supported mouse also passes through.
+If a required permission is missing or later revoked, the affected feature is not applied and the settings window shows a link to the relevant macOS System Settings pane. Side-button events pass through in unsupported apps; continuous or otherwise unknown scrolling also passes through.
 
 ## Install and run
 
