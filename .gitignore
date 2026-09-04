@@ -21,3 +21,6 @@ notarytool-profile*
 *.xcarchive
 *.dmg
 *.dmg.sha256
+
+# Local test workspace
+work/
