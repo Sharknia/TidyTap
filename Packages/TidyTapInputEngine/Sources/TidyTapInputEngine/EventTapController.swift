@@ -88,6 +88,7 @@ public final class EventTapController: @unchecked Sendable {
         sideButtonNavigation: false
     )
     private var storedStatus: EventTapStatus = .stopped
+    private var generation: UInt64 = 0
 
     public init(
         permissions: any InputPermissionChecking,
@@ -107,13 +108,21 @@ public final class EventTapController: @unchecked Sendable {
         return storedStatus
     }
 
+    public var currentConfiguration: EventTapConfiguration {
+        lock.lock()
+        defer { lock.unlock() }
+        return configuration
+    }
+
     @discardableResult
     public func start(configuration: EventTapConfiguration) -> EventTapStatus {
-        backend.uninstall()
         lock.lock()
+        generation &+= 1
+        let generation = generation
         self.configuration = configuration
         scroll = ScrollController()
         lock.unlock()
+        backend.uninstall()
 
         let drainingSideButtons = sideButtons.hasActivePresses
         guard configuration.isEnabled || drainingSideButtons else {
@@ -128,7 +137,11 @@ public final class EventTapController: @unchecked Sendable {
                 do {
                     try installBackend(
                         configuration: Self.sideButtonOnlyConfiguration,
-                        captureSideButtons: true
+                        captureSideButtons: true,
+                        generation: generation
+                    )
+                    setEffectiveConfiguration(
+                        Self.effectiveConfiguration(for: configuration, missing: missing)
                     )
                     return updateStatus(.partiallyRunning(
                         configuration,
@@ -143,13 +156,17 @@ public final class EventTapController: @unchecked Sendable {
                 sideButtons.reset()
                 return updateStatus(.stopped)
             }
+            setEffectiveConfiguration(
+                Self.effectiveConfiguration(for: configuration, missing: missing)
+            )
             return updateStatus(.permissionDenied(missing))
         }
 
         do {
             try installBackend(
                 configuration: configuration,
-                captureSideButtons: configuration.sideButtonNavigation || drainingSideButtons
+                captureSideButtons: configuration.sideButtonNavigation || drainingSideButtons,
+                generation: generation
             )
             return updateStatus(
                 configuration.isEnabled ? .running(configuration) : .drainingButtonPresses
@@ -162,12 +179,21 @@ public final class EventTapController: @unchecked Sendable {
     }
 
     public func stop() {
+        lock.lock()
+        generation &+= 1
+        configuration = EventTapConfiguration(reverseMouseScroll: false, sideButtonNavigation: false)
+        scroll = ScrollController()
+        lock.unlock()
         backend.uninstall()
         sideButtons.reset()
         _ = updateStatus(.stopped)
     }
 
-    private func handle(_ input: EventTapInput) -> EventTapOutput {
+    private func handle(_ input: EventTapInput, generation: UInt64) -> EventTapOutput {
+        lock.lock()
+        let isCurrentGeneration = self.generation == generation
+        lock.unlock()
+        guard isCurrentGeneration else { return .passThrough }
         switch input {
         case .gesture(let timestamp):
             lock.lock()
@@ -265,7 +291,11 @@ public final class EventTapController: @unchecked Sendable {
                 do {
                     try installBackend(
                         configuration: Self.sideButtonOnlyConfiguration,
-                        captureSideButtons: true
+                        captureSideButtons: true,
+                        generation: currentGeneration()
+                    )
+                    setEffectiveConfiguration(
+                        Self.effectiveConfiguration(for: currentConfiguration, missing: missing)
                     )
                     _ = updateStatus(.partiallyRunning(
                         currentConfiguration,
@@ -281,6 +311,9 @@ public final class EventTapController: @unchecked Sendable {
                 sideButtons.reset()
             }
             if currentConfiguration.isEnabled {
+                setEffectiveConfiguration(
+                    Self.effectiveConfiguration(for: currentConfiguration, missing: missing)
+                )
                 _ = updateStatus(.permissionDenied(missing))
             } else {
                 backend.uninstall()
@@ -339,6 +372,9 @@ public final class EventTapController: @unchecked Sendable {
         let currentConfiguration = configuration
         lock.unlock()
         if currentConfiguration.isEnabled {
+            setEffectiveConfiguration(
+                Self.effectiveConfiguration(for: currentConfiguration, missing: missing)
+            )
             _ = updateStatus(.permissionDenied(missing))
         } else {
             backend.uninstall()
@@ -350,6 +386,9 @@ public final class EventTapController: @unchecked Sendable {
         lock.lock()
         let currentConfiguration = configuration
         lock.unlock()
+        setEffectiveConfiguration(
+            Self.effectiveConfiguration(for: currentConfiguration, missing: missing)
+        )
         if missing == [.inputMonitoring], currentConfiguration.sideButtonNavigation {
             _ = updateStatus(.partiallyRunning(
                 currentConfiguration,
@@ -362,14 +401,38 @@ public final class EventTapController: @unchecked Sendable {
 
     private func installBackend(
         configuration: EventTapConfiguration,
-        captureSideButtons: Bool
+        captureSideButtons: Bool,
+        generation: UInt64
     ) throws {
         try backend.install(
             configuration: configuration,
             captureSideButtons: captureSideButtons
         ) { [weak self] input in
-            self?.handle(input) ?? .passThrough
+            self?.handle(input, generation: generation) ?? .passThrough
         }
+    }
+
+    private func currentGeneration() -> UInt64 {
+        lock.lock()
+        defer { lock.unlock() }
+        return generation
+    }
+
+    private func setEffectiveConfiguration(_ configuration: EventTapConfiguration) {
+        lock.lock()
+        self.configuration = configuration
+        if !configuration.reverseMouseScroll { scroll = ScrollController() }
+        lock.unlock()
+    }
+
+    private static func effectiveConfiguration(
+        for requested: EventTapConfiguration,
+        missing: Set<InputPermission>
+    ) -> EventTapConfiguration {
+        EventTapConfiguration(
+            reverseMouseScroll: requested.reverseMouseScroll && missing.isDisjoint(with: [.accessibility, .inputMonitoring]),
+            sideButtonNavigation: requested.sideButtonNavigation && !missing.contains(.accessibility)
+        )
     }
 
     private static let sideButtonOnlyConfiguration = EventTapConfiguration(

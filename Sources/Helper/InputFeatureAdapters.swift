@@ -9,11 +9,24 @@ enum TidyTapInputFeatureAdapterError: Error {
     case eventTapFailed
 }
 
-private enum CapsJournalPhase: String, Codable { case prepared, applied }
-private struct CapsJournal: Codable {
+enum CapsJournalPhase: String, Codable { case prepared, applied }
+struct CapsJournal: Codable {
     let enabled: Bool
     let phase: CapsJournalPhase
     let ownership: CapsLockFeatureOwnership
+    let enablePlan: CapsLockEnablePlan?
+
+    init(
+        enabled: Bool,
+        phase: CapsJournalPhase,
+        ownership: CapsLockFeatureOwnership,
+        enablePlan: CapsLockEnablePlan? = nil
+    ) {
+        self.enabled = enabled
+        self.phase = phase
+        self.ownership = ownership
+        self.enablePlan = enablePlan
+    }
 }
 
 final class CapsLockFeatureAdapter: TidyTapCapsFeatureApplying {
@@ -38,25 +51,47 @@ final class CapsLockFeatureAdapter: TidyTapCapsFeatureApplying {
     func apply(capsLockEnabled: Bool) throws {
         if capsLockEnabled {
             if let journal = try readJournal(), journal.enabled {
-                if try controller.isApplied(journal.ownership) {
-                    if journal.phase == .prepared { try writeJournal(.init(enabled: true, phase: .applied, ownership: journal.ownership)) }
+                if journal.phase == .prepared, let plan = journal.enablePlan {
+                    let ownership = try controller.completePreparedEnable(plan)
+                    try writeJournal(.init(enabled: true, phase: .applied, ownership: ownership))
                     return
                 }
-                // A reboot removes HID state but not this durable journal. The
-                // ownership record lets the engine safely apply a fresh mapping.
-                let ownership = try controller.enable(existingOwnership: nil)
-                try writeJournal(.init(enabled: true, phase: .applied, ownership: ownership))
+                if try controller.isApplied(journal.ownership) {
+                    if journal.phase == .prepared {
+                        try writeJournal(.init(enabled: true, phase: .applied, ownership: journal.ownership))
+                    }
+                    return
+                }
+                try controller.recoverHIDAfterReset(ownership: journal.ownership)
+                try writeJournal(.init(enabled: true, phase: .applied, ownership: journal.ownership))
                 return
             }
-            let preparedOwnership = try controller.prepareOwnershipForEnable()
-            try writeJournal(.init(enabled: true, phase: .prepared, ownership: preparedOwnership))
-            let ownership = try controller.enable(existingOwnership: nil)
+            let plan = try controller.prepareEnablePlan()
+            guard let preparedOwnership = plan.ownership else {
+                throw TransactionFailure(primaryDescription: "missing ownership after prepare")
+            }
+            try writeJournal(.init(
+                enabled: true,
+                phase: .prepared,
+                ownership: preparedOwnership,
+                enablePlan: plan
+            ))
+            let ownership = try controller.completePreparedEnable(plan)
             try writeJournal(.init(enabled: true, phase: .applied, ownership: ownership))
         } else if let journal = try readJournal() {
             try writeJournal(.init(enabled: false, phase: .prepared, ownership: journal.ownership))
             try controller.disable(ownership: journal.ownership)
             try ownershipStore.writeCapsLockJournalData(nil)
         }
+    }
+
+    func currentCapsLockEnabled() throws -> Bool {
+        guard let journal = try readJournal(),
+              journal.enabled,
+              journal.phase == .applied else {
+            return false
+        }
+        return try controller.isApplied(journal.ownership)
     }
 
     private func readJournal() throws -> CapsJournal? {
@@ -73,7 +108,10 @@ final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
     private final class RuntimeSink: @unchecked Sendable { var handler: ((EventTapStatus) -> Void)? }
     private let controller: EventTapController
     private let runtimeSink: RuntimeSink
-    var runtimeStatusHandler: ((TidyTapInputFeatureApplyResult?, TidyTapInputFeatureAdapterError?) -> Void)?
+    private let stateLock = NSLock()
+    private var isApplying = false
+    private var activeRequestID: UUID?
+    var runtimeStatusHandler: ((UUID, TidyTapInputFeatureApplyResult?, TidyTapInputFeatureAdapterError?) -> Void)?
 
     init(
         permissionChecker: any InputPermissionChecking = CGInputPermissionChecker(),
@@ -96,8 +134,18 @@ final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
 
     func apply(
         reverseMouseWheel: Bool,
-        sideButtonNavigation: Bool
+        sideButtonNavigation: Bool,
+        requestID: UUID
     ) throws -> TidyTapInputFeatureApplyResult {
+        stateLock.lock()
+        isApplying = true
+        stateLock.unlock()
+        defer {
+            stateLock.lock()
+            isApplying = false
+            activeRequestID = requestID
+            stateLock.unlock()
+        }
         let configuration = EventTapConfiguration(
             reverseMouseScroll: reverseMouseWheel,
             sideButtonNavigation: sideButtonNavigation
@@ -108,14 +156,28 @@ final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
         case .partiallyRunning(_, let unavailablePermissions):
             return .partiallyApplied(unavailablePermissions: Set(unavailablePermissions.map(Self.permission)))
         case .permissionDenied(let missing):
-            throw TidyTapInputFeatureAdapterError.permissionDenied(Set(missing.map(Self.permission)))
+            return .partiallyApplied(unavailablePermissions: Set(missing.map(Self.permission)))
         case .failed:
             throw TidyTapInputFeatureAdapterError.eventTapFailed
         }
     }
 
     func forcePassThrough() throws {
+        stateLock.lock()
+        isApplying = true
+        stateLock.unlock()
         controller.stop()
+        stateLock.lock()
+        isApplying = false
+        stateLock.unlock()
+    }
+
+    func currentConfiguration() -> TidyTapInputFeatureConfiguration {
+        let configuration = controller.currentConfiguration
+        return TidyTapInputFeatureConfiguration(
+            reverseMouseWheel: configuration.reverseMouseScroll,
+            sideButtonNavigation: configuration.sideButtonNavigation
+        )
     }
 
     private static func permission(_ permission: InputPermission) -> TidyTapPermission {
@@ -126,15 +188,21 @@ final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
     }
 
     private func report(_ status: EventTapStatus) {
+        stateLock.lock()
+        let shouldSuppress = isApplying
+        let requestID = activeRequestID
+        stateLock.unlock()
+        guard !shouldSuppress, let requestID else { return }
+
         switch status {
         case .running, .stopped, .drainingButtonPresses:
-            runtimeStatusHandler?(.applied, nil)
+            runtimeStatusHandler?(requestID, .applied, nil)
         case .partiallyRunning(_, let missing):
-            runtimeStatusHandler?(.partiallyApplied(unavailablePermissions: Set(missing.map(Self.permission))), nil)
+            runtimeStatusHandler?(requestID, .partiallyApplied(unavailablePermissions: Set(missing.map(Self.permission))), nil)
         case .permissionDenied(let missing):
-            runtimeStatusHandler?(nil, .permissionDenied(Set(missing.map(Self.permission))))
+            runtimeStatusHandler?(requestID, .partiallyApplied(unavailablePermissions: Set(missing.map(Self.permission))), nil)
         case .failed:
-            runtimeStatusHandler?(nil, .eventTapFailed)
+            runtimeStatusHandler?(requestID, nil, .eventTapFailed)
         }
     }
 }

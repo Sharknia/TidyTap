@@ -5,6 +5,7 @@
 @MainActor
 final class MenuBarController: NSObject, TidyTapMenuBarApplying {
     private var statusItem: NSStatusItem?
+    var isMenuBarVisible: Bool { statusItem != nil }
 
     func applyMenuBar(visible: Bool) throws {
         if visible {

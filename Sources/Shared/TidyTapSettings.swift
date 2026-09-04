@@ -110,13 +110,32 @@ struct TidyTapApplyStatus: Codable, Equatable {
     let outcome: TidyTapApplyOutcome
     let failedComponent: TidyTapApplyComponent?
     let errorCode: String?
+    /// The exact state left active by this result. This is present for every
+    /// terminal helper result so a restarted settings app never has to infer
+    /// effective toggles from an error-code string.
+    let effectiveSettings: TidyTapSettings?
+
+    init(
+        applyRequestID: UUID,
+        outcome: TidyTapApplyOutcome,
+        failedComponent: TidyTapApplyComponent?,
+        errorCode: String?,
+        effectiveSettings: TidyTapSettings? = nil
+    ) {
+        self.applyRequestID = applyRequestID
+        self.outcome = outcome
+        self.failedComponent = failedComponent
+        self.errorCode = errorCode
+        self.effectiveSettings = effectiveSettings
+    }
 
     static func pending(_ requestID: UUID) -> TidyTapApplyStatus {
         TidyTapApplyStatus(
             applyRequestID: requestID,
             outcome: .pending,
             failedComponent: nil,
-            errorCode: nil
+            errorCode: nil,
+            effectiveSettings: nil
         )
     }
 
@@ -125,7 +144,18 @@ struct TidyTapApplyStatus: Codable, Equatable {
             applyRequestID: requestID,
             outcome: .applied,
             failedComponent: nil,
-            errorCode: nil
+            errorCode: nil,
+            effectiveSettings: nil
+        )
+    }
+
+    static func applied(_ requestID: UUID, effectiveSettings: TidyTapSettings) -> TidyTapApplyStatus {
+        TidyTapApplyStatus(
+            applyRequestID: requestID,
+            outcome: .applied,
+            failedComponent: nil,
+            errorCode: nil,
+            effectiveSettings: effectiveSettings
         )
     }
 }

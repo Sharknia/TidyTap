@@ -33,6 +33,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let windowController = NSWindowController(window: window)
         self.windowController = windowController
         windowController.showWindow(self)
+        if let status = settingsCoordinator.latestApplyStatus {
+            controller.showApplyStatus(
+                status,
+                permission: settingsCoordinator.permissionSettingsPane(for: status)
+            )
+        }
     }
 
     deinit {
@@ -48,7 +54,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         controller.apply(coordinator.visibleSettings(for: status))
-        controller.showApplyStatus(status)
+        controller.showApplyStatus(
+            status,
+            permission: coordinator.permissionSettingsPane(for: status)
+        )
     }
 }
 

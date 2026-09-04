@@ -17,8 +17,10 @@ final class HelperAppDelegate: NSObject, NSApplicationDelegate {
             menuBar: MenuBarController(),
             terminator: ApplicationTerminator()
         )
-        inputFeatures.runtimeStatusHandler = { [weak coordinator] result, error in
-            coordinator?.reportRuntimeInput(result, error: error)
+        inputFeatures.runtimeStatusHandler = { [weak coordinator] requestID, result, error in
+            DispatchQueue.main.async {
+                coordinator?.reportRuntimeInput(requestID: requestID, result, error: error)
+            }
         }
         let lifecycle = HelperLifecycle(coordinator: coordinator)
         self.lifecycle = lifecycle

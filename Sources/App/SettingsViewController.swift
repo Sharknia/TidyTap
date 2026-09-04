@@ -51,7 +51,7 @@ final class SettingsViewController: NSViewController {
         self.settings = settings; guard isViewLoaded else { return }
         capsButton.state = settings.capsLockInputSourceSwitching ? .on : .off; wheelButton.state = settings.reverseMouseWheelVertically ? .on : .off; sideButton.state = settings.sideButtonNavigation ? .on : .off; loginButton.state = settings.launchAtLogin ? .on : .off; menuBarButton.state = settings.showInMenuBar ? .on : .off
     }
-    func showApplyStatus(_ status: TidyTapApplyStatus) {
+    func showApplyStatus(_ status: TidyTapApplyStatus, permission: TidyTapPermission? = nil) {
         let isPending = status.outcome == .pending
         [capsButton, wheelButton, sideButton, loginButton, menuBarButton].forEach { $0.isEnabled = !isPending }
         switch status.outcome {
@@ -60,11 +60,11 @@ final class SettingsViewController: NSViewController {
         case .applied:
             statusMessage.stringValue = TidyTapStrings.changesApplied; showPermissionMessage(nil)
         case .partiallyApplied:
-            statusMessage.stringValue = ""; showPermissionMessage(TidyTapStrings.permissionRequired, permission: .inputMonitoring)
+            statusMessage.stringValue = ""; showPermissionMessage(TidyTapStrings.permissionRequired, permission: permission)
         case .failed:
-            let denied = status.errorCode?.contains("permissionDenied") == true
+            let denied = permission != nil
             statusMessage.stringValue = denied ? "" : TidyTapStrings.changesCouldNotBeApplied
-            showPermissionMessage(denied ? TidyTapStrings.permissionRequired : nil, permission: status.errorCode?.contains("inputMonitoring") == true ? .inputMonitoring : .accessibility)
+            showPermissionMessage(denied ? TidyTapStrings.permissionRequired : nil, permission: permission)
         case .recoveryRequired:
             statusMessage.stringValue = TidyTapStrings.changesCouldNotBeApplied; showPermissionMessage(nil)
         }

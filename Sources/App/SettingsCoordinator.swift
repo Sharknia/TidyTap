@@ -41,7 +41,8 @@ final class SettingsCoordinator {
         let request = preferences.readRequest()
         try? loginItemManager.setEnabled(request.settings.launchAtLogin)
         latestRequestID = request.applyRequestID
-        latestApplyStatus = preferences.readApplyStatus()
+        let status = preferences.readApplyStatus()
+        latestApplyStatus = status?.applyRequestID == request.applyRequestID ? status : nil
         helperLauncher.launchOrActivateHelper()
     }
 
@@ -50,7 +51,11 @@ final class SettingsCoordinator {
     }
 
     func settingsForUI() -> TidyTapSettings {
-        var settings = persistedSettings()
+        let request = preferences.readRequest()
+        let status = preferences.readApplyStatus()
+        var settings = status?.applyRequestID == request.applyRequestID
+            ? status?.effectiveSettings ?? request.settings
+            : request.settings
         settings.launchAtLogin = loginItemManager.status() == .enabled
         return settings
     }
@@ -87,8 +92,8 @@ final class SettingsCoordinator {
         latestApplyStatus = .pending(requestID)
         settingsBeforeLatestRequest = previousRequest.settings
 
-        // A running helper must receive an all-off request so it can restore
-        // state and exit. If it is not running, no helper is necessary.
+        // All-off requests also launch the helper: a prior crash may have left
+        // a durable Caps journal that only the helper can safely restore.
         helperLauncher.launchOrActivateHelper()
         TidyTapIPC.postSettingsDidChange(requestID: requestID)
         return requestID
@@ -111,11 +116,31 @@ final class SettingsCoordinator {
     /// A rejected helper request has already been restored by the helper. Keep
     /// the visible UI truthful without issuing a second settings submission.
     func visibleSettings(for status: TidyTapApplyStatus) -> TidyTapSettings {
-        switch status.outcome {
-        case .failed, .recoveryRequired:
-            return settingsBeforeLatestRequest ?? persistedSettings()
-        case .pending, .applied, .partiallyApplied:
-            return persistedSettings()
+        var settings: TidyTapSettings
+        if let effective = status.effectiveSettings {
+            settings = effective
+        } else {
+            switch status.outcome {
+            case .failed, .recoveryRequired:
+                settings = settingsBeforeLatestRequest ?? persistedSettings()
+            case .pending, .applied, .partiallyApplied:
+                settings = persistedSettings()
+            }
         }
+        settings.launchAtLogin = loginItemManager.status() == .enabled
+        return settings
+    }
+
+    func permissionSettingsPane(for status: TidyTapApplyStatus) -> TidyTapPermission? {
+        guard let code = status.errorCode else { return nil }
+        if code.contains("permissionDenied.accessibility") ||
+            code.contains("permissionPartial.accessibility") {
+            return .accessibility
+        }
+        if code.contains("permissionDenied.inputMonitoring") ||
+            code.contains("permissionPartial.inputMonitoring") {
+            return .inputMonitoring
+        }
+        return nil
     }
 }

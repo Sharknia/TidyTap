@@ -439,6 +439,55 @@ final class CapsLockFeatureControllerTests: XCTestCase {
         )
     }
 
+    func testPreparedEnableCompletesAfterHIDOnlyCrash() throws {
+        let system = FakeSystemApplyAdapter(hotkeyDomain: originalDomain)
+        let feature = makeFeature(system)
+        let plan = try feature.prepareEnablePlan()
+        system.hidMappings = plan.hid.after
+
+        let ownership = try feature.completePreparedEnable(plan)
+
+        XCTAssertEqual(ownership, plan.ownership)
+        XCTAssertEqual(system.hidMappings, [.tidyTapCapsLock])
+        XCTAssertEqual(
+            InputSourceShortcutController.hotkey60(in: system.hotkeyDomain),
+            .tidyTapHotkey60
+        )
+        XCTAssertEqual(system.hotkeyApplyCount, 1)
+        XCTAssertEqual(system.activationCount, 1)
+    }
+
+    func testPreparedEnableReactivatesAfterHotkeyWriteBeforeActivateCrash() throws {
+        let system = FakeSystemApplyAdapter(hotkeyDomain: originalDomain)
+        let feature = makeFeature(system)
+        let plan = try feature.prepareEnablePlan()
+        system.hidMappings = plan.hid.after
+        system.hotkeyDomain = plan.hotkey60.after
+
+        _ = try feature.completePreparedEnable(plan)
+
+        XCTAssertEqual(system.hidApplyCount, 0)
+        XCTAssertEqual(system.hotkeyApplyCount, 0)
+        XCTAssertEqual(system.activationCount, 1)
+    }
+
+    func testRebootRecoveryReappliesOnlyMissingHIDWhenHotkeySurvives() throws {
+        let system = FakeSystemApplyAdapter(hotkeyDomain: originalDomain)
+        let feature = makeFeature(system)
+        let ownership = try feature.enable()
+        system.hidMappings = []
+        let hotkeyWritesBeforeRecovery = system.hotkeyApplyCount
+
+        try feature.recoverHIDAfterReset(ownership: ownership)
+
+        XCTAssertEqual(system.hidMappings, [.tidyTapCapsLock])
+        XCTAssertEqual(system.hotkeyApplyCount, hotkeyWritesBeforeRecovery)
+        XCTAssertEqual(
+            InputSourceShortcutController.hotkey60(in: system.hotkeyDomain),
+            .tidyTapHotkey60
+        )
+    }
+
     private func makeFeature(_ system: FakeSystemApplyAdapter) -> CapsLockFeatureController {
         CapsLockFeatureController(
             hid: CapsLockController(system: system),

@@ -13,6 +13,7 @@ private final class FakePermissions: InputPermissionChecking, @unchecked Sendabl
 
 private final class FakeEventTapBackend: EventTapBackend, @unchecked Sendable {
     var handler: EventTapHandler?
+    var installedHandlers: [EventTapHandler] = []
     var installCount = 0
     var enableCount = 0
     var uninstallCount = 0
@@ -31,6 +32,7 @@ private final class FakeEventTapBackend: EventTapBackend, @unchecked Sendable {
         installedConfigurations.append(configuration)
         if let installError { throw installError }
         self.handler = handler
+        installedHandlers.append(handler)
     }
 
     func enable() throws {
@@ -486,6 +488,42 @@ final class EventTapControllerTests: XCTestCase {
         XCTAssertEqual(backend.send(.buttonUp(4)), .consume)
         XCTAssertEqual(controller.status, .stopped)
         XCTAssertEqual(synthesizer.directions, [.forward])
+    }
+
+    func testCallbackFromReplacedTapGenerationCanOnlyPassThrough() {
+        let (controller, _, backend, _) = makeController(
+            accessibility: true,
+            inputMonitoring: true
+        )
+        _ = controller.start(configuration: .init(
+            reverseMouseScroll: true,
+            sideButtonNavigation: false
+        ))
+        let stale = backend.installedHandlers[0]
+        _ = controller.start(configuration: .init(
+            reverseMouseScroll: false,
+            sideButtonNavigation: true
+        ))
+        let wheel = ScrollObservation(
+            timestampNanoseconds: 1,
+            isContinuous: false,
+            deltas: .init(
+                verticalLine: 1,
+                verticalPoint: 10,
+                verticalFixed: 65_536,
+                horizontalLine: 0,
+                horizontalPoint: 0,
+                horizontalFixed: 0
+            ),
+            phase: [],
+            momentumPhase: []
+        )
+
+        XCTAssertEqual(stale(.scroll(wheel)), .passThrough)
+        XCTAssertEqual(
+            controller.currentConfiguration,
+            .init(reverseMouseScroll: false, sideButtonNavigation: true)
+        )
     }
 
     private func makeController(
