@@ -55,13 +55,23 @@ final class SettingsViewController: NSViewController {
 
     @objc private func settingChanged(_ sender: NSButton) {
         switch sender { case capsButton: settings.capsLockInputSourceSwitching = sender.state == .on; case wheelButton: settings.reverseMouseWheelVertically = sender.state == .on; case sideButton: settings.sideButtonNavigation = sender.state == .on; case loginButton: settings.launchAtLogin = sender.state == .on; case menuBarButton: settings.showInMenuBar = sender.state == .on; default: return }
-        delegate?.settingsViewController(self, didChange: settings); onSettingsChange?(settings)
+        // A coordinator may choose to handle this synchronously. The closure
+        // is a fallback hook so actions are never delivered twice.
+        if delegate?.settingsViewController(self, didChange: settings) != true {
+            onSettingsChange?(settings)
+        }
     }
-    @objc private func openPermissionSettings() { delegate?.settingsViewControllerRequestsPermissionSettings(self); onPermissionSettingsRequest?() }
+    @objc private func openPermissionSettings() {
+        if delegate?.settingsViewControllerRequestsPermissionSettings(self) != true {
+            onPermissionSettingsRequest?()
+        }
+    }
     @objc private func openLink(_ sender: NSButton) { guard let value = sender.identifier?.rawValue, let url = URL(string: value) else { return }; NSWorkspace.shared.open(url) }
 }
 
 protocol SettingsViewControllerDelegate: AnyObject {
-    func settingsViewController(_ controller: SettingsViewController, didChange settings: TidyTapSettings)
-    func settingsViewControllerRequestsPermissionSettings(_ controller: SettingsViewController)
+    /// Return true when the delegate handled the action; false selects the
+    /// controller's closure fallback.
+    func settingsViewController(_ controller: SettingsViewController, didChange settings: TidyTapSettings) -> Bool
+    func settingsViewControllerRequestsPermissionSettings(_ controller: SettingsViewController) -> Bool
 }
