@@ -7,3 +7,5 @@
 CODE_SIGN_STYLE = Manual
 DEVELOPMENT_TEAM = $(TIDYTAP_DEVELOPMENT_TEAM)
 CODE_SIGN_IDENTITY = $(TIDYTAP_DEVELOPER_ID_APPLICATION)
+// Developer ID distribution signatures need a trusted timestamp for notarization.
+OTHER_CODE_SIGN_FLAGS = --timestamp

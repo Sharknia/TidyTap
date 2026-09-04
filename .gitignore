@@ -16,3 +16,8 @@ Config/LocalSigning.xcconfig
 *.p12
 *.provisionprofile
 notarytool-profile*
+
+# Locally produced direct-distribution packages
+*.xcarchive
+*.dmg
+*.dmg.sha256
