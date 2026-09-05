@@ -140,25 +140,26 @@ if [[ ! -d "$app_path" || ! -d "$helper_path" ]]; then
   exit 1
 fi
 
-verify_signed_bundle() {
-  local bundle_path="$1"
+verify_developer_id_signature() {
+  local artifact_path="$1"
+  local artifact_label="$2"
   local signature_details
 
   run_step \
-    "Code signature verification" \
-    "Check that both app bundles were signed by the configured Developer ID." \
-    /usr/bin/codesign --verify --strict --verbose=2 "$bundle_path"
-  signature_details=$(/usr/bin/codesign -dvv "$bundle_path" 2>&1)
+    "$artifact_label signature verification" \
+    "Check that the artifact was signed by the configured Developer ID." \
+    /usr/bin/codesign --verify --strict --verbose=2 "$artifact_path"
+  signature_details=$(/usr/bin/codesign -dvv "$artifact_path" 2>&1)
   if ! /usr/bin/grep -Fqx "Authority=$identity" <<<"$signature_details" || \
     ! /usr/bin/grep -Fqx "TeamIdentifier=$team_id" <<<"$signature_details"; then
-    print -u2 -- "A bundle was not signed by the configured Developer ID team."
+    print -u2 -- "$artifact_label was not signed by the configured Developer ID team."
     exit 1
   fi
 }
 
 # Verify both independently. --deep alone can hide an incorrectly signed helper.
-verify_signed_bundle "$helper_path"
-verify_signed_bundle "$app_path"
+verify_developer_id_signature "$helper_path" "Release helper"
+verify_developer_id_signature "$app_path" "Release app"
 
 version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app_path/Contents/Info.plist")
 if [[ -z "$version" ]]; then
@@ -175,6 +176,20 @@ run_step \
   "Release DMG creation" \
   "Check available disk space and the archived app bundle." \
   /usr/bin/hdiutil create -volname "TidyTap" -srcfolder "$staging_dir" -ov -format UDZO "$candidate_dmg"
+
+# Gatekeeper assesses the disk-image container itself. Sign it before it is
+# submitted so Apple's ticket binds to the Developer ID-signed DMG.
+run_step \
+  "Release DMG signing" \
+  "Check that the configured Developer ID identity can sign disk images." \
+  /usr/bin/codesign --force --sign "$identity" --timestamp "$candidate_dmg"
+verify_developer_id_signature "$candidate_dmg" "Release DMG"
+
+release_dmg_signature_details=$(/usr/bin/codesign -dvv "$candidate_dmg" 2>&1)
+if ! /usr/bin/grep -Eq '^Timestamp=.+$' <<<"$release_dmg_signature_details"; then
+  print -u2 -- "Release DMG is missing a secure signing timestamp."
+  exit 1
+fi
 
 run_step \
   "Notarization submission" \
