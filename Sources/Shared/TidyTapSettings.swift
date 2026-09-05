@@ -86,6 +86,25 @@ struct TidyTapFeaturePermissionState: Codable, Equatable {
     }
 }
 
+enum TidyTapPermissionRequestKind: String, Codable, Equatable {
+    case refresh
+    case request
+}
+
+/// A single correlated permission command for the embedded helper. The app
+/// persists it before launching the helper so a launch-time notification race
+/// cannot lose an explicit user request.
+struct TidyTapPermissionRequest: Codable, Equatable {
+    let requestID: UUID
+    let kind: TidyTapPermissionRequestKind
+    let permission: TidyTapPermission?
+}
+
+struct TidyTapPermissionResult: Codable, Equatable {
+    let requestID: UUID
+    let state: TidyTapFeaturePermissionState
+}
+
 struct TidyTapSettingsRequest: Codable, Equatable {
     let settings: TidyTapSettings
     let applyRequestID: UUID
@@ -172,6 +191,10 @@ protocol TidyTapPreferencesStoring: AnyObject {
     func write(settings: TidyTapSettings, applyRequestID: UUID) throws
     func readApplyStatus() -> TidyTapApplyStatus?
     func writeApplyStatus(_ status: TidyTapApplyStatus) throws
+    func readPermissionRequest() -> TidyTapPermissionRequest?
+    func writePermissionRequest(_ request: TidyTapPermissionRequest) throws
+    func readPermissionResult() -> TidyTapPermissionResult?
+    func writePermissionResult(_ result: TidyTapPermissionResult) throws
 }
 
 /// Caps Lock changes system-owned values, so the helper persists the exact
@@ -236,6 +259,32 @@ final class TidyTapPreferencesStore: TidyTapPreferencesStoring, TidyTapCapsOwner
         synchronize()
     }
 
+    func readPermissionRequest() -> TidyTapPermissionRequest? {
+        synchronize()
+        guard let data = defaults.data(forKey: TidyTapPreferences.permissionRequestKey) else {
+            return nil
+        }
+        return try? decoder.decode(TidyTapPermissionRequest.self, from: data)
+    }
+
+    func writePermissionRequest(_ request: TidyTapPermissionRequest) throws {
+        defaults.set(try encode(request), forKey: TidyTapPreferences.permissionRequestKey)
+        synchronize()
+    }
+
+    func readPermissionResult() -> TidyTapPermissionResult? {
+        synchronize()
+        guard let data = defaults.data(forKey: TidyTapPreferences.permissionResultKey) else {
+            return nil
+        }
+        return try? decoder.decode(TidyTapPermissionResult.self, from: data)
+    }
+
+    func writePermissionResult(_ result: TidyTapPermissionResult) throws {
+        defaults.set(try encode(result), forKey: TidyTapPreferences.permissionResultKey)
+        synchronize()
+    }
+
     func readCapsLockJournalData() -> Data? {
         synchronize()
         return defaults.data(forKey: TidyTapPreferences.capsLockOwnershipKey)
@@ -264,4 +313,6 @@ enum TidyTapPreferences {
     static let applyRequestIDKey = "applyRequestID"
     static let applyStatusKey = "applyStatus"
     static let capsLockOwnershipKey = "capsLockOwnership"
+    static let permissionRequestKey = "permissionRequest"
+    static let permissionResultKey = "permissionResult"
 }

@@ -23,6 +23,7 @@ final class SettingsCoordinator {
 
     private(set) var latestRequestID: UUID?
     private(set) var latestApplyStatus: TidyTapApplyStatus?
+    private(set) var latestPermissionRequestID: UUID?
     private var settingsBeforeLatestRequest: TidyTapSettings?
 
     init(
@@ -43,6 +44,10 @@ final class SettingsCoordinator {
         latestRequestID = request.applyRequestID
         let status = preferences.readApplyStatus()
         latestApplyStatus = status?.applyRequestID == request.applyRequestID ? status : nil
+        if let latestApplyStatus, permissionSettingsPane(for: latestApplyStatus) != nil,
+           (try? enqueuePermission(kind: .refresh, permission: nil)) != nil {
+            return
+        }
         helperLauncher.launchOrActivateHelper()
     }
 
@@ -132,15 +137,80 @@ final class SettingsCoordinator {
     }
 
     func permissionSettingsPane(for status: TidyTapApplyStatus) -> TidyTapPermission? {
-        guard let code = status.errorCode else { return nil }
-        if code.contains("permissionDenied.accessibility") ||
-            code.contains("permissionPartial.accessibility") {
+        let unavailable = unavailablePermissions(in: status)
+        if unavailable.contains(.accessibility) {
             return .accessibility
         }
-        if code.contains("permissionDenied.inputMonitoring") ||
-            code.contains("permissionPartial.inputMonitoring") {
+        if unavailable.contains(.inputMonitoring) {
             return .inputMonitoring
         }
         return nil
+    }
+
+    /// Foreground refresh is intentionally limited to an existing permission
+    /// notice and is read-only inside the helper.
+    @discardableResult
+    func refreshPermissionsIfNeeded() throws -> UUID? {
+        guard let status = latestApplyStatus,
+              permissionSettingsPane(for: status) != nil,
+              latestPermissionRequestID == nil else {
+            return nil
+        }
+        return try enqueuePermission(kind: .refresh, permission: nil)
+    }
+
+    @discardableResult
+    func requestPermission(_ permission: TidyTapPermission) throws -> UUID {
+        try enqueuePermission(kind: .request, permission: permission)
+    }
+
+    func receivePermissionResult() -> TidyTapPermissionResult? {
+        guard let currentID = latestPermissionRequestID,
+              let request = preferences.readPermissionRequest(), request.requestID == currentID,
+              let result = preferences.readPermissionResult(), result.requestID == currentID else {
+            return nil
+        }
+        latestPermissionRequestID = nil
+        return result
+    }
+
+    func permissionSettingsPane(
+        for status: TidyTapApplyStatus,
+        confirmed state: TidyTapFeaturePermissionState
+    ) -> TidyTapPermission? {
+        let unavailable = unavailablePermissions(in: status)
+        if unavailable.contains(.accessibility), state.accessibility != .authorized {
+            return .accessibility
+        }
+        if unavailable.contains(.inputMonitoring), state.inputMonitoring != .authorized {
+            return .inputMonitoring
+        }
+        return nil
+    }
+
+    private func unavailablePermissions(in status: TidyTapApplyStatus) -> Set<TidyTapPermission> {
+        guard status.failedComponent == .eventTap,
+              let code = status.errorCode,
+              code.hasPrefix("eventTap.permissionDenied.") ||
+                code.hasPrefix("eventTap.permissionPartial.") else {
+            return []
+        }
+        return Set(TidyTapPermission.allCases.filter { code.split(separator: ".").contains(Substring($0.rawValue)) })
+    }
+
+    private func enqueuePermission(
+        kind: TidyTapPermissionRequestKind,
+        permission: TidyTapPermission?
+    ) throws -> UUID {
+        let request = TidyTapPermissionRequest(
+            requestID: UUID(),
+            kind: kind,
+            permission: permission
+        )
+        try preferences.writePermissionRequest(request)
+        latestPermissionRequestID = request.requestID
+        helperLauncher.launchOrActivateHelper()
+        TidyTapIPC.postPermissionRequest(request)
+        return request.requestID
     }
 }

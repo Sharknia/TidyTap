@@ -7,7 +7,11 @@
       </BuildActionEntry>
     </BuildActionEntries>
   </BuildAction>
-  <TestAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.DebuggerFoundation.Launcher.LLDB" shouldUseLaunchSchemeArgsEnv="YES">
+  <TestAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.DebuggerFoundation.Launcher.LLDB" shouldUseLaunchSchemeArgsEnv="NO">
+    <EnvironmentVariables>
+      <EnvironmentVariable key="TIDYTAP_LAUNCH_SMOKE" value="1" isEnabled="YES"/>
+      <EnvironmentVariable key="TIDYTAP_LAUNCH_SMOKE_PREFERENCES_SUITE" value="com.sharknia.TidyTap.LaunchSmoke.XCTest" isEnabled="YES"/>
+    </EnvironmentVariables>
     <Testables>
       <TestableReference skipped="NO">
         <BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="A10000000000000000000003" BuildableName="TidyTapTests.xctest" BlueprintName="TidyTapTests" ReferencedContainer="container:TidyTap.xcodeproj"/>
