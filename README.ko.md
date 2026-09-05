@@ -70,6 +70,16 @@ xcodebuild -project TidyTap.xcodeproj -scheme TidyTap \
 swift test --package-path Packages/TidyTapInputEngine
 ```
 
+앱 진입점을 변경한 뒤에는 프로세스 단위 launch smoke도 실행합니다.
+
+```sh
+Scripts/launch-smoke.sh
+```
+
+이 스크립트는 unsigned Release 앱을 빌드해 ad-hoc 서명하고, 격리된 all-off
+설정으로 앱과 helper를 실행합니다. 설정 창 하나, helper 시작·종료, 실제 입력
+및 운영 preferences 상태가 바뀌지 않았는지를 함께 검증합니다.
+
 서명 archive가 필요하면 `Config/LocalSigning.xcconfig.example`을 gitignore 대상인 `Config/LocalSigning.xcconfig`으로 복사하고 실제 Developer ID 정보를 입력하세요. 서명 값은 커밋하지 마세요. 현재 저장소에는 공증 및 공개 릴리스가 없습니다.
 
 ## 개인정보 보호와 제한사항

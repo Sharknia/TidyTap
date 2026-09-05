@@ -3,6 +3,23 @@ import TidyTapInputEngine
 
 @MainActor
 final class TidyTapSettingsTests: XCTestCase {
+    func testLaunchSmokeRequiresFlagAndScopedPreferencesSuite() {
+        let suite = "\(TidyTapLaunchSmoke.suitePrefix)UnitTest"
+
+        XCTAssertNil(TidyTapLaunchSmoke.current(environment: [:]))
+        XCTAssertNil(TidyTapLaunchSmoke.current(environment: [
+            TidyTapLaunchSmoke.enabledKey: "1",
+            TidyTapLaunchSmoke.preferencesSuiteKey: TidyTapPreferences.domain
+        ]))
+        XCTAssertEqual(
+            TidyTapLaunchSmoke.current(environment: [
+                TidyTapLaunchSmoke.enabledKey: "1",
+                TidyTapLaunchSmoke.preferencesSuiteKey: suite
+            ])?.preferencesSuite,
+            suite
+        )
+    }
+
     func testDefaultSettingsKeepEveryCapabilityDisabled() {
         XCTAssertEqual(TidyTapSettings.defaults, TidyTapSettings(
             capsLockInputSourceSwitching: false,

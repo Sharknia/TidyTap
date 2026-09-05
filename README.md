@@ -70,6 +70,17 @@ xcodebuild -project TidyTap.xcodeproj -scheme TidyTap \
 swift test --package-path Packages/TidyTapInputEngine
 ```
 
+Run the process-level launch smoke after changing either app entry point:
+
+```sh
+Scripts/launch-smoke.sh
+```
+
+It builds an unsigned Release app, applies an ad-hoc signature, launches the
+main app and helper with isolated all-off preferences, verifies one settings
+window plus helper startup/exit, and checks that live input and production
+preference state did not change.
+
 To create a signed archive, copy `Config/LocalSigning.xcconfig.example` to the gitignored `Config/LocalSigning.xcconfig` and provide a real Developer ID identity. Do not commit signing values. Notarization and release publication are not part of the current repository status.
 
 ## Privacy and limitations

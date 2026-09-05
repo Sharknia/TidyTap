@@ -29,11 +29,11 @@ TidyTapHelper (LSUIElement, 단일 백그라운드 프로세스)
 | --- | --- | --- |
 | `Shared/Preferences.swift` | 세 기능 토글, 두 옵션, 백업 메타데이터가 담긴 Codable/UserDefaults 모델과 preferences domain 키 | 이벤트 탭, UI |
 | `Shared/IPC.swift` | 설정 변경 알림과 상관관계가 있는 적용 요청/결과 계약 | 설정 저장, 기능 적용 |
-| `App/TidyTapApp.swift`, `App/SettingsViewController.swift` | AppKit 창, 한국어/영어 문자열, 토글과 권한 상태 표시 | HID/event tap 구현 |
+| `App/main.swift`, `App/AppDelegate.swift`, `App/SettingsViewController.swift` | 강하게 보유한 delegate로 `NSApplication` 실행, AppKit 창, 한국어/영어 문자열, 토글과 권한 상태 표시 | HID/event tap 구현 |
 | `App/SettingsCoordinator.swift` | 사용자 변경 검증, UserDefaults 저장, helper 시작 요청, IPC 알림 | 이벤트 콜백 |
 | `App/PermissionCoordinator.swift` | 접근성·입력 모니터링 상태 확인 및 시스템 설정 열기 | 권한 우회, 권한 자동 승인 |
 | `App/LoginItemCoordinator.swift` | `SMAppService`로 helper 로그인 항목 등록/해제 및 상태 표시 | helper 기능 토글 |
-| `Helper/HelperMain.swift` | helper 진입점, 전체 설정 초기 적용, IPC 수신, 종료 조건 | 설정 UI |
+| `Helper/main.swift`, `Helper/HelperAppDelegate.swift` | 강하게 보유한 delegate로 helper `NSApplication` 실행, 전체 설정 초기 적용, IPC 수신, 종료 조건 | 설정 UI |
 | `Helper/ApplyCoordinator.swift` | 설정 스냅샷을 읽어 Caps/이벤트 탭/메뉴 막대 적용 순서 조정, 트랜잭션과 롤백, 결과 보고 | 개별 이벤트 판정 |
 | `Helper/CapsLockController.swift` | Caps Lock HID 매핑의 백업·충돌 검사·적용·조건부 복원 | 입력 소스 단축키, 다른 키 매핑, UI |
 | `Helper/InputSourceShortcutController.swift` | 입력 소스 단축키의 현재값 확인, F18 설정 및 조건부 백업 복원 | HID 매핑, 입력 소스 목록 변경 |

@@ -1,18 +1,27 @@
 import AppKit
 
-@main
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowController: NSWindowController?
     private var settingsCoordinator: SettingsCoordinator?
     private var observesApplyResults = false
+    private let launchSmoke = TidyTapLaunchSmoke.current()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // The settings app is a regular, user-facing application even though
         // its embedded helper is an agent. Explicitly restore the regular
         // activation policy so launches from a login item/Dock are visible.
         NSApp.setActivationPolicy(.regular)
-        let settingsCoordinator = SettingsCoordinator(helperLauncher: HelperLauncher())
+        let settingsCoordinator: SettingsCoordinator
+        if let launchSmoke {
+            settingsCoordinator = SettingsCoordinator(
+                preferences: TidyTapPreferencesStore(defaults: launchSmoke.makePreferences()),
+                helperLauncher: LaunchSmokeHelperLauncher(smoke: launchSmoke),
+                loginItemManager: LaunchSmokeLoginItemCoordinator(smoke: launchSmoke)
+            )
+        } else {
+            settingsCoordinator = SettingsCoordinator(helperLauncher: HelperLauncher())
+        }
         self.settingsCoordinator = settingsCoordinator
         DistributedNotificationCenter.default().addObserver(
             self,
@@ -38,6 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let windowController = NSWindowController(window: window)
         self.windowController = windowController
         showSettingsWindow()
+        launchSmoke?.report("main-delegate-started")
         if let status = settingsCoordinator.latestApplyStatus {
             controller.showApplyStatus(
                 status,
@@ -85,6 +95,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             status,
             permission: coordinator.permissionSettingsPane(for: status)
         )
+    }
+}
+
+private final class LaunchSmokeHelperLauncher: TidyTapHelperLaunching {
+    private let smoke: TidyTapLaunchSmoke
+
+    init(smoke: TidyTapLaunchSmoke) {
+        self.smoke = smoke
+    }
+
+    func launchOrActivateHelper() {
+        smoke.report("main-helper-launch-skipped")
+    }
+}
+
+private final class LaunchSmokeLoginItemCoordinator: TidyTapLoginItemManaging {
+    private let smoke: TidyTapLaunchSmoke
+
+    init(smoke: TidyTapLaunchSmoke) {
+        self.smoke = smoke
+    }
+
+    func setEnabled(_ enabled: Bool) throws {
+        smoke.report("main-login-item-mutation-skipped")
+    }
+
+    func status() -> TidyTapLoginItemStatus {
+        .disabled
     }
 }
 
