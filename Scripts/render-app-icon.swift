@@ -22,17 +22,43 @@ func draw() {
     color(0.49, 0.57, 0.60, 0.30).setFill(); tile.fill()
     NSGraphicsContext.restoreGraphicsState()
 
-    // Pale blue-grey translucency; the narrow white rim is the icon's only bevel.
+    // Pale blue-grey translucency with a gently shaded center, rather than a flat tile.
     NSGradient(colors: [
-        color(0.88, 0.93, 0.94, 0.91),
+        color(0.84, 0.90, 0.91, 0.91),
         color(0.67, 0.76, 0.79, 0.87)
     ])!.draw(in: tile, angle: 90)
-    color(1, 1, 1, 0.72).setStroke(); tile.lineWidth = 7; tile.stroke()
+    NSGradient(starting: color(0.94, 0.97, 0.97, 0.22), ending: color(0.57, 0.67, 0.70, 0.10))!
+        .draw(in: tile, relativeCenterPosition: NSPoint(x: 0.48, y: 0.56))
+    color(1, 1, 1, 0.48).setStroke(); tile.lineWidth = 4; tile.stroke()
+
+    // A clipped, low-contrast inner highlight carries the glass perimeter softly.
+    NSGraphicsContext.saveGraphicsState()
+    tile.addClip()
+    let innerPerimeter = NSBezierPath(roundedRect: NSRect(x: 112, y: 112, width: 800, height: 800), xRadius: 188, yRadius: 188)
+    let innerGlow = NSShadow(); innerGlow.shadowColor = color(1, 1, 1, 0.18)
+    innerGlow.shadowOffset = .zero; innerGlow.shadowBlurRadius = 11; innerGlow.set()
+    color(1, 1, 1, 0.08).setStroke(); innerPerimeter.lineWidth = 3; innerPerimeter.stroke()
+    NSGraphicsContext.restoreGraphicsState()
 
     // A clean raised T: enough depth to read as a control without becoming a keycap.
     let letter = NSBezierPath()
-    letter.appendRoundedRect(NSRect(x: 318, y: 635, width: 388, height: 106), xRadius: 48, yRadius: 48)
-    letter.appendRoundedRect(NSRect(x: 462, y: 335, width: 100, height: 350), xRadius: 46, yRadius: 46)
+    // One continuous union contour prevents a seam where the bar meets the stem.
+    letter.move(to: NSPoint(x: 366, y: 741))
+    letter.curve(to: NSPoint(x: 318, y: 693), controlPoint1: NSPoint(x: 339, y: 741), controlPoint2: NSPoint(x: 318, y: 720))
+    letter.line(to: NSPoint(x: 318, y: 683))
+    letter.curve(to: NSPoint(x: 366, y: 635), controlPoint1: NSPoint(x: 318, y: 656), controlPoint2: NSPoint(x: 339, y: 635))
+    letter.line(to: NSPoint(x: 438, y: 635))
+    letter.curve(to: NSPoint(x: 462, y: 611), controlPoint1: NSPoint(x: 451, y: 635), controlPoint2: NSPoint(x: 462, y: 624))
+    letter.line(to: NSPoint(x: 462, y: 383))
+    letter.curve(to: NSPoint(x: 512, y: 335), controlPoint1: NSPoint(x: 462, y: 356), controlPoint2: NSPoint(x: 484, y: 335))
+    letter.curve(to: NSPoint(x: 562, y: 383), controlPoint1: NSPoint(x: 540, y: 335), controlPoint2: NSPoint(x: 562, y: 356))
+    letter.line(to: NSPoint(x: 562, y: 611))
+    letter.curve(to: NSPoint(x: 586, y: 635), controlPoint1: NSPoint(x: 562, y: 624), controlPoint2: NSPoint(x: 573, y: 635))
+    letter.line(to: NSPoint(x: 658, y: 635))
+    letter.curve(to: NSPoint(x: 706, y: 683), controlPoint1: NSPoint(x: 685, y: 635), controlPoint2: NSPoint(x: 706, y: 656))
+    letter.line(to: NSPoint(x: 706, y: 693))
+    letter.curve(to: NSPoint(x: 658, y: 741), controlPoint1: NSPoint(x: 706, y: 720), controlPoint2: NSPoint(x: 685, y: 741))
+    letter.close()
     NSGraphicsContext.saveGraphicsState()
     let letterShadow = NSShadow(); letterShadow.shadowColor = NSColor.black.withAlphaComponent(0.23)
     letterShadow.shadowOffset = NSSize(width: 0, height: -9); letterShadow.shadowBlurRadius = 10; letterShadow.set()
@@ -42,11 +68,13 @@ func draw() {
 
     let cursor = NSBezierPath()
     // The pointer faces the T from the lower-right rather than forming another frame.
-    cursor.move(to: NSPoint(x: 654, y: 486))
-    cursor.line(to: NSPoint(x: 810, y: 352))
-    cursor.line(to: NSPoint(x: 748, y: 330))
-    cursor.line(to: NSPoint(x: 724, y: 264))
-    cursor.line(to: NSPoint(x: 671, y: 293))
+    cursor.move(to: NSPoint(x: 661, y: 476))
+    cursor.line(to: NSPoint(x: 790, y: 365))
+    cursor.line(to: NSPoint(x: 748, y: 356))
+    cursor.line(to: NSPoint(x: 770, y: 292))
+    cursor.line(to: NSPoint(x: 738, y: 278))
+    cursor.line(to: NSPoint(x: 710, y: 343))
+    cursor.line(to: NSPoint(x: 681, y: 316))
     cursor.close()
     cursor.lineJoinStyle = .round
     NSGraphicsContext.saveGraphicsState()
