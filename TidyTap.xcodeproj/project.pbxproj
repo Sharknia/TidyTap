@@ -1,0 +1,157 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000000000000000000011 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000101 /* AppDelegate.swift */; };
+		A10000000000000000000012 /* SettingsViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000102 /* SettingsViewController.swift */; };
+		A10000000000000000000013 /* TidyTapSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000111 /* TidyTapSettings.swift */; };
+		A10000000000000000000014 /* TidyTapIPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000112 /* TidyTapIPC.swift */; };
+		A10000000000000000000015 /* TidyTapProduct.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000113 /* TidyTapProduct.swift */; };
+		A10000000000000000000016 /* TidyTapStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000114 /* TidyTapStrings.swift */; };
+		A10000000000000000000017 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000115 /* Localizable.xcstrings */; };
+		A10000000000000000000018 /* SettingsCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000116 /* SettingsCoordinator.swift */; };
+		A10000000000000000000019 /* HelperLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000117 /* HelperLauncher.swift */; };
+		A1000000000000000000001A /* LoginItemCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000118 /* LoginItemCoordinator.swift */; };
+		A10000000000000000000021 /* HelperAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000121 /* HelperAppDelegate.swift */; };
+		A10000000000000000000022 /* TidyTapSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000111 /* TidyTapSettings.swift */; };
+		A10000000000000000000023 /* TidyTapIPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000112 /* TidyTapIPC.swift */; };
+		A10000000000000000000024 /* TidyTapProduct.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000113 /* TidyTapProduct.swift */; };
+		A10000000000000000000025 /* TidyTapStrings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000114 /* TidyTapStrings.swift */; };
+		A10000000000000000000026 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000115 /* Localizable.xcstrings */; };
+		A10000000000000000000027 /* ApplyCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000122 /* ApplyCoordinator.swift */; };
+		A10000000000000000000028 /* MenuBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000123 /* MenuBarController.swift */; };
+		A10000000000000000000029 /* HelperLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000124 /* HelperLifecycle.swift */; };
+		A10000000000000000000031 /* TidyTapSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000131 /* TidyTapSettingsTests.swift */; };
+		A10000000000000000000032 /* TidyTapSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000111 /* TidyTapSettings.swift */; };
+		A10000000000000000000033 /* TidyTapProduct.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000113 /* TidyTapProduct.swift */; };
+		A10000000000000000000034 /* TidyTapIPC.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000112 /* TidyTapIPC.swift */; };
+		A10000000000000000000035 /* ApplyCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000122 /* ApplyCoordinator.swift */; };
+		A10000000000000000000036 /* SettingsCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000116 /* SettingsCoordinator.swift */; };
+		A10000000000000000000037 /* LoginItemCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000118 /* LoginItemCoordinator.swift */; };
+		A10000000000000000000041 /* TidyTapHelper.app in Embed Login Item */ = {isa = PBXBuildFile; fileRef = A10000000000000000000202 /* TidyTapHelper.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		A10000000000000000000042 /* InputFeatureAdapters.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000125 /* InputFeatureAdapters.swift */; };
+		A10000000000000000000043 /* InputFeatureAdapters.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000125 /* InputFeatureAdapters.swift */; };
+		A10000000000000000000044 /* TidyTapInputEngine in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000801 /* TidyTapInputEngine */; };
+		A10000000000000000000045 /* TidyTapInputEngine in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000802 /* TidyTapInputEngine */; };
+		A10000000000000000000046 /* TidyTapLaunchSmoke.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000119 /* TidyTapLaunchSmoke.swift */; };
+		A10000000000000000000047 /* TidyTapLaunchSmoke.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000119 /* TidyTapLaunchSmoke.swift */; };
+		A10000000000000000000048 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000103 /* main.swift */; };
+		A10000000000000000000049 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000126 /* main.swift */; };
+		A1000000000000000000004A /* TidyTapLaunchSmoke.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000119 /* TidyTapLaunchSmoke.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A10000000000000000000051 /* PBXContainerItemProxy */ = {isa = PBXContainerItemProxy; containerPortal = A10000000000000000000000 /* Project object */; proxyType = 1; remoteGlobalIDString = A10000000000000000000002; remoteInfo = TidyTapHelper; };
+		A10000000000000000000052 /* PBXContainerItemProxy */ = {isa = PBXContainerItemProxy; containerPortal = A10000000000000000000000 /* Project object */; proxyType = 1; remoteGlobalIDString = A10000000000000000000001; remoteInfo = TidyTap; };
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		A10000000000000000000101 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		A10000000000000000000102 /* SettingsViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsViewController.swift; sourceTree = "<group>"; };
+		A10000000000000000000103 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		A10000000000000000000111 /* TidyTapSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TidyTapSettings.swift; sourceTree = "<group>"; };
+		A10000000000000000000112 /* TidyTapIPC.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TidyTapIPC.swift; sourceTree = "<group>"; };
+		A10000000000000000000113 /* TidyTapProduct.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TidyTapProduct.swift; sourceTree = "<group>"; };
+		A10000000000000000000114 /* TidyTapStrings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TidyTapStrings.swift; sourceTree = "<group>"; };
+		A10000000000000000000115 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		A10000000000000000000116 /* SettingsCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsCoordinator.swift; sourceTree = "<group>"; };
+		A10000000000000000000117 /* HelperLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperLauncher.swift; sourceTree = "<group>"; };
+		A10000000000000000000118 /* LoginItemCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginItemCoordinator.swift; sourceTree = "<group>"; };
+		A10000000000000000000119 /* TidyTapLaunchSmoke.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TidyTapLaunchSmoke.swift; sourceTree = "<group>"; };
+		A10000000000000000000121 /* HelperAppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperAppDelegate.swift; sourceTree = "<group>"; };
+		A10000000000000000000122 /* ApplyCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplyCoordinator.swift; sourceTree = "<group>"; };
+		A10000000000000000000123 /* MenuBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarController.swift; sourceTree = "<group>"; };
+		A10000000000000000000124 /* HelperLifecycle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelperLifecycle.swift; sourceTree = "<group>"; };
+		A10000000000000000000125 /* InputFeatureAdapters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputFeatureAdapters.swift; sourceTree = "<group>"; };
+		A10000000000000000000126 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		A10000000000000000000131 /* TidyTapSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TidyTapSettingsTests.swift; sourceTree = "<group>"; };
+		A10000000000000000000141 /* Signing.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Signing.xcconfig; sourceTree = "<group>"; };
+		A10000000000000000000142 /* LocalSigning.xcconfig.example */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = "LocalSigning.xcconfig.example"; sourceTree = "<group>"; };
+		A10000000000000000000143 /* verify-release-build-settings.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = "verify-release-build-settings.sh"; sourceTree = "<group>"; };
+		A10000000000000000000201 /* TidyTap.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TidyTap.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000202 /* TidyTapHelper.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TidyTapHelper.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A10000000000000000000203 /* TidyTapTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TidyTapTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A10000000000000000000301 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A10000000000000000000302 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000044 /* TidyTapInputEngine in Frameworks */, ); runOnlyForDeploymentPostprocessing = 0; };
+		A10000000000000000000303 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000045 /* TidyTapInputEngine in Frameworks */, ); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A10000000000000000000401 = {isa = PBXGroup; children = (A10000000000000000000402 /* Sources */, A10000000000000000000405 /* Tests */, A10000000000000000000409 /* Config */, A10000000000000000000410 /* Scripts */, A10000000000000000000406 /* Products */, ); sourceTree = "<group>"; };
+		A10000000000000000000402 /* Sources */ = {isa = PBXGroup; children = (A10000000000000000000403 /* App */, A10000000000000000000404 /* Helper */, A10000000000000000000407 /* Shared */, ); path = Sources; sourceTree = "<group>"; };
+		A10000000000000000000403 /* App */ = {isa = PBXGroup; children = (A10000000000000000000103 /* main.swift */, A10000000000000000000101 /* AppDelegate.swift */, A10000000000000000000102 /* SettingsViewController.swift */, A10000000000000000000116 /* SettingsCoordinator.swift */, A10000000000000000000117 /* HelperLauncher.swift */, A10000000000000000000118 /* LoginItemCoordinator.swift */, ); path = App; sourceTree = "<group>"; };
+		A10000000000000000000404 /* Helper */ = {isa = PBXGroup; children = (A10000000000000000000126 /* main.swift */, A10000000000000000000121 /* HelperAppDelegate.swift */, A10000000000000000000122 /* ApplyCoordinator.swift */, A10000000000000000000123 /* MenuBarController.swift */, A10000000000000000000124 /* HelperLifecycle.swift */, A10000000000000000000125 /* InputFeatureAdapters.swift */, ); path = Helper; sourceTree = "<group>"; };
+		A10000000000000000000405 /* Tests */ = {isa = PBXGroup; children = (A10000000000000000000408 /* TidyTapTests */, ); path = Tests; sourceTree = "<group>"; };
+		A10000000000000000000406 /* Products */ = {isa = PBXGroup; children = (A10000000000000000000201 /* TidyTap.app */, A10000000000000000000202 /* TidyTapHelper.app */, A10000000000000000000203 /* TidyTapTests.xctest */, ); name = Products; sourceTree = "<group>"; };
+		A10000000000000000000407 /* Shared */ = {isa = PBXGroup; children = (A10000000000000000000111 /* TidyTapSettings.swift */, A10000000000000000000112 /* TidyTapIPC.swift */, A10000000000000000000113 /* TidyTapProduct.swift */, A10000000000000000000114 /* TidyTapStrings.swift */, A10000000000000000000119 /* TidyTapLaunchSmoke.swift */, A10000000000000000000115 /* Localizable.xcstrings */, ); path = Shared; sourceTree = "<group>"; };
+		A10000000000000000000408 /* TidyTapTests */ = {isa = PBXGroup; children = (A10000000000000000000131 /* TidyTapSettingsTests.swift */, ); path = TidyTapTests; sourceTree = "<group>"; };
+		A10000000000000000000409 /* Config */ = {isa = PBXGroup; children = (A10000000000000000000141 /* Signing.xcconfig */, A10000000000000000000142 /* LocalSigning.xcconfig.example */, ); path = Config; sourceTree = "<group>"; };
+		A10000000000000000000410 /* Scripts */ = {isa = PBXGroup; children = (A10000000000000000000143 /* verify-release-build-settings.sh */, ); path = Scripts; sourceTree = "<group>"; };
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A10000000000000000000001 /* TidyTap */ = {isa = PBXNativeTarget; buildConfigurationList = A10000000000000000000501 /* Build configuration list for PBXNativeTarget "TidyTap" */; buildPhases = (A10000000000000000000311 /* Sources */, A10000000000000000000301 /* Frameworks */, A10000000000000000000312 /* Resources */, A10000000000000000000313 /* Embed Login Item */, ); buildRules = (); dependencies = (A10000000000000000000601 /* PBXTargetDependency */, ); name = TidyTap; productName = TidyTap; productReference = A10000000000000000000201 /* TidyTap.app */; productType = "com.apple.product-type.application"; };
+		A10000000000000000000002 /* TidyTapHelper */ = {isa = PBXNativeTarget; buildConfigurationList = A10000000000000000000502 /* Build configuration list for PBXNativeTarget "TidyTapHelper" */; buildPhases = (A10000000000000000000321 /* Sources */, A10000000000000000000302 /* Frameworks */, A10000000000000000000322 /* Resources */, ); buildRules = (); dependencies = (); name = TidyTapHelper; packageProductDependencies = (A10000000000000000000801 /* TidyTapInputEngine */, ); productName = TidyTapHelper; productReference = A10000000000000000000202 /* TidyTapHelper.app */; productType = "com.apple.product-type.application"; };
+		A10000000000000000000003 /* TidyTapTests */ = {isa = PBXNativeTarget; buildConfigurationList = A10000000000000000000503 /* Build configuration list for PBXNativeTarget "TidyTapTests" */; buildPhases = (A10000000000000000000331 /* Sources */, A10000000000000000000303 /* Frameworks */, ); buildRules = (); dependencies = (A10000000000000000000602 /* PBXTargetDependency */, ); name = TidyTapTests; packageProductDependencies = (A10000000000000000000802 /* TidyTapInputEngine */, ); productName = TidyTapTests; productReference = A10000000000000000000203 /* TidyTapTests.xctest */; productType = "com.apple.product-type.bundle.unit-test"; };
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A10000000000000000000000 /* Project object */ = {isa = PBXProject; attributes = { BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 2660; LastUpgradeCheck = 2660; TargetAttributes = { A10000000000000000000001 = { CreatedOnToolsVersion = 26.6; }; A10000000000000000000002 = { CreatedOnToolsVersion = 26.6; }; A10000000000000000000003 = { CreatedOnToolsVersion = 26.6; TestTargetID = A10000000000000000000001; }; }; }; buildConfigurationList = A10000000000000000000500 /* Build configuration list for PBXProject "TidyTap" */; compatibilityVersion = "Xcode 16.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, ko, Base, ); mainGroup = A10000000000000000000401; minimizedProjectReferenceProxies = 1; packageReferences = (A10000000000000000000800 /* XCLocalSwiftPackageReference "Packages/TidyTapInputEngine" */, ); preferredProjectObjectVersion = 77; productRefGroup = A10000000000000000000406 /* Products */; projectDirPath = ""; projectRoot = ""; targets = (A10000000000000000000001 /* TidyTap */, A10000000000000000000002 /* TidyTapHelper */, A10000000000000000000003 /* TidyTapTests */, ); };
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A10000000000000000000312 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000017 /* Localizable.xcstrings in Resources */, ); runOnlyForDeploymentPostprocessing = 0; };
+		A10000000000000000000322 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000026 /* Localizable.xcstrings in Resources */, ); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A10000000000000000000311 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000048 /* main.swift in Sources */, A10000000000000000000011 /* AppDelegate.swift in Sources */, A10000000000000000000012 /* SettingsViewController.swift in Sources */, A10000000000000000000018 /* SettingsCoordinator.swift in Sources */, A10000000000000000000019 /* HelperLauncher.swift in Sources */, A1000000000000000000001A /* LoginItemCoordinator.swift in Sources */, A10000000000000000000013 /* TidyTapSettings.swift in Sources */, A10000000000000000000014 /* TidyTapIPC.swift in Sources */, A10000000000000000000015 /* TidyTapProduct.swift in Sources */, A10000000000000000000016 /* TidyTapStrings.swift in Sources */, A10000000000000000000046 /* TidyTapLaunchSmoke.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
+		A10000000000000000000321 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000049 /* main.swift in Sources */, A10000000000000000000021 /* HelperAppDelegate.swift in Sources */, A10000000000000000000027 /* ApplyCoordinator.swift in Sources */, A10000000000000000000028 /* MenuBarController.swift in Sources */, A10000000000000000000029 /* HelperLifecycle.swift in Sources */, A10000000000000000000042 /* InputFeatureAdapters.swift in Sources */, A10000000000000000000022 /* TidyTapSettings.swift in Sources */, A10000000000000000000023 /* TidyTapIPC.swift in Sources */, A10000000000000000000024 /* TidyTapProduct.swift in Sources */, A10000000000000000000025 /* TidyTapStrings.swift in Sources */, A10000000000000000000047 /* TidyTapLaunchSmoke.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
+		A10000000000000000000331 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000031 /* TidyTapSettingsTests.swift in Sources */, A10000000000000000000032 /* TidyTapSettings.swift in Sources */, A10000000000000000000034 /* TidyTapIPC.swift in Sources */, A10000000000000000000035 /* ApplyCoordinator.swift in Sources */, A10000000000000000000036 /* SettingsCoordinator.swift in Sources */, A10000000000000000000037 /* LoginItemCoordinator.swift in Sources */, A10000000000000000000043 /* InputFeatureAdapters.swift in Sources */, A10000000000000000000033 /* TidyTapProduct.swift in Sources */, A1000000000000000000004A /* TidyTapLaunchSmoke.swift in Sources */, ); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A10000000000000000000313 /* Embed Login Item */ = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = "Contents/Library/LoginItems"; dstSubfolderSpec = 1; files = (A10000000000000000000041 /* TidyTapHelper.app in Embed Login Item */, ); name = "Embed Login Item"; runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A10000000000000000000601 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = A10000000000000000000002 /* TidyTapHelper */; targetProxy = A10000000000000000000051 /* PBXContainerItemProxy */; };
+		A10000000000000000000602 /* PBXTargetDependency */ = {isa = PBXTargetDependency; target = A10000000000000000000001 /* TidyTap */; targetProxy = A10000000000000000000052 /* PBXContainerItemProxy */; };
+/* End PBXTargetDependency section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		A10000000000000000000800 /* XCLocalSwiftPackageReference "Packages/TidyTapInputEngine" */ = {isa = XCLocalSwiftPackageReference; relativePath = Packages/TidyTapInputEngine; };
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A10000000000000000000801 /* TidyTapInputEngine */ = {isa = XCSwiftPackageProductDependency; package = A10000000000000000000800 /* XCLocalSwiftPackageReference "Packages/TidyTapInputEngine" */; productName = TidyTapInputEngine; };
+		A10000000000000000000802 /* TidyTapInputEngine */ = {isa = XCSwiftPackageProductDependency; package = A10000000000000000000800 /* XCLocalSwiftPackageReference "Packages/TidyTapInputEngine" */; productName = TidyTapInputEngine; };
+/* End XCSwiftPackageProductDependency section */
+
+/* Begin XCBuildConfiguration section */
+		A10000000000000000000700 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = { ARCHS = arm64; CLANG_ENABLE_MODULES = YES; CODE_SIGN_IDENTITY = "-"; CODE_SIGNING_ALLOWED = NO; CODE_SIGNING_REQUIRED = NO; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = ""; MACOSX_DEPLOYMENT_TARGET = 26.0; SDKROOT = macosx; SWIFT_VERSION = 6.0; }; name = Debug; };
+		A10000000000000000000701 /* Release */ = {isa = XCBuildConfiguration; buildSettings = { ARCHS = arm64; CLANG_ENABLE_MODULES = YES; CURRENT_PROJECT_VERSION = 1; MACOSX_DEPLOYMENT_TARGET = 26.0; SDKROOT = macosx; SWIFT_COMPILATION_MODE = wholemodule; SWIFT_OPTIMIZATION_LEVEL = "-O"; SWIFT_VERSION = 6.0; }; name = Release; };
+		A10000000000000000000710 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = { ASSETCATALOG_COMPILER_APPICON_NAME = ""; CODE_SIGN_IDENTITY = "-"; CODE_SIGNING_ALLOWED = NO; CODE_SIGNING_REQUIRED = NO; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = TidyTap; INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities"; INFOPLIST_KEY_NSMainStoryboardFile = ""; INFOPLIST_KEY_NSPrincipalClass = NSApplication; MARKETING_VERSION = 0.0.1; PRODUCT_BUNDLE_IDENTIFIER = "com.sharknia.TidyTap"; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_EMIT_LOC_STRINGS = YES; }; name = Debug; };
+		A10000000000000000000711 /* Release */ = {isa = XCBuildConfiguration; baseConfigurationReference = A10000000000000000000141 /* Signing.xcconfig */; buildSettings = { ASSETCATALOG_COMPILER_APPICON_NAME = ""; CURRENT_PROJECT_VERSION = 1; ENABLE_HARDENED_RUNTIME = YES; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_CFBundleDisplayName = TidyTap; INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities"; INFOPLIST_KEY_NSMainStoryboardFile = ""; INFOPLIST_KEY_NSPrincipalClass = NSApplication; MARKETING_VERSION = 0.0.1; PRODUCT_BUNDLE_IDENTIFIER = "com.sharknia.TidyTap"; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_EMIT_LOC_STRINGS = YES; }; name = Release; };
+		A10000000000000000000720 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = { CODE_SIGN_IDENTITY = "-"; CODE_SIGNING_ALLOWED = NO; CODE_SIGNING_REQUIRED = NO; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_LSUIElement = YES; INFOPLIST_KEY_NSPrincipalClass = NSApplication; MARKETING_VERSION = 0.0.1; PRODUCT_BUNDLE_IDENTIFIER = "com.sharknia.TidyTap.Helper"; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_EMIT_LOC_STRINGS = YES; }; name = Debug; };
+		A10000000000000000000721 /* Release */ = {isa = XCBuildConfiguration; baseConfigurationReference = A10000000000000000000141 /* Signing.xcconfig */; buildSettings = { CURRENT_PROJECT_VERSION = 1; ENABLE_HARDENED_RUNTIME = YES; GENERATE_INFOPLIST_FILE = YES; INFOPLIST_KEY_LSUIElement = YES; INFOPLIST_KEY_NSPrincipalClass = NSApplication; MARKETING_VERSION = 0.0.1; PRODUCT_BUNDLE_IDENTIFIER = "com.sharknia.TidyTap.Helper"; PRODUCT_NAME = "$(TARGET_NAME)"; SWIFT_EMIT_LOC_STRINGS = YES; }; name = Release; };
+		A10000000000000000000730 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = { BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGN_IDENTITY = "-"; CODE_SIGNING_ALLOWED = NO; CODE_SIGNING_REQUIRED = NO; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = "com.sharknia.TidyTapTests"; PRODUCT_NAME = "$(TARGET_NAME)"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TidyTap.app/Contents/MacOS/TidyTap"; }; name = Debug; };
+		A10000000000000000000731 /* Release */ = {isa = XCBuildConfiguration; buildSettings = { BUNDLE_LOADER = "$(TEST_HOST)"; GENERATE_INFOPLIST_FILE = YES; PRODUCT_BUNDLE_IDENTIFIER = "com.sharknia.TidyTapTests"; PRODUCT_NAME = "$(TARGET_NAME)"; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/TidyTap.app/Contents/MacOS/TidyTap"; }; name = Release; };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A10000000000000000000500 /* Build configuration list for PBXProject "TidyTap" */ = {isa = XCConfigurationList; buildConfigurations = (A10000000000000000000700 /* Debug */, A10000000000000000000701 /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A10000000000000000000501 /* Build configuration list for PBXNativeTarget "TidyTap" */ = {isa = XCConfigurationList; buildConfigurations = (A10000000000000000000710 /* Debug */, A10000000000000000000711 /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A10000000000000000000502 /* Build configuration list for PBXNativeTarget "TidyTapHelper" */ = {isa = XCConfigurationList; buildConfigurations = (A10000000000000000000720 /* Debug */, A10000000000000000000721 /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A10000000000000000000503 /* Build configuration list for PBXNativeTarget "TidyTapTests" */ = {isa = XCConfigurationList; buildConfigurations = (A10000000000000000000730 /* Debug */, A10000000000000000000731 /* Release */, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+	};
+	rootObject = A10000000000000000000000 /* Project object */;
+}

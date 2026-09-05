@@ -1,0 +1,8 @@
+// Copy this file to LocalSigning.xcconfig. It is intentionally gitignored.
+// Use real values from the Apple Developer account used for distribution.
+
+TIDYTAP_DEVELOPMENT_TEAM =
+TIDYTAP_DEVELOPER_ID_APPLICATION =
+// Name of an existing notarytool keychain profile. Do not put Apple ID or
+// app-specific-password values in this file.
+TIDYTAP_NOTARYTOOL_KEYCHAIN_PROFILE =

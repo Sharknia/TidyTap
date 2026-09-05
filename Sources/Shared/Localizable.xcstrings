@@ -1,0 +1,90 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Applying changes…" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Applying changes…" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "변경 사항 적용 중…" } }
+      }
+    },
+    "Changes applied." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Changes applied." } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "변경 사항이 적용되었습니다." } }
+      }
+    },
+    "Changes could not be applied." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Changes could not be applied." } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "변경 사항을 적용할 수 없습니다." } }
+      }
+    },
+    "Open System Settings" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open System Settings" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "시스템 설정 열기" } }
+      }
+    },
+    "Open TidyTap" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open TidyTap" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "TidyTap 열기" } }
+      }
+    },
+    "Options" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Options" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "옵션" } }
+      }
+    },
+    "Permission is required for this feature." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Permission is required for this feature." } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "이 기능을 사용하려면 권한이 필요합니다." } }
+      }
+    },
+    "Reverse vertical mouse wheel direction" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Reverse vertical mouse wheel direction" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "마우스 휠 수직 방향 반전" } }
+      }
+    },
+    "Show in menu bar" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Show in menu bar" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "메뉴 막대에 표시" } }
+      }
+    },
+    "Start at login" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Start at login" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "로그인할 때 시작" } }
+      }
+    },
+    "TidyTap" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "TidyTap" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "TidyTap" } }
+      }
+    },
+    "Use Caps Lock to switch input source" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Use Caps Lock to switch input source" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "Caps Lock으로 입력 소스 전환" } }
+      }
+    },
+    "Use side buttons for back/forward in Safari and Finder" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Use side buttons for back/forward in Safari and Finder" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "Safari와 Finder에서 측면 버튼으로 뒤로/앞으로" } }
+      }
+    },
+    "Version %@" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Version %@" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "버전 %@" } }
+      }
+    }
+  },
+  "version" : "1.0"
+}
