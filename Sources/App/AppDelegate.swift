@@ -49,12 +49,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let controller = SettingsViewController(
             settings: settingsCoordinator.settingsForUI(),
+            permissionState: settingsCoordinator.latestPermissionState ?? .init(),
             delegate: self
         )
         let window = NSWindow(contentViewController: controller)
         window.title = TidyTapStrings.appName
-        window.setContentSize(NSSize(width: 520, height: 420))
-        window.styleMask = [.titled, .closable, .miniaturizable]
+        window.setContentSize(SettingsViewController.contentSize)
+        window.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.backgroundColor = .clear
+        window.isOpaque = false
+        window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         window.center()
 
@@ -111,6 +117,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         controller.apply(coordinator.visibleSettings(for: status))
+        if let permissionState = coordinator.latestPermissionState {
+            controller.applyPermissionState(permissionState)
+        }
         controller.showApplyStatus(
             status,
             permission: coordinator.permissionSettingsPane(for: status)
@@ -125,28 +134,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func updatePermissionResultIfAvailable() -> Bool {
         guard let coordinator = settingsCoordinator,
               let controller = windowController?.contentViewController as? SettingsViewController,
-              let result = coordinator.receivePermissionResult(),
-              let status = coordinator.latestApplyStatus,
-              coordinator.permissionSettingsPane(for: status) != nil else {
+              let result = coordinator.receivePermissionResult() else {
             return false
         }
-        let requestedPane = pendingPermissionSettingsOpen?.consume(matching: result.requestID)
-        let missing = coordinator.permissionSettingsPane(for: status, confirmed: result.state)
-        controller.showPermissionMessage(
-            missing.map { permissionMessage(for: $0) },
-            permission: missing
-        )
-        if let requestedPane, requestedPane == missing {
+        controller.applyPermissionState(result.state)
+        if let requestedPane = pendingPermissionSettingsOpen?.consume(matching: result) {
             permissionSettingsOpener.open(requestedPane)
         }
         return true
-    }
-
-    private func permissionMessage(for permission: TidyTapPermission) -> String {
-        switch permission {
-        case .accessibility: TidyTapStrings.accessibilityPermissionRequired
-        case .inputMonitoring: TidyTapStrings.inputMonitoringPermissionRequired
-        }
     }
 }
 

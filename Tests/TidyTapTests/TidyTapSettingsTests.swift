@@ -57,6 +57,21 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertNil(pending.consume(matching: requestID))
     }
 
+    func testExplicitPermissionPaneStillOpensWhenMatchingResultIsAlreadyAuthorized() {
+        let requestID = UUID()
+        var pending = TidyTapPendingPermissionSettingsOpen(
+            requestID: requestID,
+            permission: .accessibility
+        )
+        let authorized = TidyTapPermissionResult(
+            requestID: requestID,
+            state: .init(accessibility: .authorized, inputMonitoring: .authorized)
+        )
+
+        XCTAssertEqual(pending.consume(matching: authorized), .accessibility)
+        XCTAssertNil(pending.consume(matching: authorized))
+    }
+
     func testOnlyCoreFeaturesKeepHelperAlive() {
         XCTAssertFalse(TidyTapSettings.defaults.requiresHelper)
 
@@ -770,6 +785,42 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertNotNil(try coordinator.refreshPermissionsIfNeeded(), "a later foreground return requests a fresh check")
         XCTAssertEqual(store.request.settings, sanitized)
         XCTAssertEqual(launcher.launchCount, 2)
+    }
+
+    func testRuntimePermissionDenialDowngradesConfirmedGreenUIOnlyForNamedPermission() throws {
+        let applyID = UUID()
+        let store = InMemoryPreferences(request: .init(settings: .defaults, applyRequestID: applyID))
+        let coordinator = SettingsCoordinator(
+            preferences: store,
+            helperLauncher: RecordingHelperLauncher(),
+            loginItemManager: StatefulLoginItem(status: .disabled)
+        )
+        let permissionID = try coordinator.requestPermission(.accessibility)
+        store.permissionResult = .init(
+            requestID: permissionID,
+            state: .init(accessibility: .authorized, inputMonitoring: .authorized)
+        )
+        let confirmed = try XCTUnwrap(coordinator.receivePermissionResult())
+        let controller = SettingsViewController(
+            permissionState: confirmed.state,
+            renderingMode: .offscreenSemanticFallback
+        )
+        _ = controller.view
+
+        store.status = TidyTapApplyStatus(
+            applyRequestID: applyID,
+            outcome: .partiallyApplied,
+            failedComponent: .eventTap,
+            errorCode: "eventTap.permissionPartial.inputMonitoring",
+            effectiveSettings: .defaults
+        )
+        let status = try XCTUnwrap(coordinator.receiveApplyResult())
+        controller.applyPermissionState(try XCTUnwrap(coordinator.latestPermissionState))
+        controller.showApplyStatus(status, permission: coordinator.permissionSettingsPane(for: status))
+
+        XCTAssertEqual(controller.permissionState.accessibility, .authorized)
+        XCTAssertEqual(controller.permissionState.inputMonitoring, .denied)
+        XCTAssertEqual(controller.settings, .defaults)
     }
 
     func testHelperExplicitRequestPromptsDeniedPermissionOnceThenReportsGranted() {
