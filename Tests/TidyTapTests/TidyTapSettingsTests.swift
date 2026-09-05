@@ -1012,6 +1012,43 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(store.request.settings, .defaults)
     }
 
+    func testColdHelperKeepsInputMonitoringNoticeWhenSideButtonsRemainApplied() throws {
+        let applyID = UUID()
+        var sanitized = TidyTapSettings.defaults
+        sanitized.sideButtonNavigation = true
+        let store = InMemoryPreferences(request: .init(settings: sanitized, applyRequestID: applyID))
+        store.status = TidyTapApplyStatus(
+            applyRequestID: applyID,
+            outcome: .partiallyApplied,
+            failedComponent: .eventTap,
+            errorCode: "eventTap.permissionPartial.inputMonitoring",
+            effectiveSettings: sanitized
+        )
+        store.permissionRequest = .init(requestID: UUID(), kind: .refresh, permission: nil)
+        let provider = RecordingPermissionProvider(
+            state: .init(accessibility: .authorized, inputMonitoring: .denied)
+        )
+        let calls = CallLog()
+        let lifecycle = HelperLifecycle(
+            coordinator: ApplyCoordinator(
+                preferences: store,
+                capsFeature: RecordingCaps(calls: calls),
+                inputFeatures: RecordingInput(calls: calls),
+                menuBar: RecordingMenu(calls: calls),
+                terminator: RecordingTerminator(calls: calls)
+            ),
+            permissionCoordinator: HelperPermissionCoordinator(preferences: store, provider: provider)
+        )
+        lifecycle.start()
+        lifecycle.stop()
+
+        XCTAssertEqual(store.applyStatuses.map(\.outcome), [.applied, .partiallyApplied])
+        let final = try XCTUnwrap(store.status)
+        XCTAssertEqual(final.errorCode, "eventTap.permissionPartial.inputMonitoring")
+        XCTAssertEqual(final.effectiveSettings, sanitized)
+        XCTAssertEqual(calls.values.prefix(2), ["caps:false", "input:false:true"])
+    }
+
     func testRuntimePermissionLossNormalizesAllOffTapBeforeHelperCleanup() {
         let requestID = UUID()
         var settings = TidyTapSettings.defaults

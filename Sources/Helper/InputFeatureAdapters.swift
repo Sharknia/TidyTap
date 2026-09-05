@@ -73,8 +73,6 @@ final class HelperPermissionCoordinator {
         guard let prior = applyStatusBeforeRequest,
               startupApply.outcome == .applied,
               startupApply.applyRequestID == prior.applyRequestID,
-              startupApply.effectiveSettings?.reverseMouseWheelVertically == false,
-              startupApply.effectiveSettings?.sideButtonNavigation == false,
               prior.failedComponent == .eventTap,
               let priorCode = prior.errorCode,
               priorCode.hasPrefix("eventTap.permissionDenied.") ||
