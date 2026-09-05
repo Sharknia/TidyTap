@@ -34,6 +34,17 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(TidyTapProduct.helperBundleIdentifier, "com.sharknia.TidyTap.Helper")
     }
 
+    func testPermissionSettingsURLsTargetTheirExactPrivacyPanes() {
+        XCTAssertEqual(
+            SettingsCoordinator.permissionSettingsURL(for: .accessibility).absoluteString,
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+        )
+        XCTAssertEqual(
+            SettingsCoordinator.permissionSettingsURL(for: .inputMonitoring).absoluteString,
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
+        )
+    }
+
     func testOnlyCoreFeaturesKeepHelperAlive() {
         XCTAssertFalse(TidyTapSettings.defaults.requiresHelper)
 

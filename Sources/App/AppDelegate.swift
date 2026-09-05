@@ -6,6 +6,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsCoordinator: SettingsCoordinator?
     private var observesApplyResults = false
     private let launchSmoke = TidyTapLaunchSmoke.current()
+    private let permissionSettingsOpener: TidyTapPermissionSettingsOpening
+
+    init(permissionSettingsOpener: TidyTapPermissionSettingsOpening = SystemPermissionSettingsOpener()) {
+        self.permissionSettingsOpener = permissionSettingsOpener
+        super.init()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // The settings app is a regular, user-facing application even though
@@ -188,10 +194,30 @@ extension AppDelegate: SettingsViewControllerDelegate {
         guard let coordinator = settingsCoordinator else { return false }
         do {
             try coordinator.requestPermission(permission)
+            // Queue the helper-owned request before opening System Settings.
+            // This is still useful after macOS has denied a prior prompt.
+            permissionSettingsOpener.open(permission)
             return true
         } catch {
             controller.showPermissionMessage(TidyTapStrings.changesCouldNotBeApplied, permission: permission)
             return true
+        }
+    }
+}
+
+@MainActor
+protocol TidyTapPermissionSettingsOpening: AnyObject {
+    func open(_ permission: TidyTapPermission)
+}
+
+/// Opens the exact Privacy & Security pane after the helper has asked macOS
+/// for access. Keeping this behind a protocol makes smoke/tests non-mutating.
+@MainActor
+final class SystemPermissionSettingsOpener: TidyTapPermissionSettingsOpening {
+    func open(_ permission: TidyTapPermission) {
+        let url = SettingsCoordinator.permissionSettingsURL(for: permission)
+        DispatchQueue.main.async {
+            NSWorkspace.shared.open(url)
         }
     }
 }

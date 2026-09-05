@@ -147,6 +147,17 @@ final class SettingsCoordinator {
         return nil
     }
 
+    /// The System Settings deep links are intentionally a pure mapping so it
+    /// can be tested without opening a user-facing settings pane.
+    static func permissionSettingsURL(for permission: TidyTapPermission) -> URL {
+        switch permission {
+        case .accessibility:
+            URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+        case .inputMonitoring:
+            URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")!
+        }
+    }
+
     /// Foreground refresh is intentionally limited to an existing permission
     /// notice and is read-only inside the helper.
     @discardableResult

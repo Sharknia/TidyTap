@@ -120,9 +120,9 @@ final class SettingsViewController: NSViewController {
     }
     private func permissionButtonTitle(for permission: TidyTapPermission?) -> String {
         switch permission {
-        case .accessibility: TidyTapStrings.requestAccessibilityPermission
-        case .inputMonitoring: TidyTapStrings.requestInputMonitoringPermission
-        case nil: TidyTapStrings.requestAccessibilityPermission
+        case .accessibility: TidyTapStrings.openAccessibilitySettings
+        case .inputMonitoring: TidyTapStrings.openInputMonitoringSettings
+        case nil: TidyTapStrings.openAccessibilitySettings
         }
     }
     @objc private func openLink(_ sender: NSButton) { guard let value = sender.identifier?.rawValue, let url = URL(string: value) else { return }; NSWorkspace.shared.open(url) }
