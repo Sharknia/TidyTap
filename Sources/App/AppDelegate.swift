@@ -30,6 +30,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             object: TidyTapProduct.appBundleIdentifier,
             suspensionBehavior: .deliverImmediately
         )
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(permissionResultDidArrive(_:)),
+            name: TidyTapIPC.permissionResult,
+            object: TidyTapProduct.appBundleIdentifier,
+            suspensionBehavior: .deliverImmediately
+        )
         observesApplyResults = true
         settingsCoordinator.restoreSession()
 
@@ -53,6 +60,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 status,
                 permission: settingsCoordinator.permissionSettingsPane(for: status)
             )
+        }
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        if !updatePermissionResultIfAvailable() {
+            _ = try? settingsCoordinator?.refreshPermissionsIfNeeded()
         }
     }
 
@@ -95,6 +108,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             status,
             permission: coordinator.permissionSettingsPane(for: status)
         )
+    }
+
+    @objc private func permissionResultDidArrive(_ notification: Notification) {
+        _ = updatePermissionResultIfAvailable()
+    }
+
+    @discardableResult
+    private func updatePermissionResultIfAvailable() -> Bool {
+        guard let coordinator = settingsCoordinator,
+              let controller = windowController?.contentViewController as? SettingsViewController,
+              let result = coordinator.receivePermissionResult(),
+              let status = coordinator.latestApplyStatus,
+              coordinator.permissionSettingsPane(for: status) != nil else {
+            return false
+        }
+        let missing = coordinator.permissionSettingsPane(for: status, confirmed: result.state)
+        controller.showPermissionMessage(
+            missing.map { permissionMessage(for: $0) },
+            permission: missing
+        )
+        return true
+    }
+
+    private func permissionMessage(for permission: TidyTapPermission) -> String {
+        switch permission {
+        case .accessibility: TidyTapStrings.accessibilityPermissionRequired
+        case .inputMonitoring: TidyTapStrings.inputMonitoringPermissionRequired
+        }
     }
 }
 
@@ -144,9 +185,13 @@ extension AppDelegate: SettingsViewControllerDelegate {
     }
 
     func settingsViewControllerRequestsPermissionSettings(_ controller: SettingsViewController, permission: TidyTapPermission) -> Bool {
-        let anchor = permission == .accessibility ? "Privacy_Accessibility" : "Privacy_ListenEvent"
-        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)")!
-        NSWorkspace.shared.open(url)
-        return true
+        guard let coordinator = settingsCoordinator else { return false }
+        do {
+            try coordinator.requestPermission(permission)
+            return true
+        } catch {
+            controller.showPermissionMessage(TidyTapStrings.changesCouldNotBeApplied, permission: permission)
+            return true
+        }
     }
 }

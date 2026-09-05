@@ -7,6 +7,12 @@
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "변경 사항 적용 중…" } }
       }
     },
+    "Accessibility permission is required for mouse features." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Accessibility permission is required for mouse features." } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "마우스 기능을 사용하려면 손쉬운 사용 권한이 필요합니다." } }
+      }
+    },
     "Changes applied." : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Changes applied." } },
@@ -19,16 +25,16 @@
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "변경 사항을 적용할 수 없습니다." } }
       }
     },
-    "Open System Settings" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Open System Settings" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "시스템 설정 열기" } }
-      }
-    },
     "Open TidyTap" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Open TidyTap" } },
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "TidyTap 열기" } }
+      }
+    },
+    "Input Monitoring permission is required for mouse wheel reversal." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Input Monitoring permission is required for mouse wheel reversal." } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "마우스 휠 방향을 반전하려면 입력 모니터링 권한이 필요합니다." } }
       }
     },
     "Options" : {
@@ -47,6 +53,18 @@
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Reverse vertical mouse wheel direction" } },
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "마우스 휠 수직 방향 반전" } }
+      }
+    },
+    "Request Accessibility Permission" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Request Accessibility Permission" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "손쉬운 사용 권한 요청" } }
+      }
+    },
+    "Request Input Monitoring Permission" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Request Input Monitoring Permission" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "입력 모니터링 권한 요청" } }
       }
     },
     "Show in menu bar" : {

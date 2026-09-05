@@ -1,5 +1,73 @@
 import TidyTapInputEngine
 import Foundation
+import CoreGraphics
+
+protocol TidyTapPermissionProviding: AnyObject {
+    func currentState() -> TidyTapFeaturePermissionState
+    func request(_ permission: TidyTapPermission)
+}
+
+final class CGTidyTapPermissionProvider: TidyTapPermissionProviding {
+    func currentState() -> TidyTapFeaturePermissionState {
+        TidyTapFeaturePermissionState(
+            accessibility: CGPreflightPostEventAccess() ? .authorized : .denied,
+            inputMonitoring: CGPreflightListenEventAccess() ? .authorized : .denied
+        )
+    }
+
+    func request(_ permission: TidyTapPermission) {
+        switch permission {
+        case .accessibility:
+            _ = CGRequestPostEventAccess()
+        case .inputMonitoring:
+            _ = CGRequestListenEventAccess()
+        }
+    }
+}
+
+/// Handles only the app/helper permission handshake. It never applies feature
+/// settings, changes the Caps journal, or starts an event tap.
+final class HelperPermissionCoordinator {
+    private let preferences: TidyTapPreferencesStoring
+    private let provider: TidyTapPermissionProviding
+
+    init(
+        preferences: TidyTapPreferencesStoring,
+        provider: TidyTapPermissionProviding = CGTidyTapPermissionProvider()
+    ) {
+        self.preferences = preferences
+        self.provider = provider
+    }
+
+    @discardableResult
+    func handleLatestRequest() -> TidyTapPermissionResult? {
+        guard let request = preferences.readPermissionRequest() else { return nil }
+        if let existing = preferences.readPermissionResult(), existing.requestID == request.requestID {
+            return existing
+        }
+
+        var state = provider.currentState()
+        if request.kind == .request, let permission = request.permission,
+           !state.isAuthorized(permission) {
+            provider.request(permission)
+            state = provider.currentState()
+        }
+
+        let result = TidyTapPermissionResult(requestID: request.requestID, state: state)
+        _ = try? preferences.writePermissionResult(result)
+        TidyTapIPC.postPermissionResult(result)
+        return result
+    }
+}
+
+private extension TidyTapFeaturePermissionState {
+    func isAuthorized(_ permission: TidyTapPermission) -> Bool {
+        switch permission {
+        case .accessibility: accessibility == .authorized
+        case .inputMonitoring: inputMonitoring == .authorized
+        }
+    }
+}
 
 /// Error values are deliberately stable and small: they cross the helper/UI
 /// boundary only through `TidyTapApplyStatus.errorCode`, never as raw system

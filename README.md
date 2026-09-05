@@ -22,7 +22,7 @@ See the [MVP work plan](docs/MVP_PLAN.md) and [Korean README](README.ko.md).
 - Mouse wheel reversal: Accessibility **and** Input Monitoring.
 - Safari/Finder side-button navigation: Accessibility only.
 
-If a required permission is missing or later revoked, the affected feature is not applied and the settings window shows a link to the relevant macOS System Settings pane. Side-button events pass through in unsupported apps; continuous or otherwise unknown scrolling also passes through.
+If a required permission is missing or later revoked, the affected feature is not applied and the settings window names Accessibility or Input Monitoring explicitly. Its permission button asks the embedded helper (the process that uses the permission) through the public macOS API; returning to TidyTap refreshes the helper's current status without turning a disabled feature back on. Side-button events pass through in unsupported apps; continuous or otherwise unknown scrolling also passes through.
 
 ## Install and run
 

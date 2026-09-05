@@ -43,7 +43,10 @@ final class HelperAppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
-        let lifecycle = HelperLifecycle(coordinator: coordinator)
+        let lifecycle = HelperLifecycle(
+            coordinator: coordinator,
+            permissionCoordinator: HelperPermissionCoordinator(preferences: preferences)
+        )
         self.lifecycle = lifecycle
         lifecycle.start()
         launchSmoke?.report("helper-delegate-started")

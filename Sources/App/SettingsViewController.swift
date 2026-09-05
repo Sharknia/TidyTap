@@ -10,6 +10,7 @@ final class SettingsViewController: NSViewController {
     private let stack = NSStackView()
     private let permissionContainer = NSStackView()
     private let permissionMessage = NSTextField(wrappingLabelWithString: "")
+    private let permissionButton = NSButton()
     private let statusMessage = NSTextField(wrappingLabelWithString: "")
     private var requestedPermission: TidyTapPermission?
     private let capsButton = NSButton(checkboxWithTitle: TidyTapStrings.capsLockInputSourceSwitching, target: nil, action: nil)
@@ -40,7 +41,7 @@ final class SettingsViewController: NSViewController {
         statusMessage.textColor = .secondaryLabelColor; stack.addArrangedSubview(statusMessage)
         permissionContainer.orientation = .vertical; permissionContainer.alignment = .leading; permissionContainer.spacing = 8; permissionContainer.isHidden = true
         permissionContainer.addArrangedSubview(permissionMessage)
-        let permissionButton = NSButton(title: TidyTapStrings.openSystemSettings, target: self, action: #selector(openPermissionSettings)); permissionButton.bezelStyle = .rounded; permissionContainer.addArrangedSubview(permissionButton); stack.addArrangedSubview(permissionContainer)
+        permissionButton.target = self; permissionButton.action = #selector(requestPermission); permissionButton.bezelStyle = .rounded; permissionContainer.addArrangedSubview(permissionButton); stack.addArrangedSubview(permissionContainer)
         let footer = NSStackView(); footer.orientation = .vertical; footer.alignment = .leading; footer.spacing = 4
         footer.addArrangedSubview(NSTextField(labelWithString: versionText())); footer.addArrangedSubview(linkButton(title: TidyTapStrings.email, url: TidyTapStrings.emailURL)); footer.addArrangedSubview(linkButton(title: TidyTapStrings.github, url: TidyTapStrings.githubURL)); stack.addArrangedSubview(footer)
         apply(settings)
@@ -60,17 +61,22 @@ final class SettingsViewController: NSViewController {
         case .applied:
             statusMessage.stringValue = TidyTapStrings.changesApplied; showPermissionMessage(nil)
         case .partiallyApplied:
-            statusMessage.stringValue = ""; showPermissionMessage(TidyTapStrings.permissionRequired, permission: permission)
+            statusMessage.stringValue = ""; showPermissionMessage(permissionMessage(for: permission), permission: permission)
         case .failed:
             let denied = permission != nil
             statusMessage.stringValue = denied ? "" : TidyTapStrings.changesCouldNotBeApplied
-            showPermissionMessage(denied ? TidyTapStrings.permissionRequired : nil, permission: permission)
+            showPermissionMessage(denied ? permissionMessage(for: permission) : nil, permission: permission)
         case .recoveryRequired:
             statusMessage.stringValue = TidyTapStrings.changesCouldNotBeApplied; showPermissionMessage(nil)
         }
     }
     /// Displays the inline permission/error area; pass nil to hide it.
-    func showPermissionMessage(_ message: String?, permission: TidyTapPermission? = nil) { requestedPermission = permission; permissionMessage.stringValue = message ?? ""; permissionContainer.isHidden = message == nil }
+    func showPermissionMessage(_ message: String?, permission: TidyTapPermission? = nil) {
+        requestedPermission = permission
+        permissionMessage.stringValue = message ?? ""
+        permissionButton.title = permissionButtonTitle(for: permission)
+        permissionContainer.isHidden = message == nil
+    }
     private func versionText() -> String { let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.1"; return String(format: TidyTapStrings.versionFormat, version) }
     private func linkButton(title: String, url: URL) -> NSButton { let button = NSButton(title: title, target: self, action: #selector(openLink(_:))); button.identifier = NSUserInterfaceItemIdentifier(url.absoluteString); button.isBordered = false; button.alignment = .left; button.contentTintColor = .linkColor; return button }
 
@@ -82,9 +88,23 @@ final class SettingsViewController: NSViewController {
             onSettingsChange?(settings)
         }
     }
-    @objc private func openPermissionSettings() {
+    @objc private func requestPermission() {
         if delegate?.settingsViewControllerRequestsPermissionSettings(self, permission: requestedPermission ?? .accessibility) != true {
             onPermissionSettingsRequest?()
+        }
+    }
+    private func permissionMessage(for permission: TidyTapPermission?) -> String {
+        switch permission {
+        case .accessibility: TidyTapStrings.accessibilityPermissionRequired
+        case .inputMonitoring: TidyTapStrings.inputMonitoringPermissionRequired
+        case nil: TidyTapStrings.permissionRequired
+        }
+    }
+    private func permissionButtonTitle(for permission: TidyTapPermission?) -> String {
+        switch permission {
+        case .accessibility: TidyTapStrings.requestAccessibilityPermission
+        case .inputMonitoring: TidyTapStrings.requestInputMonitoringPermission
+        case nil: TidyTapStrings.requestAccessibilityPermission
         }
     }
     @objc private func openLink(_ sender: NSButton) { guard let value = sender.identifier?.rawValue, let url = URL(string: value) else { return }; NSWorkspace.shared.open(url) }
