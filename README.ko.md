@@ -1,5 +1,10 @@
 # TidyTap
 
+[![릴리스](https://img.shields.io/github/v/release/Sharknia/TidyTap?include_prereleases&label=release)](https://github.com/Sharknia/TidyTap/releases)
+[![에셋 다운로드](https://img.shields.io/github/downloads/Sharknia/TidyTap/total?label=asset%20downloads)](https://github.com/Sharknia/TidyTap/releases)
+[![언어](https://img.shields.io/badge/languages-%ED%95%9C%EA%B5%AD%EC%96%B4%20%2F%20English-2ea44f)](README.ko.md)
+[![라이선스: MIT](https://img.shields.io/badge/license-MIT-2ea44f.svg)](LICENSE)
+
 TidyTap은 macOS 입력 불편 세 가지를 해결하는 작은 유틸리티입니다.
 
 - Caps Lock을 대문자 고정 없이 두 입력 소스 전환키(F18 매핑)로 사용합니다.
@@ -12,7 +17,7 @@ TidyTap은 macOS 입력 불편 세 가지를 해결하는 작은 유틸리티입
 
 개발 빌드는 MacBook Pro `Mac15,6`(Apple M3 Pro)와 macOS 26.6.2(`25G83`)에서 확인 중입니다. 현재 물리 검증은 스크롤 장치 분류(VXE와 내장·Magic Trackpad 구분)와 VXE 측면 버튼이 Core Graphics 버튼 3/4로 보고되는지에 한정됩니다. Caps Lock 입력 소스 백업·복원, 권한 허용·회수, 휠 및 Safari/Finder 탐색 통합 동작, helper 수명·로그인 동작, 지원 제거 순서는 아직 통합 라이브 검증이 남아 있으며 완료를 주장하지 않습니다. UI는 한국어와 영어를 지원합니다. 다른 Mac이나 macOS 버전에서 실행될 수는 있지만 `0.0.1` 호환성을 보장하지 않습니다.
 
-상태: 개발 빌드. 공증된 배포용 `0.0.1` 릴리스는 아직 없습니다.
+상태: 개발 빌드. 공증된 `v0.0.1` 프리릴리스가 있으며, 현재 개발 변경 사항은 아직 릴리스되지 않았습니다.
 
 [MVP 작업 계획](docs/MVP_PLAN.md)과 [English README](README.md)도 참고하세요.
 
@@ -26,7 +31,7 @@ TidyTap은 macOS 입력 불편 세 가지를 해결하는 작은 유틸리티입
 
 ## 설치 및 실행
 
-현재 패키지 릴리스는 없습니다. 앱을 로컬에서 빌드한 뒤 결과물을 여세요.
+공증된 [`v0.0.1` 프리릴리스](https://github.com/Sharknia/TidyTap/releases/tag/v0.0.1)를 내려받을 수 있습니다. 개발 중에는 앱을 로컬에서 빌드한 뒤 결과물을 여세요.
 
 ```sh
 xcodebuild -project TidyTap.xcodeproj -scheme TidyTap -configuration Debug \
@@ -80,7 +85,7 @@ Scripts/launch-smoke.sh
 설정으로 앱과 helper를 실행합니다. 설정 창 하나, helper 시작·종료, 실제 입력
 및 운영 preferences 상태가 바뀌지 않았는지를 함께 검증합니다.
 
-서명 archive가 필요하면 `Config/LocalSigning.xcconfig.example`을 gitignore 대상인 `Config/LocalSigning.xcconfig`으로 복사하고 실제 Developer ID 정보를 입력하세요. 서명 값은 커밋하지 마세요. 현재 저장소에는 공증 및 공개 릴리스가 없습니다.
+서명 archive가 필요하면 `Config/LocalSigning.xcconfig.example`을 gitignore 대상인 `Config/LocalSigning.xcconfig`으로 복사하고 실제 Developer ID 정보를 입력하세요. 서명 값은 커밋하지 마세요. 현재 개발 변경 사항은 릴리스로 공개되지 않았습니다.
 
 ## 개인정보 보호와 제한사항
 
@@ -92,3 +97,7 @@ MVP에는 사용자 지정 매핑, 프로필, 수평 스크롤 반전, 속도·�
 
 - 이메일: [zel@kakao.com](mailto:zel@kakao.com)
 - GitHub: [Sharknia/TidyTap](https://github.com/Sharknia/TidyTap)
+
+## 라이선스
+
+TidyTap은 [MIT 라이선스](LICENSE)로 배포됩니다.
