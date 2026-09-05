@@ -4,6 +4,10 @@
 repository never contains a certificate, private key, Apple ID, app-specific
 password, App Store Connect API key, or a notarytool profile export.
 
+Both preview and public DMGs include an `Applications` shortcut and a short
+bilingual `Install TidyTap.txt` note. Drag `TidyTap.app` onto the shortcut
+(`TidyTap.app`을 Applications 폴더로 드래그) to install it.
+
 ## Local ad-hoc preview
 
 Build a Release-optimized package without a Developer ID signing identity:
