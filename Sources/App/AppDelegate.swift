@@ -117,6 +117,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         controller.apply(coordinator.visibleSettings(for: status))
+        if let permissionState = coordinator.latestPermissionState {
+            controller.applyPermissionState(permissionState)
+        }
         controller.showApplyStatus(
             status,
             permission: coordinator.permissionSettingsPane(for: status)
@@ -135,23 +138,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return false
         }
         controller.applyPermissionState(result.state)
-        let requestedPane = pendingPermissionSettingsOpen?.consume(matching: result.requestID)
-        if let requestedPane, !isAuthorized(requestedPane, in: result.state) {
+        if let requestedPane = pendingPermissionSettingsOpen?.consume(matching: result) {
             permissionSettingsOpener.open(requestedPane)
         }
         return true
-    }
-
-    private func isAuthorized(
-        _ permission: TidyTapPermission,
-        in state: TidyTapFeaturePermissionState
-    ) -> Bool {
-        switch permission {
-        case .accessibility:
-            state.accessibility == .authorized
-        case .inputMonitoring:
-            state.inputMonitoring == .authorized
-        }
     }
 }
 

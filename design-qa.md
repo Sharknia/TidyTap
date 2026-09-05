@@ -9,9 +9,13 @@
 
 The reference includes rendered window chrome and a surrounding concept canvas. The implementation capture contains the production settings content only. The implementation is taller because the approved correction requires two explicit permission rows below both mouse functions.
 
+**Verified Scope**
+
+This QA pass verifies layout, localized copy, permission-state presentation, action wiring, and native AppKit hierarchy/geometry. It does not claim visual verification of the live composited glass material.
+
 **Findings**
 
-- No actionable P0, P1, or P2 structural mismatch remains. The implementation preserves the reference hierarchy: compact icon/title header, keyboard card, combined mouse card, general card, native switches, and compact footer.
+- No actionable P0, P1, or P2 mismatch remains within the verified layout/state/native-hierarchy scope. The implementation preserves the reference hierarchy: compact icon/title header, keyboard card, combined mouse card, general card, native switches, and compact footer.
 - Typography uses system fonts at native control sizes with the same title/caption hierarchy. Korean and English copies fit without truncation.
 - Spacing is compact and consistent at 560×650 pt. The mouse permission block is grouped below both mouse feature rows.
 - Production colors are semantic AppKit colors. Allowed, missing, and not-checked states have distinct icon, text, and accessibility values.

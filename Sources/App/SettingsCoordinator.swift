@@ -22,6 +22,12 @@ struct TidyTapPendingPermissionSettingsOpen: Equatable {
         requestID = nil
         return permission
     }
+
+    /// An explicit click opens its exact pane after the matching helper result,
+    /// even when the helper confirms that access is already granted.
+    mutating func consume(matching result: TidyTapPermissionResult) -> TidyTapPermission? {
+        consume(matching: result.requestID)
+    }
 }
 
 /// A completed ServiceManagement mutation could not be reconciled after the
@@ -134,6 +140,7 @@ final class SettingsCoordinator {
         }
         latestRequestID = request.applyRequestID
         latestApplyStatus = status
+        applyExplicitPermissionDowngrade(from: status)
         return status
     }
 
@@ -229,6 +236,22 @@ final class SettingsCoordinator {
             return []
         }
         return Set(TidyTapPermission.allCases.filter { code.split(separator: ".").contains(Substring($0.rawValue)) })
+    }
+
+    /// A permission failure is affirmative helper evidence for only the names
+    /// encoded in its stable error code. Unmentioned permissions stay unchanged
+    /// (or unknown); success never implies authorization.
+    private func applyExplicitPermissionDowngrade(from status: TidyTapApplyStatus) {
+        let unavailable = unavailablePermissions(in: status)
+        guard !unavailable.isEmpty else { return }
+        var state = latestPermissionState ?? .init()
+        if unavailable.contains(.accessibility) {
+            state.accessibility = .denied
+        }
+        if unavailable.contains(.inputMonitoring) {
+            state.inputMonitoring = .denied
+        }
+        latestPermissionState = state
     }
 
     private func enqueuePermission(
