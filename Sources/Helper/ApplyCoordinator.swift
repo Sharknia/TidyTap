@@ -223,7 +223,9 @@ final class ApplyCoordinator {
 
         touchedComponents.append(.menuBar)
         do {
-            try menuBar.applyMenuBar(visible: settings.showInMenuBar)
+            // Keep this narrow protocol for the existing transaction and
+            // launch-smoke seams. The retired preference is always inert.
+            try menuBar.applyMenuBar(visible: false)
         } catch {
             return ApplyAttempt(
                 status: failure(requestID, component: .menuBar, error: error),
@@ -380,7 +382,6 @@ final class ApplyCoordinator {
         result.capsLockInputSourceSwitching = state.capsLockEnabled
         result.reverseMouseWheelVertically = state.input.reverseMouseWheel
         result.sideButtonNavigation = state.input.sideButtonNavigation
-        result.showInMenuBar = state.menuBarVisible
         return result
     }
 

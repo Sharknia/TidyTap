@@ -113,6 +113,13 @@ candidate_dmg="$candidate_dir/$dmg_name"
 staging_dir="$candidate_dir/staging"
 mkdir "$staging_dir"
 /usr/bin/ditto "$app_path" "$staging_dir/TidyTap.app"
+/bin/ln -s /Applications "$staging_dir/Applications"
+/usr/bin/tee "$staging_dir/Install TidyTap.txt" >/dev/null <<'EOF'
+TidyTap 설치 / Install TidyTap
+
+TidyTap.app을 Applications 폴더로 드래그하세요.
+Drag TidyTap.app to the Applications folder.
+EOF
 run_step \
   "Preview DMG creation" \
   "Check available disk space and the built app bundle." \
@@ -122,8 +129,18 @@ mkdir "$mount_dir"
 run_step \
   "Preview DMG mount" \
   "The candidate DMG could not be mounted read-only for install verification." \
-  /usr/bin/hdiutil attach -readonly -nobrowse -mountpoint "$mount_dir" "$candidate_dmg"
+/usr/bin/hdiutil attach -readonly -nobrowse -mountpoint "$mount_dir" "$candidate_dmg"
 mounted_image=true
+
+applications_target=$(/usr/bin/readlink "$mount_dir/Applications" 2>/dev/null || true)
+if [[ ! -L "$mount_dir/Applications" || "$applications_target" != "/Applications" ]]; then
+  print -u2 -- "Mounted preview DMG did not contain the /Applications install link."
+  exit 1
+fi
+if [[ ! -f "$mount_dir/Install TidyTap.txt" ]]; then
+  print -u2 -- "Mounted preview DMG did not contain the install instructions."
+  exit 1
+fi
 
 copied_app_path="$candidate_dir/installed-copy/TidyTap.app"
 mkdir "${copied_app_path:h}"

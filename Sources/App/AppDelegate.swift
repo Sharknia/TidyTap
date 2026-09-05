@@ -6,6 +6,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsCoordinator: SettingsCoordinator?
     private var observesApplyResults = false
     private let launchSmoke = TidyTapLaunchSmoke.current()
+    private let permissionSettingsOpener: TidyTapPermissionSettingsOpening
+    private var pendingPermissionSettingsOpen: TidyTapPendingPermissionSettingsOpen?
+
+    init(permissionSettingsOpener: TidyTapPermissionSettingsOpening = SystemPermissionSettingsOpener()) {
+        self.permissionSettingsOpener = permissionSettingsOpener
+        super.init()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // The settings app is a regular, user-facing application even though
@@ -30,17 +37,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             object: TidyTapProduct.appBundleIdentifier,
             suspensionBehavior: .deliverImmediately
         )
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(permissionResultDidArrive(_:)),
+            name: TidyTapIPC.permissionResult,
+            object: TidyTapProduct.appBundleIdentifier,
+            suspensionBehavior: .deliverImmediately
+        )
         observesApplyResults = true
         settingsCoordinator.restoreSession()
 
         let controller = SettingsViewController(
             settings: settingsCoordinator.settingsForUI(),
+            permissionState: settingsCoordinator.latestPermissionState ?? .init(),
             delegate: self
         )
         let window = NSWindow(contentViewController: controller)
         window.title = TidyTapStrings.appName
-        window.setContentSize(NSSize(width: 520, height: 420))
-        window.styleMask = [.titled, .closable, .miniaturizable]
+        window.setContentSize(SettingsViewController.contentSize)
+        window.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.backgroundColor = .clear
+        window.isOpaque = false
+        window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         window.center()
 
@@ -53,6 +73,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 status,
                 permission: settingsCoordinator.permissionSettingsPane(for: status)
             )
+        }
+    }
+
+    func applicationDidBecomeActive(_ notification: Notification) {
+        if !updatePermissionResultIfAvailable() {
+            _ = try? settingsCoordinator?.refreshPermissionsIfNeeded()
         }
     }
 
@@ -91,10 +117,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         controller.apply(coordinator.visibleSettings(for: status))
+        if let permissionState = coordinator.latestPermissionState {
+            controller.applyPermissionState(permissionState)
+        }
         controller.showApplyStatus(
             status,
             permission: coordinator.permissionSettingsPane(for: status)
         )
+    }
+
+    @objc private func permissionResultDidArrive(_ notification: Notification) {
+        _ = updatePermissionResultIfAvailable()
+    }
+
+    @discardableResult
+    private func updatePermissionResultIfAvailable() -> Bool {
+        guard let coordinator = settingsCoordinator,
+              let controller = windowController?.contentViewController as? SettingsViewController,
+              let result = coordinator.receivePermissionResult() else {
+            return false
+        }
+        controller.applyPermissionState(result.state)
+        if let requestedPane = pendingPermissionSettingsOpen?.consume(matching: result) {
+            permissionSettingsOpener.open(requestedPane)
+        }
+        return true
     }
 }
 
@@ -144,9 +191,36 @@ extension AppDelegate: SettingsViewControllerDelegate {
     }
 
     func settingsViewControllerRequestsPermissionSettings(_ controller: SettingsViewController, permission: TidyTapPermission) -> Bool {
-        let anchor = permission == .accessibility ? "Privacy_Accessibility" : "Privacy_ListenEvent"
-        let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)")!
-        NSWorkspace.shared.open(url)
-        return true
+        guard let coordinator = settingsCoordinator else { return false }
+        do {
+            let requestID = try coordinator.requestPermission(permission)
+            // The helper makes the native request first. System Settings opens
+            // only after its matching response, never for a refresh result.
+            pendingPermissionSettingsOpen = TidyTapPendingPermissionSettingsOpen(
+                requestID: requestID,
+                permission: permission
+            )
+            return true
+        } catch {
+            controller.showPermissionMessage(TidyTapStrings.changesCouldNotBeApplied, permission: permission)
+            return true
+        }
+    }
+}
+
+@MainActor
+protocol TidyTapPermissionSettingsOpening: AnyObject {
+    func open(_ permission: TidyTapPermission)
+}
+
+/// Opens the exact Privacy & Security pane after the helper has asked macOS
+/// for access. Keeping this behind a protocol makes smoke/tests non-mutating.
+@MainActor
+final class SystemPermissionSettingsOpener: TidyTapPermissionSettingsOpening {
+    func open(_ permission: TidyTapPermission) {
+        let url = SettingsCoordinator.permissionSettingsURL(for: permission)
+        DispatchQueue.main.async {
+            NSWorkspace.shared.open(url)
+        }
     }
 }

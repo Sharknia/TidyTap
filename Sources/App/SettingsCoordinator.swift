@@ -6,6 +6,30 @@ protocol TidyTapHelperLaunching: AnyObject {
     func launchOrActivateHelper()
 }
 
+/// A user-initiated settings-pane request is consumed only by the helper
+/// result that carries its exact request ID. Refreshes never create one.
+struct TidyTapPendingPermissionSettingsOpen: Equatable {
+    private var requestID: UUID?
+    private let permission: TidyTapPermission
+
+    init(requestID: UUID, permission: TidyTapPermission) {
+        self.requestID = requestID
+        self.permission = permission
+    }
+
+    mutating func consume(matching resultID: UUID) -> TidyTapPermission? {
+        guard requestID == resultID else { return nil }
+        requestID = nil
+        return permission
+    }
+
+    /// An explicit click opens its exact pane after the matching helper result,
+    /// even when the helper confirms that access is already granted.
+    mutating func consume(matching result: TidyTapPermissionResult) -> TidyTapPermission? {
+        consume(matching: result.requestID)
+    }
+}
+
 /// A completed ServiceManagement mutation could not be reconciled after the
 /// preferences write failed. Both underlying failures are retained so the UI
 /// can tell the user that login registration needs manual recovery.
@@ -23,6 +47,8 @@ final class SettingsCoordinator {
 
     private(set) var latestRequestID: UUID?
     private(set) var latestApplyStatus: TidyTapApplyStatus?
+    private(set) var latestPermissionRequestID: UUID?
+    private(set) var latestPermissionState: TidyTapFeaturePermissionState?
     private var settingsBeforeLatestRequest: TidyTapSettings?
 
     init(
@@ -43,6 +69,10 @@ final class SettingsCoordinator {
         latestRequestID = request.applyRequestID
         let status = preferences.readApplyStatus()
         latestApplyStatus = status?.applyRequestID == request.applyRequestID ? status : nil
+        if let latestApplyStatus, permissionSettingsPane(for: latestApplyStatus) != nil,
+           (try? enqueuePermission(kind: .refresh, permission: nil)) != nil {
+            return
+        }
         helperLauncher.launchOrActivateHelper()
     }
 
@@ -110,6 +140,7 @@ final class SettingsCoordinator {
         }
         latestRequestID = request.applyRequestID
         latestApplyStatus = status
+        applyExplicitPermissionDowngrade(from: status)
         return status
     }
 
@@ -132,15 +163,110 @@ final class SettingsCoordinator {
     }
 
     func permissionSettingsPane(for status: TidyTapApplyStatus) -> TidyTapPermission? {
-        guard let code = status.errorCode else { return nil }
-        if code.contains("permissionDenied.accessibility") ||
-            code.contains("permissionPartial.accessibility") {
+        let unavailable = unavailablePermissions(in: status)
+        if unavailable.contains(.accessibility) {
             return .accessibility
         }
-        if code.contains("permissionDenied.inputMonitoring") ||
-            code.contains("permissionPartial.inputMonitoring") {
+        if unavailable.contains(.inputMonitoring) {
             return .inputMonitoring
         }
         return nil
+    }
+
+    /// The System Settings deep links are intentionally a pure mapping so it
+    /// can be tested without opening a user-facing settings pane.
+    static func permissionSettingsURL(for permission: TidyTapPermission) -> URL {
+        switch permission {
+        case .accessibility:
+            URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+        case .inputMonitoring:
+            URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")!
+        }
+    }
+
+    /// Foreground refresh is limited to an existing permission notice or a
+    /// previously confirmed snapshot and is read-only inside the helper.
+    @discardableResult
+    func refreshPermissionsIfNeeded() throws -> UUID? {
+        let unresolvedApplyPermission = latestApplyStatus.map {
+            permissionSettingsPane(for: $0) != nil
+        } ?? false
+        guard (unresolvedApplyPermission || latestPermissionState != nil),
+              latestPermissionRequestID == nil else {
+            return nil
+        }
+        return try enqueuePermission(kind: .refresh, permission: nil)
+    }
+
+    @discardableResult
+    func requestPermission(_ permission: TidyTapPermission) throws -> UUID {
+        try enqueuePermission(kind: .request, permission: permission)
+    }
+
+    func receivePermissionResult() -> TidyTapPermissionResult? {
+        guard let currentID = latestPermissionRequestID,
+              let request = preferences.readPermissionRequest(), request.requestID == currentID,
+              let result = preferences.readPermissionResult(), result.requestID == currentID else {
+            return nil
+        }
+        latestPermissionRequestID = nil
+        latestPermissionState = result.state
+        return result
+    }
+
+    func permissionSettingsPane(
+        for status: TidyTapApplyStatus,
+        confirmed state: TidyTapFeaturePermissionState
+    ) -> TidyTapPermission? {
+        let unavailable = unavailablePermissions(in: status)
+        if unavailable.contains(.accessibility), state.accessibility != .authorized {
+            return .accessibility
+        }
+        if unavailable.contains(.inputMonitoring), state.inputMonitoring != .authorized {
+            return .inputMonitoring
+        }
+        return nil
+    }
+
+    private func unavailablePermissions(in status: TidyTapApplyStatus) -> Set<TidyTapPermission> {
+        guard status.failedComponent == .eventTap,
+              let code = status.errorCode,
+              code.hasPrefix("eventTap.permissionDenied.") ||
+                code.hasPrefix("eventTap.permissionPartial.") else {
+            return []
+        }
+        return Set(TidyTapPermission.allCases.filter { code.split(separator: ".").contains(Substring($0.rawValue)) })
+    }
+
+    /// A permission failure is affirmative helper evidence for only the names
+    /// encoded in its stable error code. Unmentioned permissions stay unchanged
+    /// (or unknown); success never implies authorization.
+    private func applyExplicitPermissionDowngrade(from status: TidyTapApplyStatus) {
+        let unavailable = unavailablePermissions(in: status)
+        guard !unavailable.isEmpty else { return }
+        var state = latestPermissionState ?? .init()
+        if unavailable.contains(.accessibility) {
+            state.accessibility = .denied
+        }
+        if unavailable.contains(.inputMonitoring) {
+            state.inputMonitoring = .denied
+        }
+        latestPermissionState = state
+    }
+
+    private func enqueuePermission(
+        kind: TidyTapPermissionRequestKind,
+        permission: TidyTapPermission?
+    ) throws -> UUID {
+        let request = TidyTapPermissionRequest(
+            requestID: UUID(),
+            kind: kind,
+            permission: permission
+        )
+        try preferences.writePermissionRequest(request)
+        latestPermissionRequestID = request.requestID
+        helperLauncher.launchOrActivateHelper()
+        TidyTapIPC.postPermissionRequest(request)
+        return request.requestID
     }
 }

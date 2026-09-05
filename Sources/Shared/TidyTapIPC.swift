@@ -4,6 +4,8 @@ import Foundation
 enum TidyTapIPC {
     static let settingsDidChange = Notification.Name("com.sharknia.TidyTap.settingsDidChange")
     static let applyResult = Notification.Name("com.sharknia.TidyTap.applyResult")
+    static let permissionRequest = Notification.Name("com.sharknia.TidyTap.permissionRequest")
+    static let permissionResult = Notification.Name("com.sharknia.TidyTap.permissionResult")
     static let applyRequestIDUserInfoKey = "applyRequestID"
 
     static func postSettingsDidChange(requestID: UUID) {
@@ -12,6 +14,14 @@ enum TidyTapIPC {
 
     static func postApplyResult(_ status: TidyTapApplyStatus) {
         post(applyResult, requestID: status.applyRequestID)
+    }
+
+    static func postPermissionRequest(_ request: TidyTapPermissionRequest) {
+        post(permissionRequest, requestID: request.requestID)
+    }
+
+    static func postPermissionResult(_ result: TidyTapPermissionResult) {
+        post(permissionResult, requestID: result.requestID)
     }
 
     static func requestID(in notification: Notification) -> UUID? {

@@ -25,8 +25,7 @@ final class TidyTapSettingsTests: XCTestCase {
             capsLockInputSourceSwitching: false,
             reverseMouseWheelVertically: false,
             sideButtonNavigation: false,
-            launchAtLogin: false,
-            showInMenuBar: false
+            launchAtLogin: false
         ))
     }
 
@@ -35,15 +34,65 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(TidyTapProduct.helperBundleIdentifier, "com.sharknia.TidyTap.Helper")
     }
 
-    func testOnlyCoreFeaturesAndMenuBarKeepHelperAlive() {
+    func testPermissionSettingsURLsTargetTheirExactPrivacyPanes() {
+        XCTAssertEqual(
+            SettingsCoordinator.permissionSettingsURL(for: .accessibility).absoluteString,
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+        )
+        XCTAssertEqual(
+            SettingsCoordinator.permissionSettingsURL(for: .inputMonitoring).absoluteString,
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
+        )
+    }
+
+    func testExplicitPermissionPaneOpenConsumesOnlyItsMatchingHelperResult() {
+        let requestID = UUID()
+        var pending = TidyTapPendingPermissionSettingsOpen(
+            requestID: requestID,
+            permission: .inputMonitoring
+        )
+
+        XCTAssertNil(pending.consume(matching: UUID()))
+        XCTAssertEqual(pending.consume(matching: requestID), .inputMonitoring)
+        XCTAssertNil(pending.consume(matching: requestID))
+    }
+
+    func testExplicitPermissionPaneStillOpensWhenMatchingResultIsAlreadyAuthorized() {
+        let requestID = UUID()
+        var pending = TidyTapPendingPermissionSettingsOpen(
+            requestID: requestID,
+            permission: .accessibility
+        )
+        let authorized = TidyTapPermissionResult(
+            requestID: requestID,
+            state: .init(accessibility: .authorized, inputMonitoring: .authorized)
+        )
+
+        XCTAssertEqual(pending.consume(matching: authorized), .accessibility)
+        XCTAssertNil(pending.consume(matching: authorized))
+    }
+
+    func testOnlyCoreFeaturesKeepHelperAlive() {
         XCTAssertFalse(TidyTapSettings.defaults.requiresHelper)
 
         var settings = TidyTapSettings.defaults
         settings.launchAtLogin = true
         XCTAssertFalse(settings.requiresHelper)
 
-        settings.showInMenuBar = true
+        settings.sideButtonNavigation = true
         XCTAssertTrue(settings.requiresHelper)
+    }
+
+    func testLegacyMenuBarPreferenceIsIgnoredWhenDecoded() throws {
+        let data = Data("""
+        {"capsLockInputSourceSwitching":false,"reverseMouseWheelVertically":false,"sideButtonNavigation":false,"launchAtLogin":false,"showInMenuBar":true}
+        """.utf8)
+
+        let settings = try JSONDecoder().decode(TidyTapSettings.self, from: data)
+
+        XCTAssertEqual(settings, .defaults)
+        XCTAssertFalse(settings.requiresHelper)
+        XCTAssertFalse(String(data: try JSONEncoder().encode(settings), encoding: .utf8)!.contains("showInMenuBar"))
     }
 
     func testMouseWheelNeedsAccessibilityAndInputMonitoring() {
@@ -69,8 +118,7 @@ final class TidyTapSettingsTests: XCTestCase {
                 capsLockInputSourceSwitching: true,
                 reverseMouseWheelVertically: true,
                 sideButtonNavigation: false,
-                launchAtLogin: false,
-                showInMenuBar: false
+                launchAtLogin: false
             ),
             applyRequestID: requestID
         ))
@@ -108,60 +156,10 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(calls.values.last, "terminate")
     }
 
-    func testMenuRollbackFailureStillRestoresInputAndCaps() {
-        let requestID = UUID()
-        let store = InMemoryPreferences(request: TidyTapSettingsRequest(
-            settings: enabledSettings(showInMenuBar: true),
-            applyRequestID: requestID
-        ))
-        let calls = CallLog()
-        let coordinator = ApplyCoordinator(
-            preferences: store,
-            capsFeature: RecordingCaps(calls: calls),
-            inputFeatures: RecordingInput(calls: calls),
-            menuBar: FailingMenu(calls: calls, failWhenVisible: true, failWhenHidden: true),
-            terminator: RecordingTerminator(calls: calls)
-        )
-
-        let status = coordinator.applyLatestSettings()
-
-        XCTAssertEqual(status.outcome, .recoveryRequired)
-        XCTAssertEqual(status.errorCode, "lifecycle.rollbackFailed.menuBar")
-        XCTAssertEqual(calls.values, [
-            "caps:true", "input:true:false", "menu:true",
-            "menu:false", "input:false:false", "caps:false"
-        ])
-    }
-
-    func testInputRollbackFailureForcesPassThroughAndStillRestoresCaps() {
-        let requestID = UUID()
-        let store = InMemoryPreferences(request: TidyTapSettingsRequest(
-            settings: enabledSettings(showInMenuBar: true),
-            applyRequestID: requestID
-        ))
-        let calls = CallLog()
-        let coordinator = ApplyCoordinator(
-            preferences: store,
-            capsFeature: RecordingCaps(calls: calls),
-            inputFeatures: FailingRollbackInput(calls: calls),
-            menuBar: FailingMenu(calls: calls, failWhenVisible: true, failWhenHidden: false),
-            terminator: RecordingTerminator(calls: calls)
-        )
-
-        let status = coordinator.applyLatestSettings()
-
-        XCTAssertEqual(status.outcome, .recoveryRequired)
-        XCTAssertEqual(status.errorCode, "lifecycle.rollbackFailed.eventTap")
-        XCTAssertEqual(calls.values, [
-            "caps:true", "input:true:false", "menu:true",
-            "menu:false", "input:false:false", "input:passThrough", "caps:false"
-        ])
-    }
-
     func testRollbackReportsEveryComponentThatCouldNotBeRestored() {
         let requestID = UUID()
         let store = InMemoryPreferences(request: TidyTapSettingsRequest(
-            settings: enabledSettings(showInMenuBar: true),
+            settings: enabledSettings(),
             applyRequestID: requestID
         ))
         let calls = CallLog()
@@ -185,8 +183,7 @@ final class TidyTapSettingsTests: XCTestCase {
             capsLockInputSourceSwitching: true,
             reverseMouseWheelVertically: false,
             sideButtonNavigation: false,
-            launchAtLogin: false,
-            showInMenuBar: false
+            launchAtLogin: false
         )
         let store = InMemoryPreferences(request: TidyTapSettingsRequest(settings: original, applyRequestID: UUID()))
         let launcher = RecordingHelperLauncher()
@@ -213,8 +210,7 @@ final class TidyTapSettingsTests: XCTestCase {
             capsLockInputSourceSwitching: true,
             reverseMouseWheelVertically: false,
             sideButtonNavigation: false,
-            launchAtLogin: true,
-            showInMenuBar: false
+            launchAtLogin: true
         )
         let store = InMemoryPreferences(request: TidyTapSettingsRequest(settings: original, applyRequestID: UUID()))
         let launcher = RecordingHelperLauncher()
@@ -322,8 +318,7 @@ final class TidyTapSettingsTests: XCTestCase {
             capsLockInputSourceSwitching: false,
             reverseMouseWheelVertically: true,
             sideButtonNavigation: true,
-            launchAtLogin: false,
-            showInMenuBar: false
+            launchAtLogin: false
         )
         let store = InMemoryPreferences(request: .init(settings: settings, applyRequestID: requestID))
         let coordinator = ApplyCoordinator(
@@ -500,8 +495,7 @@ final class TidyTapSettingsTests: XCTestCase {
             capsLockInputSourceSwitching: false,
             reverseMouseWheelVertically: true,
             sideButtonNavigation: true,
-            launchAtLogin: false,
-            showInMenuBar: false
+            launchAtLogin: false
         )
         let store = InMemoryPreferences(request: .init(settings: requested, applyRequestID: requestID))
         let backend = FakeEventTapBackend()
@@ -537,8 +531,7 @@ final class TidyTapSettingsTests: XCTestCase {
             capsLockInputSourceSwitching: false,
             reverseMouseWheelVertically: true,
             sideButtonNavigation: true,
-            launchAtLogin: false,
-            showInMenuBar: false
+            launchAtLogin: false
         )
         let store = InMemoryPreferences(request: .init(settings: requested, applyRequestID: requestID))
         let input = PartialInput()
@@ -574,7 +567,7 @@ final class TidyTapSettingsTests: XCTestCase {
         _ = coordinator.applyLatestSettings()
         let newerID = UUID()
         var newer = first
-        newer.showInMenuBar = true
+        newer.launchAtLogin = true
         store.request = .init(settings: newer, applyRequestID: newerID)
         input.configuration = .disabled
 
@@ -589,42 +582,6 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(store.request.settings, newer, "an older runtime result must not rewrite the newer request")
         coordinator.reportRuntimeInput(requestID: UUID(), .applied, error: nil)
         XCTAssertEqual(store.status?.applyRequestID, firstID, "unknown runtime generations are ignored")
-    }
-
-    func testRollbackUsesActualControllerStateAfterHelperRestart() {
-        let requestID = UUID()
-        let requested = TidyTapSettings.defaults
-        let calls = CallLog()
-        let caps = RecordingCaps(calls: calls, enabled: true)
-        let input = RecordingInput(
-            calls: calls,
-            configuration: .init(reverseMouseWheel: false, sideButtonNavigation: true)
-        )
-        let menu = FailingMenu(
-            calls: calls,
-            failWhenVisible: false,
-            failWhenHidden: true,
-            initiallyVisible: true
-        )
-        let store = InMemoryPreferences(request: .init(settings: requested, applyRequestID: requestID))
-        let coordinator = ApplyCoordinator(
-            preferences: store,
-            capsFeature: caps,
-            inputFeatures: input,
-            menuBar: menu,
-            terminator: RecordingTerminator(calls: calls)
-        )
-
-        let result = coordinator.applyLatestSettings()
-
-        XCTAssertEqual(result.outcome, .failed)
-        XCTAssertEqual(calls.values, [
-            "caps:false", "input:false:false", "menu:false",
-            "menu:true", "input:false:true", "caps:true"
-        ])
-        XCTAssertTrue(caps.enabled)
-        XCTAssertEqual(input.configuration, .init(reverseMouseWheel: false, sideButtonNavigation: true))
-        XCTAssertTrue(menu.isMenuBarVisible)
     }
 
     func testStartupUsesCorrelatedPersistedEffectiveStatus() {
@@ -747,6 +704,342 @@ final class TidyTapSettingsTests: XCTestCase {
 
         XCTAssertEqual(coordinator.permissionSettingsPane(for: both), .accessibility)
         XCTAssertEqual(coordinator.permissionSettingsPane(for: inputOnly), .inputMonitoring)
+    }
+
+    func testConfirmedPermissionRefreshAdvancesFromAccessibilityToInputMonitoring() {
+        let coordinator = SettingsCoordinator(
+            preferences: InMemoryPreferences(request: .init(settings: .defaults, applyRequestID: UUID())),
+            helperLauncher: RecordingHelperLauncher(),
+            loginItemManager: StatefulLoginItem(status: .disabled)
+        )
+        let status = TidyTapApplyStatus(
+            applyRequestID: UUID(),
+            outcome: .partiallyApplied,
+            failedComponent: .eventTap,
+            errorCode: "eventTap.permissionPartial.accessibility.inputMonitoring"
+        )
+
+        XCTAssertEqual(
+            coordinator.permissionSettingsPane(
+                for: status,
+                confirmed: .init(accessibility: .denied, inputMonitoring: .denied)
+            ),
+            .accessibility
+        )
+        XCTAssertEqual(
+            coordinator.permissionSettingsPane(
+                for: status,
+                confirmed: .init(accessibility: .authorized, inputMonitoring: .denied)
+            ),
+            .inputMonitoring
+        )
+        XCTAssertNil(coordinator.permissionSettingsPane(
+            for: status,
+            confirmed: .init(accessibility: .authorized, inputMonitoring: .authorized)
+        ))
+    }
+
+    func testForegroundRefreshUsesCorrelatedResultWithoutChangingFeatureState() throws {
+        let applyID = UUID()
+        var sanitized = TidyTapSettings.defaults
+        sanitized.capsLockInputSourceSwitching = true
+        let store = InMemoryPreferences(request: .init(settings: sanitized, applyRequestID: applyID))
+        store.status = TidyTapApplyStatus(
+            applyRequestID: applyID,
+            outcome: .partiallyApplied,
+            failedComponent: .eventTap,
+            errorCode: "eventTap.permissionPartial.accessibility",
+            effectiveSettings: sanitized
+        )
+        let launcher = RecordingHelperLauncher()
+        let coordinator = SettingsCoordinator(
+            preferences: store,
+            helperLauncher: launcher,
+            loginItemManager: StatefulLoginItem(status: .disabled)
+        )
+        coordinator.restoreSession()
+        let requestID = try XCTUnwrap(coordinator.latestPermissionRequestID)
+
+        XCTAssertEqual(store.permissionRequest, .init(requestID: requestID, kind: .refresh, permission: nil))
+        XCTAssertEqual(store.request.settings, sanitized)
+        XCTAssertEqual(store.status?.applyRequestID, applyID)
+
+        store.permissionResult = .init(
+            requestID: UUID(),
+            state: .init(accessibility: .authorized, inputMonitoring: .authorized)
+        )
+        XCTAssertNil(coordinator.receivePermissionResult(), "a stale helper response must not clear the notice")
+        XCTAssertEqual(coordinator.latestPermissionRequestID, requestID)
+
+        let current = TidyTapPermissionResult(
+            requestID: requestID,
+            state: .init(accessibility: .authorized, inputMonitoring: .denied)
+        )
+        store.permissionResult = current
+        XCTAssertEqual(coordinator.receivePermissionResult(), current)
+        XCTAssertNil(coordinator.latestPermissionRequestID)
+        XCTAssertEqual(store.request.settings, sanitized)
+        XCTAssertEqual(store.status?.applyRequestID, applyID)
+        XCTAssertEqual(launcher.launchCount, 1, "startup persists refresh before launching the helper")
+
+        XCTAssertNotNil(try coordinator.refreshPermissionsIfNeeded(), "a later foreground return requests a fresh check")
+        XCTAssertEqual(store.request.settings, sanitized)
+        XCTAssertEqual(launcher.launchCount, 2)
+    }
+
+    func testRuntimePermissionDenialDowngradesConfirmedGreenUIOnlyForNamedPermission() throws {
+        let applyID = UUID()
+        let store = InMemoryPreferences(request: .init(settings: .defaults, applyRequestID: applyID))
+        let coordinator = SettingsCoordinator(
+            preferences: store,
+            helperLauncher: RecordingHelperLauncher(),
+            loginItemManager: StatefulLoginItem(status: .disabled)
+        )
+        let permissionID = try coordinator.requestPermission(.accessibility)
+        store.permissionResult = .init(
+            requestID: permissionID,
+            state: .init(accessibility: .authorized, inputMonitoring: .authorized)
+        )
+        let confirmed = try XCTUnwrap(coordinator.receivePermissionResult())
+        let controller = SettingsViewController(
+            permissionState: confirmed.state,
+            renderingMode: .offscreenSemanticFallback
+        )
+        _ = controller.view
+
+        store.status = TidyTapApplyStatus(
+            applyRequestID: applyID,
+            outcome: .partiallyApplied,
+            failedComponent: .eventTap,
+            errorCode: "eventTap.permissionPartial.inputMonitoring",
+            effectiveSettings: .defaults
+        )
+        let status = try XCTUnwrap(coordinator.receiveApplyResult())
+        controller.applyPermissionState(try XCTUnwrap(coordinator.latestPermissionState))
+        controller.showApplyStatus(status, permission: coordinator.permissionSettingsPane(for: status))
+
+        XCTAssertEqual(controller.permissionState.accessibility, .authorized)
+        XCTAssertEqual(controller.permissionState.inputMonitoring, .denied)
+        XCTAssertEqual(controller.settings, .defaults)
+    }
+
+    func testHelperExplicitRequestPromptsDeniedPermissionOnceThenReportsGranted() {
+        let store = InMemoryPreferences(request: .init(settings: .defaults, applyRequestID: UUID()))
+        let request = TidyTapPermissionRequest(
+            requestID: UUID(),
+            kind: .request,
+            permission: .accessibility
+        )
+        store.permissionRequest = request
+        let provider = RecordingPermissionProvider(
+            state: .init(accessibility: .denied, inputMonitoring: .denied),
+            grantsOnRequest: [.accessibility]
+        )
+        let coordinator = HelperPermissionCoordinator(preferences: store, provider: provider)
+
+        let result = coordinator.handleLatestRequest()
+        _ = coordinator.handleLatestRequest()
+
+        XCTAssertEqual(provider.requests, [.accessibility], "startup and DNC replay must not prompt twice")
+        XCTAssertEqual(result?.requestID, request.requestID)
+        XCTAssertEqual(result?.state.accessibility, .authorized)
+        XCTAssertEqual(store.request.settings, .defaults)
+        XCTAssertNil(store.status)
+    }
+
+    func testHelperDoesNotPromptWhenExplicitPermissionIsAlreadyGranted() {
+        let store = InMemoryPreferences(request: .init(settings: .defaults, applyRequestID: UUID()))
+        store.permissionRequest = .init(
+            requestID: UUID(),
+            kind: .request,
+            permission: .inputMonitoring
+        )
+        let provider = RecordingPermissionProvider(
+            state: .init(accessibility: .authorized, inputMonitoring: .authorized)
+        )
+
+        _ = HelperPermissionCoordinator(preferences: store, provider: provider).handleLatestRequest()
+
+        XCTAssertTrue(provider.requests.isEmpty)
+    }
+
+    func testHelperExplicitInputMonitoringRequestUsesInputMonitoringProviderPath() {
+        let store = InMemoryPreferences(request: .init(settings: .defaults, applyRequestID: UUID()))
+        store.permissionRequest = .init(
+            requestID: UUID(),
+            kind: .request,
+            permission: .inputMonitoring
+        )
+        let provider = RecordingPermissionProvider(
+            state: .init(accessibility: .authorized, inputMonitoring: .denied)
+        )
+
+        _ = HelperPermissionCoordinator(preferences: store, provider: provider).handleLatestRequest()
+
+        XCTAssertEqual(provider.requests, [.inputMonitoring])
+        XCTAssertEqual(store.permissionResult?.state.inputMonitoring, .denied)
+    }
+
+    func testReadOnlyRefreshNeverRequestsOrMutatesSanitizedSettings() {
+        var sanitized = TidyTapSettings.defaults
+        sanitized.capsLockInputSourceSwitching = true
+        let applyID = UUID()
+        let store = InMemoryPreferences(request: .init(settings: sanitized, applyRequestID: applyID))
+        store.permissionRequest = .init(requestID: UUID(), kind: .refresh, permission: nil)
+        let provider = RecordingPermissionProvider(
+            state: .init(accessibility: .authorized, inputMonitoring: .denied)
+        )
+
+        let result = HelperPermissionCoordinator(preferences: store, provider: provider).handleLatestRequest()
+
+        XCTAssertEqual(result?.state, provider.state)
+        XCTAssertTrue(provider.requests.isEmpty)
+        XCTAssertEqual(store.request, .init(settings: sanitized, applyRequestID: applyID))
+        XCTAssertNil(store.status)
+    }
+
+    func testCapsOnlyHelperStartupDoesNotCheckOrRequestPermissions() {
+        var settings = TidyTapSettings.defaults
+        settings.capsLockInputSourceSwitching = true
+        let store = InMemoryPreferences(request: .init(settings: settings, applyRequestID: UUID()))
+        let calls = CallLog()
+        let provider = RecordingPermissionProvider(
+            state: .init(accessibility: .denied, inputMonitoring: .denied)
+        )
+        let apply = ApplyCoordinator(
+            preferences: store,
+            capsFeature: RecordingCaps(calls: calls),
+            inputFeatures: RecordingInput(calls: calls),
+            menuBar: RecordingMenu(calls: calls),
+            terminator: RecordingTerminator(calls: calls)
+        )
+        let lifecycle = HelperLifecycle(
+            coordinator: apply,
+            permissionCoordinator: HelperPermissionCoordinator(preferences: store, provider: provider)
+        )
+
+        lifecycle.start()
+        lifecycle.stop()
+
+        XCTAssertEqual(provider.checkCount, 0)
+        XCTAssertTrue(provider.requests.isEmpty)
+        XCTAssertEqual(calls.values.prefix(2), ["caps:true", "input:false:false"])
+    }
+
+    func testHelperStartupDrainsPersistedRefreshWhenLaunchNotificationWasMissed() {
+        let store = InMemoryPreferences(request: .init(settings: .defaults, applyRequestID: UUID()))
+        let permissionID = UUID()
+        store.permissionRequest = .init(requestID: permissionID, kind: .refresh, permission: nil)
+        let provider = RecordingPermissionProvider(
+            state: .init(accessibility: .authorized, inputMonitoring: .denied)
+        )
+        let calls = CallLog()
+        let lifecycle = HelperLifecycle(
+            coordinator: ApplyCoordinator(
+                preferences: store,
+                capsFeature: RecordingCaps(calls: calls),
+                inputFeatures: RecordingInput(calls: calls),
+                menuBar: RecordingMenu(calls: calls),
+                terminator: RecordingTerminator(calls: calls)
+            ),
+            permissionCoordinator: HelperPermissionCoordinator(preferences: store, provider: provider)
+        )
+
+        lifecycle.start()
+        lifecycle.stop()
+
+        XCTAssertEqual(store.permissionResult?.requestID, permissionID)
+        XCTAssertEqual(store.permissionResult?.state.inputMonitoring, .denied)
+        XCTAssertEqual(provider.checkCount, 1)
+        XCTAssertTrue(provider.requests.isEmpty)
+    }
+
+    func testColdHelperKeepsInputMonitoringNoticeAfterAllOffStartupApply() throws {
+        let applyID = UUID()
+        let store = InMemoryPreferences(request: .init(settings: .defaults, applyRequestID: applyID))
+        store.status = TidyTapApplyStatus(
+            applyRequestID: applyID,
+            outcome: .partiallyApplied,
+            failedComponent: .eventTap,
+            errorCode: "eventTap.permissionPartial.accessibility.inputMonitoring",
+            effectiveSettings: .defaults
+        )
+        let app = SettingsCoordinator(
+            preferences: store,
+            helperLauncher: RecordingHelperLauncher(),
+            loginItemManager: StatefulLoginItem(status: .disabled)
+        )
+        app.restoreSession()
+        let permissionID = try XCTUnwrap(app.latestPermissionRequestID)
+        let provider = RecordingPermissionProvider(
+            state: .init(accessibility: .authorized, inputMonitoring: .denied)
+        )
+        let calls = CallLog()
+        let lifecycle = HelperLifecycle(
+            coordinator: ApplyCoordinator(
+                preferences: store,
+                capsFeature: RecordingCaps(calls: calls),
+                inputFeatures: RecordingInput(calls: calls),
+                menuBar: RecordingMenu(calls: calls),
+                terminator: RecordingTerminator(calls: calls)
+            ),
+            permissionCoordinator: HelperPermissionCoordinator(preferences: store, provider: provider)
+        )
+
+        lifecycle.start()
+        lifecycle.stop()
+
+        XCTAssertEqual(store.permissionResults.map(\.requestID), [permissionID])
+        XCTAssertEqual(store.applyStatuses.map(\.outcome), [.applied, .partiallyApplied])
+        let permissionNotificationResult = app.receivePermissionResult()
+        let applyNotificationResult = app.receiveApplyResult()
+        XCTAssertEqual(permissionNotificationResult?.state, provider.state)
+        XCTAssertEqual(applyNotificationResult?.errorCode, "eventTap.permissionPartial.inputMonitoring")
+        XCTAssertEqual(
+            app.permissionSettingsPane(
+                for: try XCTUnwrap(applyNotificationResult),
+                confirmed: try XCTUnwrap(permissionNotificationResult).state
+            ),
+            .inputMonitoring
+        )
+        XCTAssertEqual(store.request.settings, .defaults)
+    }
+
+    func testColdHelperKeepsInputMonitoringNoticeWhenSideButtonsRemainApplied() throws {
+        let applyID = UUID()
+        var sanitized = TidyTapSettings.defaults
+        sanitized.sideButtonNavigation = true
+        let store = InMemoryPreferences(request: .init(settings: sanitized, applyRequestID: applyID))
+        store.status = TidyTapApplyStatus(
+            applyRequestID: applyID,
+            outcome: .partiallyApplied,
+            failedComponent: .eventTap,
+            errorCode: "eventTap.permissionPartial.inputMonitoring",
+            effectiveSettings: sanitized
+        )
+        store.permissionRequest = .init(requestID: UUID(), kind: .refresh, permission: nil)
+        let provider = RecordingPermissionProvider(
+            state: .init(accessibility: .authorized, inputMonitoring: .denied)
+        )
+        let calls = CallLog()
+        let lifecycle = HelperLifecycle(
+            coordinator: ApplyCoordinator(
+                preferences: store,
+                capsFeature: RecordingCaps(calls: calls),
+                inputFeatures: RecordingInput(calls: calls),
+                menuBar: RecordingMenu(calls: calls),
+                terminator: RecordingTerminator(calls: calls)
+            ),
+            permissionCoordinator: HelperPermissionCoordinator(preferences: store, provider: provider)
+        )
+        lifecycle.start()
+        lifecycle.stop()
+
+        XCTAssertEqual(store.applyStatuses.map(\.outcome), [.applied, .partiallyApplied])
+        let final = try XCTUnwrap(store.status)
+        XCTAssertEqual(final.errorCode, "eventTap.permissionPartial.inputMonitoring")
+        XCTAssertEqual(final.effectiveSettings, sanitized)
+        XCTAssertEqual(calls.values.prefix(2), ["caps:false", "input:false:true"])
     }
 
     func testRuntimePermissionLossNormalizesAllOffTapBeforeHelperCleanup() {
@@ -935,13 +1228,12 @@ final class TidyTapSettingsTests: XCTestCase {
         CapsLockFeatureAdapter(controller: makeCapsController(system: system), ownershipStore: ownership)
     }
 
-    private func enabledSettings(showInMenuBar: Bool) -> TidyTapSettings {
+    private func enabledSettings() -> TidyTapSettings {
         TidyTapSettings(
             capsLockInputSourceSwitching: true,
             reverseMouseWheelVertically: true,
             sideButtonNavigation: false,
-            launchAtLogin: false,
-            showInMenuBar: showInMenuBar
+            launchAtLogin: false
         )
     }
 }
@@ -949,6 +1241,10 @@ final class TidyTapSettingsTests: XCTestCase {
 private final class InMemoryPreferences: TidyTapPreferencesStoring {
     var request: TidyTapSettingsRequest
     var status: TidyTapApplyStatus?
+    var permissionRequest: TidyTapPermissionRequest?
+    var permissionResult: TidyTapPermissionResult?
+    var applyStatuses = [TidyTapApplyStatus]()
+    var permissionResults = [TidyTapPermissionResult]()
     var writeError: Error?
 
     init(request: TidyTapSettingsRequest, writeError: Error? = nil) {
@@ -965,7 +1261,19 @@ private final class InMemoryPreferences: TidyTapPreferencesStoring {
         status = .pending(applyRequestID)
     }
     func readApplyStatus() -> TidyTapApplyStatus? { status }
-    func writeApplyStatus(_ status: TidyTapApplyStatus) throws { self.status = status }
+    func writeApplyStatus(_ status: TidyTapApplyStatus) throws {
+        self.status = status
+        applyStatuses.append(status)
+    }
+    func readPermissionRequest() -> TidyTapPermissionRequest? { permissionRequest }
+    func writePermissionRequest(_ request: TidyTapPermissionRequest) throws {
+        permissionRequest = request
+    }
+    func readPermissionResult() -> TidyTapPermissionResult? { permissionResult }
+    func writePermissionResult(_ result: TidyTapPermissionResult) throws {
+        permissionResult = result
+        permissionResults.append(result)
+    }
 }
 
 private final class CallLog {
@@ -1052,6 +1360,35 @@ private final class MutableInputPermissions: InputPermissionChecking, @unchecked
     init(accessibility: Bool, inputMonitoring: Bool) {
         accessibilityAllowed = accessibility
         inputMonitoringAllowed = inputMonitoring
+    }
+}
+
+private final class RecordingPermissionProvider: TidyTapPermissionProviding {
+    var state: TidyTapFeaturePermissionState
+    var grantsOnRequest: Set<TidyTapPermission>
+    private(set) var checkCount = 0
+    private(set) var requests = [TidyTapPermission]()
+
+    init(
+        state: TidyTapFeaturePermissionState,
+        grantsOnRequest: Set<TidyTapPermission> = []
+    ) {
+        self.state = state
+        self.grantsOnRequest = grantsOnRequest
+    }
+
+    func currentState() -> TidyTapFeaturePermissionState {
+        checkCount += 1
+        return state
+    }
+
+    func request(_ permission: TidyTapPermission) {
+        requests.append(permission)
+        guard grantsOnRequest.contains(permission) else { return }
+        switch permission {
+        case .accessibility: state.accessibility = .authorized
+        case .inputMonitoring: state.inputMonitoring = .authorized
+        }
     }
 }
 

@@ -12,6 +12,8 @@ main_log="$smoke_root/main.log"
 helper_log="$smoke_root/helper.log"
 main_suite="com.sharknia.TidyTap.LaunchSmoke.Main.$$.${RANDOM}"
 helper_suite="com.sharknia.TidyTap.LaunchSmoke.Helper.$$.${RANDOM}"
+settings_content_width=560
+settings_content_height=650
 main_pid=""
 helper_pid=""
 
@@ -102,7 +104,7 @@ env \
 main_pid=$!
 
 wait_for_log "$main_pid" "$main_log" "TIDYTAP_LAUNCH_SMOKE main-delegate-started"
-"$smoke_root/verify-process-window" "$main_pid" 520 420
+"$smoke_root/verify-process-window" "$main_pid" "$settings_content_width" "$settings_content_height"
 /usr/bin/grep -Fq "TIDYTAP_LAUNCH_SMOKE main-helper-launch-skipped" "$main_log"
 /usr/bin/grep -Fq "TIDYTAP_LAUNCH_SMOKE main-login-item-mutation-skipped" "$main_log"
 
@@ -143,4 +145,4 @@ if [[ "$live_state_before" != "$live_state_after" ]]; then
   exit 1
 fi
 
-print -- "Launch smoke passed: one 520x420-content settings window, all-off helper startup/exit, and no live state mutation."
+print -- "Launch smoke passed: one ${settings_content_width}x${settings_content_height}-content settings window, all-off helper startup/exit, and no live state mutation."

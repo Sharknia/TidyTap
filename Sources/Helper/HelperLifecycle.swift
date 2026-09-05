@@ -5,10 +5,12 @@ import Foundation
 @MainActor
 final class HelperLifecycle: NSObject {
     private let coordinator: ApplyCoordinator
+    private let permissionCoordinator: HelperPermissionCoordinator
     private var isObservingSettings = false
 
-    init(coordinator: ApplyCoordinator) {
+    init(coordinator: ApplyCoordinator, permissionCoordinator: HelperPermissionCoordinator) {
         self.coordinator = coordinator
+        self.permissionCoordinator = permissionCoordinator
     }
 
     func start() {
@@ -20,8 +22,20 @@ final class HelperLifecycle: NSObject {
             object: TidyTapProduct.appBundleIdentifier,
             suspensionBehavior: .deliverImmediately
         )
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(permissionRequestDidArrive(_:)),
+            name: TidyTapIPC.permissionRequest,
+            object: TidyTapProduct.appBundleIdentifier,
+            suspensionBehavior: .deliverImmediately
+        )
         isObservingSettings = true
-        _ = coordinator.applyLatestSettings()
+        let permissionResult = permissionCoordinator.handleLatestRequest()
+        let startupResult = coordinator.applyLatestSettings()
+        _ = permissionCoordinator.restoreOutstandingPermissionFailure(
+            after: permissionResult,
+            startupApply: startupResult
+        )
     }
 
     func stop() {
@@ -33,5 +47,9 @@ final class HelperLifecycle: NSObject {
 
     @objc private func settingsDidChange(_ notification: Notification) {
         _ = coordinator.applyLatestSettings()
+    }
+
+    @objc private func permissionRequestDidArrive(_ notification: Notification) {
+        _ = permissionCoordinator.handleLatestRequest()
     }
 }
