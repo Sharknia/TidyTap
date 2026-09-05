@@ -71,7 +71,7 @@ final class SettingsViewController: NSViewController {
     }
     /// Displays the inline permission/error area; pass nil to hide it.
     func showPermissionMessage(_ message: String?, permission: TidyTapPermission? = nil) { requestedPermission = permission; permissionMessage.stringValue = message ?? ""; permissionContainer.isHidden = message == nil }
-    private func versionText() -> String { let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0"; return String(format: TidyTapStrings.versionFormat, version) }
+    private func versionText() -> String { let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.0.1"; return String(format: TidyTapStrings.versionFormat, version) }
     private func linkButton(title: String, url: URL) -> NSButton { let button = NSButton(title: title, target: self, action: #selector(openLink(_:))); button.identifier = NSUserInterfaceItemIdentifier(url.absoluteString); button.isBordered = false; button.alignment = .left; button.contentTintColor = .linkColor; return button }
 
     @objc private func settingChanged(_ sender: NSButton) {

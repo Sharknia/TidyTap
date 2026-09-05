@@ -1,6 +1,6 @@
 import Foundation
 
-/// The complete user-configurable state for the 0.1.0 preferences domain.
+/// The complete user-configurable state for the 0.0.1 preferences domain.
 struct TidyTapSettings: Codable, Equatable {
     var capsLockInputSourceSwitching: Bool
     var reverseMouseWheelVertically: Bool
