@@ -8,6 +8,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var observesApplyResults = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // The settings app is a regular, user-facing application even though
+        // its embedded helper is an agent. Explicitly restore the regular
+        // activation policy so launches from a login item/Dock are visible.
+        NSApp.setActivationPolicy(.regular)
         let settingsCoordinator = SettingsCoordinator(helperLauncher: HelperLauncher())
         self.settingsCoordinator = settingsCoordinator
         DistributedNotificationCenter.default().addObserver(
@@ -28,17 +32,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.title = TidyTapStrings.appName
         window.setContentSize(NSSize(width: 520, height: 420))
         window.styleMask = [.titled, .closable, .miniaturizable]
+        window.isReleasedWhenClosed = false
         window.center()
 
         let windowController = NSWindowController(window: window)
         self.windowController = windowController
-        windowController.showWindow(self)
+        showSettingsWindow()
         if let status = settingsCoordinator.latestApplyStatus {
             controller.showApplyStatus(
                 status,
                 permission: settingsCoordinator.permissionSettingsPane(for: status)
             )
         }
+    }
+
+    /// Reopen the settings surface when the Dock icon or a status-item menu
+    /// asks the already-running application to open.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        showSettingsWindow()
+        return true
+    }
+
+    /// Closing the settings window hides it but must not terminate the app:
+    /// the helper may continue running independently.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+
+    private func showSettingsWindow() {
+        guard let window = windowController?.window else { return }
+        if !window.isVisible {
+            window.center()
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        window.makeKeyAndOrderFront(self)
     }
 
     deinit {
