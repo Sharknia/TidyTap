@@ -66,9 +66,12 @@ Scripts/package-release-dmg.sh
 
 It archives the Release scheme, verifies the outer app and embedded
 `TidyTapHelper.app` independently against the configured Developer ID team,
-creates the DMG, submits it to notarytool, waits for acceptance, staples and
-validates the ticket, assesses the DMG with Gatekeeper, and writes a SHA-256
-sidecar next to the DMG. Every build and verification step runs in a unique
+creates the DMG, then signs the **DMG container itself** with that identity and
+a secure timestamp. It verifies the DMG's signature, Developer ID authority,
+Team ID, and timestamp before submitting that exact DMG to notarytool. It then
+waits for acceptance, staples and validates the ticket, assesses the DMG with
+Gatekeeper, and writes a SHA-256 sidecar next to the DMG. Every build and
+verification step runs in a unique
 temporary candidate directory. Only after all checks succeed does an atomic
 rename publish the pair together at `build/artifacts/TidyTap-<version>/`.
 An existing package directory is never overwritten.
@@ -81,6 +84,16 @@ prints local config values, keychain credentials, or notarization secrets.
 The workflow fails before archiving if any of the local config, Team ID,
 Developer ID identity, or usable notarytool profile is absent. It does not
 upload to GitHub or install the app.
+
+For a no-network regression check of the release ordering and fail-closed
+publication boundary, run:
+
+```sh
+Scripts/test-release-dmg-workflow.sh
+```
+
+It is a static check only: it does not build, sign, notarize, install, or
+publish an artifact.
 
 ## Final manual checks
 
