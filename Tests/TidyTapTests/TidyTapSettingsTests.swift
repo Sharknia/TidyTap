@@ -25,8 +25,7 @@ final class TidyTapSettingsTests: XCTestCase {
             capsLockInputSourceSwitching: false,
             reverseMouseWheelVertically: false,
             sideButtonNavigation: false,
-            launchAtLogin: false,
-            showInMenuBar: false
+            launchAtLogin: false
         ))
     }
 
@@ -35,15 +34,27 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(TidyTapProduct.helperBundleIdentifier, "com.sharknia.TidyTap.Helper")
     }
 
-    func testOnlyCoreFeaturesAndMenuBarKeepHelperAlive() {
+    func testOnlyCoreFeaturesKeepHelperAlive() {
         XCTAssertFalse(TidyTapSettings.defaults.requiresHelper)
 
         var settings = TidyTapSettings.defaults
         settings.launchAtLogin = true
         XCTAssertFalse(settings.requiresHelper)
 
-        settings.showInMenuBar = true
+        settings.sideButtonNavigation = true
         XCTAssertTrue(settings.requiresHelper)
+    }
+
+    func testLegacyMenuBarPreferenceIsIgnoredWhenDecoded() throws {
+        let data = Data("""
+        {"capsLockInputSourceSwitching":false,"reverseMouseWheelVertically":false,"sideButtonNavigation":false,"launchAtLogin":false,"showInMenuBar":true}
+        """.utf8)
+
+        let settings = try JSONDecoder().decode(TidyTapSettings.self, from: data)
+
+        XCTAssertEqual(settings, .defaults)
+        XCTAssertFalse(settings.requiresHelper)
+        XCTAssertFalse(String(data: try JSONEncoder().encode(settings), encoding: .utf8)!.contains("showInMenuBar"))
     }
 
     func testMouseWheelNeedsAccessibilityAndInputMonitoring() {
@@ -69,8 +80,7 @@ final class TidyTapSettingsTests: XCTestCase {
                 capsLockInputSourceSwitching: true,
                 reverseMouseWheelVertically: true,
                 sideButtonNavigation: false,
-                launchAtLogin: false,
-                showInMenuBar: false
+                launchAtLogin: false
             ),
             applyRequestID: requestID
         ))
@@ -108,60 +118,10 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(calls.values.last, "terminate")
     }
 
-    func testMenuRollbackFailureStillRestoresInputAndCaps() {
-        let requestID = UUID()
-        let store = InMemoryPreferences(request: TidyTapSettingsRequest(
-            settings: enabledSettings(showInMenuBar: true),
-            applyRequestID: requestID
-        ))
-        let calls = CallLog()
-        let coordinator = ApplyCoordinator(
-            preferences: store,
-            capsFeature: RecordingCaps(calls: calls),
-            inputFeatures: RecordingInput(calls: calls),
-            menuBar: FailingMenu(calls: calls, failWhenVisible: true, failWhenHidden: true),
-            terminator: RecordingTerminator(calls: calls)
-        )
-
-        let status = coordinator.applyLatestSettings()
-
-        XCTAssertEqual(status.outcome, .recoveryRequired)
-        XCTAssertEqual(status.errorCode, "lifecycle.rollbackFailed.menuBar")
-        XCTAssertEqual(calls.values, [
-            "caps:true", "input:true:false", "menu:true",
-            "menu:false", "input:false:false", "caps:false"
-        ])
-    }
-
-    func testInputRollbackFailureForcesPassThroughAndStillRestoresCaps() {
-        let requestID = UUID()
-        let store = InMemoryPreferences(request: TidyTapSettingsRequest(
-            settings: enabledSettings(showInMenuBar: true),
-            applyRequestID: requestID
-        ))
-        let calls = CallLog()
-        let coordinator = ApplyCoordinator(
-            preferences: store,
-            capsFeature: RecordingCaps(calls: calls),
-            inputFeatures: FailingRollbackInput(calls: calls),
-            menuBar: FailingMenu(calls: calls, failWhenVisible: true, failWhenHidden: false),
-            terminator: RecordingTerminator(calls: calls)
-        )
-
-        let status = coordinator.applyLatestSettings()
-
-        XCTAssertEqual(status.outcome, .recoveryRequired)
-        XCTAssertEqual(status.errorCode, "lifecycle.rollbackFailed.eventTap")
-        XCTAssertEqual(calls.values, [
-            "caps:true", "input:true:false", "menu:true",
-            "menu:false", "input:false:false", "input:passThrough", "caps:false"
-        ])
-    }
-
     func testRollbackReportsEveryComponentThatCouldNotBeRestored() {
         let requestID = UUID()
         let store = InMemoryPreferences(request: TidyTapSettingsRequest(
-            settings: enabledSettings(showInMenuBar: true),
+            settings: enabledSettings(),
             applyRequestID: requestID
         ))
         let calls = CallLog()
@@ -185,8 +145,7 @@ final class TidyTapSettingsTests: XCTestCase {
             capsLockInputSourceSwitching: true,
             reverseMouseWheelVertically: false,
             sideButtonNavigation: false,
-            launchAtLogin: false,
-            showInMenuBar: false
+            launchAtLogin: false
         )
         let store = InMemoryPreferences(request: TidyTapSettingsRequest(settings: original, applyRequestID: UUID()))
         let launcher = RecordingHelperLauncher()
@@ -213,8 +172,7 @@ final class TidyTapSettingsTests: XCTestCase {
             capsLockInputSourceSwitching: true,
             reverseMouseWheelVertically: false,
             sideButtonNavigation: false,
-            launchAtLogin: true,
-            showInMenuBar: false
+            launchAtLogin: true
         )
         let store = InMemoryPreferences(request: TidyTapSettingsRequest(settings: original, applyRequestID: UUID()))
         let launcher = RecordingHelperLauncher()
@@ -322,8 +280,7 @@ final class TidyTapSettingsTests: XCTestCase {
             capsLockInputSourceSwitching: false,
             reverseMouseWheelVertically: true,
             sideButtonNavigation: true,
-            launchAtLogin: false,
-            showInMenuBar: false
+            launchAtLogin: false
         )
         let store = InMemoryPreferences(request: .init(settings: settings, applyRequestID: requestID))
         let coordinator = ApplyCoordinator(
@@ -500,8 +457,7 @@ final class TidyTapSettingsTests: XCTestCase {
             capsLockInputSourceSwitching: false,
             reverseMouseWheelVertically: true,
             sideButtonNavigation: true,
-            launchAtLogin: false,
-            showInMenuBar: false
+            launchAtLogin: false
         )
         let store = InMemoryPreferences(request: .init(settings: requested, applyRequestID: requestID))
         let backend = FakeEventTapBackend()
@@ -537,8 +493,7 @@ final class TidyTapSettingsTests: XCTestCase {
             capsLockInputSourceSwitching: false,
             reverseMouseWheelVertically: true,
             sideButtonNavigation: true,
-            launchAtLogin: false,
-            showInMenuBar: false
+            launchAtLogin: false
         )
         let store = InMemoryPreferences(request: .init(settings: requested, applyRequestID: requestID))
         let input = PartialInput()
@@ -574,7 +529,7 @@ final class TidyTapSettingsTests: XCTestCase {
         _ = coordinator.applyLatestSettings()
         let newerID = UUID()
         var newer = first
-        newer.showInMenuBar = true
+        newer.launchAtLogin = true
         store.request = .init(settings: newer, applyRequestID: newerID)
         input.configuration = .disabled
 
@@ -589,42 +544,6 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(store.request.settings, newer, "an older runtime result must not rewrite the newer request")
         coordinator.reportRuntimeInput(requestID: UUID(), .applied, error: nil)
         XCTAssertEqual(store.status?.applyRequestID, firstID, "unknown runtime generations are ignored")
-    }
-
-    func testRollbackUsesActualControllerStateAfterHelperRestart() {
-        let requestID = UUID()
-        let requested = TidyTapSettings.defaults
-        let calls = CallLog()
-        let caps = RecordingCaps(calls: calls, enabled: true)
-        let input = RecordingInput(
-            calls: calls,
-            configuration: .init(reverseMouseWheel: false, sideButtonNavigation: true)
-        )
-        let menu = FailingMenu(
-            calls: calls,
-            failWhenVisible: false,
-            failWhenHidden: true,
-            initiallyVisible: true
-        )
-        let store = InMemoryPreferences(request: .init(settings: requested, applyRequestID: requestID))
-        let coordinator = ApplyCoordinator(
-            preferences: store,
-            capsFeature: caps,
-            inputFeatures: input,
-            menuBar: menu,
-            terminator: RecordingTerminator(calls: calls)
-        )
-
-        let result = coordinator.applyLatestSettings()
-
-        XCTAssertEqual(result.outcome, .failed)
-        XCTAssertEqual(calls.values, [
-            "caps:false", "input:false:false", "menu:false",
-            "menu:true", "input:false:true", "caps:true"
-        ])
-        XCTAssertTrue(caps.enabled)
-        XCTAssertEqual(input.configuration, .init(reverseMouseWheel: false, sideButtonNavigation: true))
-        XCTAssertTrue(menu.isMenuBarVisible)
     }
 
     func testStartupUsesCorrelatedPersistedEffectiveStatus() {
@@ -935,13 +854,12 @@ final class TidyTapSettingsTests: XCTestCase {
         CapsLockFeatureAdapter(controller: makeCapsController(system: system), ownershipStore: ownership)
     }
 
-    private func enabledSettings(showInMenuBar: Bool) -> TidyTapSettings {
+    private func enabledSettings() -> TidyTapSettings {
         TidyTapSettings(
             capsLockInputSourceSwitching: true,
             reverseMouseWheelVertically: true,
             sideButtonNavigation: false,
-            launchAtLogin: false,
-            showInMenuBar: showInMenuBar
+            launchAtLogin: false
         )
     }
 }
