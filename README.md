@@ -1,5 +1,10 @@
 # TidyTap
 
+[![Release](https://img.shields.io/github/v/release/Sharknia/TidyTap?include_prereleases&label=release)](https://github.com/Sharknia/TidyTap/releases)
+[![Asset downloads](https://img.shields.io/github/downloads/Sharknia/TidyTap/total?label=asset%20downloads)](https://github.com/Sharknia/TidyTap/releases)
+[![Languages](https://img.shields.io/badge/languages-%ED%95%9C%EA%B5%AD%EC%96%B4%20%2F%20English-2ea44f)](README.ko.md)
+[![License: MIT](https://img.shields.io/badge/license-MIT-2ea44f.svg)](LICENSE)
+
 TidyTap is a small macOS utility for three input annoyances:
 
 - Use Caps Lock as a two-input-source switch (mapped to F18), without toggling Caps Lock.
@@ -12,7 +17,7 @@ Each feature has its own toggle. The settings window also offers **Start at logi
 
 The development build is being checked on MacBook Pro `Mac15,6` (Apple M3 Pro) and macOS 26.6.2 (`25G83`). Physical validation so far covers scroll-device classification (VXE versus the built-in and Magic Trackpad) and that the VXE side buttons report as Core Graphics buttons 3/4. Remaining integrated live validation includes Caps Lock/input-source backup and restore, permission grant/revocation behavior, end-to-end wheel and Safari/Finder navigation, helper lifetime/login behavior, and the supported removal sequence; these are not claimed complete. The UI is available in English and Korean. Other Macs or macOS versions may run, but are not compatibility claims for `0.0.1`.
 
-Status: development build. A notarized or distributable `0.0.1` release does not exist yet.
+Status: development build. A notarized `v0.0.1` pre-release exists; current development changes are not yet released.
 
 See the [MVP work plan](docs/MVP_PLAN.md) and [Korean README](README.ko.md).
 
@@ -26,7 +31,7 @@ If a required permission is missing or later revoked, the affected feature is no
 
 ## Install and run
 
-There is currently no packaged release. Build the app locally, then open the resulting app:
+A notarized [`v0.0.1` pre-release](https://github.com/Sharknia/TidyTap/releases/tag/v0.0.1) is available. For development, build the app locally, then open the resulting app:
 
 ```sh
 xcodebuild -project TidyTap.xcodeproj -scheme TidyTap -configuration Debug \
@@ -81,7 +86,7 @@ main app and helper with isolated all-off preferences, verifies one settings
 window plus helper startup/exit, and checks that live input and production
 preference state did not change.
 
-To create a signed archive, copy `Config/LocalSigning.xcconfig.example` to the gitignored `Config/LocalSigning.xcconfig` and provide a real Developer ID identity. Do not commit signing values. Notarization and release publication are not part of the current repository status.
+To create a signed archive, copy `Config/LocalSigning.xcconfig.example` to the gitignored `Config/LocalSigning.xcconfig` and provide a real Developer ID identity. Do not commit signing values. Current development changes have not been published in a release.
 
 ## Privacy and limitations
 
@@ -93,3 +98,7 @@ The MVP does not provide custom mappings, profiles, horizontal-scroll reversal, 
 
 - Email: [zel@kakao.com](mailto:zel@kakao.com)
 - GitHub: [Sharknia/TidyTap](https://github.com/Sharknia/TidyTap)
+
+## License
+
+TidyTap is released under the [MIT License](LICENSE).
