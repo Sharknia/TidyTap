@@ -30,6 +30,7 @@ final class CGTidyTapPermissionProvider: TidyTapPermissionProviding {
 final class HelperPermissionCoordinator {
     private let preferences: TidyTapPreferencesStoring
     private let provider: TidyTapPermissionProviding
+    private var applyStatusBeforeRequest: TidyTapApplyStatus?
 
     init(
         preferences: TidyTapPreferencesStoring,
@@ -41,6 +42,7 @@ final class HelperPermissionCoordinator {
 
     @discardableResult
     func handleLatestRequest() -> TidyTapPermissionResult? {
+        applyStatusBeforeRequest = preferences.readApplyStatus()
         guard let request = preferences.readPermissionRequest() else { return nil }
         if let existing = preferences.readPermissionResult(), existing.requestID == request.requestID {
             return existing
@@ -57,6 +59,49 @@ final class HelperPermissionCoordinator {
         _ = try? preferences.writePermissionResult(result)
         TidyTapIPC.postPermissionResult(result)
         return result
+    }
+
+    /// An all-off startup still applies controller cleanup, but that successful
+    /// cleanup must not replace an unresolved permission result for the same
+    /// already-sanitized settings generation.
+    @discardableResult
+    func restoreOutstandingPermissionFailure(
+        after result: TidyTapPermissionResult?,
+        startupApply: TidyTapApplyStatus
+    ) -> TidyTapApplyStatus? {
+        defer { applyStatusBeforeRequest = nil }
+        guard let prior = applyStatusBeforeRequest,
+              startupApply.outcome == .applied,
+              startupApply.applyRequestID == prior.applyRequestID,
+              startupApply.effectiveSettings?.reverseMouseWheelVertically == false,
+              startupApply.effectiveSettings?.sideButtonNavigation == false,
+              prior.failedComponent == .eventTap,
+              let priorCode = prior.errorCode,
+              priorCode.hasPrefix("eventTap.permissionDenied.") ||
+                priorCode.hasPrefix("eventTap.permissionPartial."),
+              let result else {
+            return nil
+        }
+
+        let unavailable = TidyTapPermission.allCases.filter { permission in
+            priorCode.split(separator: ".").contains(Substring(permission.rawValue)) &&
+                !result.state.isAuthorized(permission)
+        }
+        guard !unavailable.isEmpty else { return nil }
+
+        let prefix = prior.outcome == .failed
+            ? "eventTap.permissionDenied"
+            : "eventTap.permissionPartial"
+        let preserved = TidyTapApplyStatus(
+            applyRequestID: prior.applyRequestID,
+            outcome: prior.outcome,
+            failedComponent: prior.failedComponent,
+            errorCode: "\(prefix).\(unavailable.map(\.rawValue).sorted().joined(separator: "."))",
+            effectiveSettings: prior.effectiveSettings
+        )
+        guard (try? preferences.writeApplyStatus(preserved)) != nil else { return nil }
+        TidyTapIPC.postApplyResult(preserved)
+        return preserved
     }
 }
 

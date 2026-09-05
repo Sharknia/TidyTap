@@ -30,8 +30,12 @@ final class HelperLifecycle: NSObject {
             suspensionBehavior: .deliverImmediately
         )
         isObservingSettings = true
-        _ = permissionCoordinator.handleLatestRequest()
-        _ = coordinator.applyLatestSettings()
+        let permissionResult = permissionCoordinator.handleLatestRequest()
+        let startupResult = coordinator.applyLatestSettings()
+        _ = permissionCoordinator.restoreOutstandingPermissionFailure(
+            after: permissionResult,
+            startupApply: startupResult
+        )
     }
 
     func stop() {

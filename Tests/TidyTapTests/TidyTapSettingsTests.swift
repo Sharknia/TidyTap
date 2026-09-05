@@ -961,6 +961,57 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertTrue(provider.requests.isEmpty)
     }
 
+    func testColdHelperKeepsInputMonitoringNoticeAfterAllOffStartupApply() throws {
+        let applyID = UUID()
+        let store = InMemoryPreferences(request: .init(settings: .defaults, applyRequestID: applyID))
+        store.status = TidyTapApplyStatus(
+            applyRequestID: applyID,
+            outcome: .partiallyApplied,
+            failedComponent: .eventTap,
+            errorCode: "eventTap.permissionPartial.accessibility.inputMonitoring",
+            effectiveSettings: .defaults
+        )
+        let app = SettingsCoordinator(
+            preferences: store,
+            helperLauncher: RecordingHelperLauncher(),
+            loginItemManager: StatefulLoginItem(status: .disabled)
+        )
+        app.restoreSession()
+        let permissionID = try XCTUnwrap(app.latestPermissionRequestID)
+        let provider = RecordingPermissionProvider(
+            state: .init(accessibility: .authorized, inputMonitoring: .denied)
+        )
+        let calls = CallLog()
+        let lifecycle = HelperLifecycle(
+            coordinator: ApplyCoordinator(
+                preferences: store,
+                capsFeature: RecordingCaps(calls: calls),
+                inputFeatures: RecordingInput(calls: calls),
+                menuBar: RecordingMenu(calls: calls),
+                terminator: RecordingTerminator(calls: calls)
+            ),
+            permissionCoordinator: HelperPermissionCoordinator(preferences: store, provider: provider)
+        )
+
+        lifecycle.start()
+        lifecycle.stop()
+
+        XCTAssertEqual(store.permissionResults.map(\.requestID), [permissionID])
+        XCTAssertEqual(store.applyStatuses.map(\.outcome), [.applied, .partiallyApplied])
+        let permissionNotificationResult = app.receivePermissionResult()
+        let applyNotificationResult = app.receiveApplyResult()
+        XCTAssertEqual(permissionNotificationResult?.state, provider.state)
+        XCTAssertEqual(applyNotificationResult?.errorCode, "eventTap.permissionPartial.inputMonitoring")
+        XCTAssertEqual(
+            app.permissionSettingsPane(
+                for: try XCTUnwrap(applyNotificationResult),
+                confirmed: try XCTUnwrap(permissionNotificationResult).state
+            ),
+            .inputMonitoring
+        )
+        XCTAssertEqual(store.request.settings, .defaults)
+    }
+
     func testRuntimePermissionLossNormalizesAllOffTapBeforeHelperCleanup() {
         let requestID = UUID()
         var settings = TidyTapSettings.defaults
@@ -1163,6 +1214,8 @@ private final class InMemoryPreferences: TidyTapPreferencesStoring {
     var status: TidyTapApplyStatus?
     var permissionRequest: TidyTapPermissionRequest?
     var permissionResult: TidyTapPermissionResult?
+    var applyStatuses = [TidyTapApplyStatus]()
+    var permissionResults = [TidyTapPermissionResult]()
     var writeError: Error?
 
     init(request: TidyTapSettingsRequest, writeError: Error? = nil) {
@@ -1179,7 +1232,10 @@ private final class InMemoryPreferences: TidyTapPreferencesStoring {
         status = .pending(applyRequestID)
     }
     func readApplyStatus() -> TidyTapApplyStatus? { status }
-    func writeApplyStatus(_ status: TidyTapApplyStatus) throws { self.status = status }
+    func writeApplyStatus(_ status: TidyTapApplyStatus) throws {
+        self.status = status
+        applyStatuses.append(status)
+    }
     func readPermissionRequest() -> TidyTapPermissionRequest? { permissionRequest }
     func writePermissionRequest(_ request: TidyTapPermissionRequest) throws {
         permissionRequest = request
@@ -1187,6 +1243,7 @@ private final class InMemoryPreferences: TidyTapPreferencesStoring {
     func readPermissionResult() -> TidyTapPermissionResult? { permissionResult }
     func writePermissionResult(_ result: TidyTapPermissionResult) throws {
         permissionResult = result
+        permissionResults.append(result)
     }
 }
 
