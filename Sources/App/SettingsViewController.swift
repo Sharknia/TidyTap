@@ -40,10 +40,10 @@ final class SettingsViewController: NSViewController {
         statusMessage.textColor = .secondaryLabelColor; statusMessage.maximumNumberOfLines = 2; stack.addArrangedSubview(statusMessage)
         permissionContainer.orientation = .vertical; permissionContainer.alignment = .leading; permissionContainer.spacing = 10; permissionContainer.isHidden = true
         permissionMessage.maximumNumberOfLines = 0
-        permissionContainer.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
-        permissionMessage.widthAnchor.constraint(equalTo: permissionContainer.widthAnchor).isActive = true
         permissionContainer.addArrangedSubview(permissionMessage)
         permissionButton.target = self; permissionButton.action = #selector(openPermissionSettings); permissionButton.bezelStyle = .rounded; permissionContainer.addArrangedSubview(permissionButton); stack.addArrangedSubview(permissionContainer)
+        permissionContainer.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        permissionMessage.widthAnchor.constraint(equalTo: permissionContainer.widthAnchor).isActive = true
         addDivider()
         let footer = NSStackView(); footer.orientation = .vertical; footer.alignment = .leading; footer.spacing = 5
         footer.addArrangedSubview(NSTextField(labelWithString: versionText())); footer.addArrangedSubview(linkButton(title: TidyTapStrings.email, url: TidyTapStrings.emailURL)); footer.addArrangedSubview(linkButton(title: TidyTapStrings.github, url: TidyTapStrings.githubURL)); stack.addArrangedSubview(footer)
@@ -52,7 +52,6 @@ final class SettingsViewController: NSViewController {
 
     private func addSection(_ buttons: [NSButton], title: String?) {
         let section = NSStackView(); section.orientation = .vertical; section.alignment = .leading; section.spacing = 8
-        section.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         if let title {
             let label = NSTextField(labelWithString: title); label.font = .systemFont(ofSize: 13, weight: .semibold); label.textColor = .secondaryLabelColor; section.addArrangedSubview(label); section.setCustomSpacing(6, after: label)
         }
@@ -60,6 +59,7 @@ final class SettingsViewController: NSViewController {
             button.target = self; button.action = #selector(settingChanged(_:)); button.controlSize = .large; button.setAccessibilityLabel(button.title); section.addArrangedSubview(button)
         }
         stack.addArrangedSubview(section)
+        section.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
     }
     private func addDivider() {
         let divider = NSBox(); divider.boxType = .separator
