@@ -40,6 +40,8 @@ final class SettingsViewController: NSViewController {
         statusMessage.textColor = .secondaryLabelColor; statusMessage.maximumNumberOfLines = 2; stack.addArrangedSubview(statusMessage)
         permissionContainer.orientation = .vertical; permissionContainer.alignment = .leading; permissionContainer.spacing = 10; permissionContainer.isHidden = true
         permissionMessage.maximumNumberOfLines = 0
+        permissionContainer.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        permissionMessage.widthAnchor.constraint(equalTo: permissionContainer.widthAnchor).isActive = true
         permissionContainer.addArrangedSubview(permissionMessage)
         permissionButton.target = self; permissionButton.action = #selector(openPermissionSettings); permissionButton.bezelStyle = .rounded; permissionContainer.addArrangedSubview(permissionButton); stack.addArrangedSubview(permissionContainer)
         addDivider()
@@ -50,6 +52,7 @@ final class SettingsViewController: NSViewController {
 
     private func addSection(_ buttons: [NSButton], title: String?) {
         let section = NSStackView(); section.orientation = .vertical; section.alignment = .leading; section.spacing = 8
+        section.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         if let title {
             let label = NSTextField(labelWithString: title); label.font = .systemFont(ofSize: 13, weight: .semibold); label.textColor = .secondaryLabelColor; section.addArrangedSubview(label); section.setCustomSpacing(6, after: label)
         }
@@ -58,7 +61,11 @@ final class SettingsViewController: NSViewController {
         }
         stack.addArrangedSubview(section)
     }
-    private func addDivider() { let divider = NSBox(); divider.boxType = .separator; stack.addArrangedSubview(divider) }
+    private func addDivider() {
+        let divider = NSBox(); divider.boxType = .separator
+        stack.addArrangedSubview(divider)
+        divider.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+    }
     func apply(_ settings: TidyTapSettings) {
         self.settings = settings; guard isViewLoaded else { return }
         capsButton.state = settings.capsLockInputSourceSwitching ? .on : .off; wheelButton.state = settings.reverseMouseWheelVertically ? .on : .off; sideButton.state = settings.sideButtonNavigation ? .on : .off; loginButton.state = settings.launchAtLogin ? .on : .off
