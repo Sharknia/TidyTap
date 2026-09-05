@@ -6,6 +6,24 @@ protocol TidyTapHelperLaunching: AnyObject {
     func launchOrActivateHelper()
 }
 
+/// A user-initiated settings-pane request is consumed only by the helper
+/// result that carries its exact request ID. Refreshes never create one.
+struct TidyTapPendingPermissionSettingsOpen: Equatable {
+    private var requestID: UUID?
+    private let permission: TidyTapPermission
+
+    init(requestID: UUID, permission: TidyTapPermission) {
+        self.requestID = requestID
+        self.permission = permission
+    }
+
+    mutating func consume(matching resultID: UUID) -> TidyTapPermission? {
+        guard requestID == resultID else { return nil }
+        requestID = nil
+        return permission
+    }
+}
+
 /// A completed ServiceManagement mutation could not be reconciled after the
 /// preferences write failed. Both underlying failures are retained so the UI
 /// can tell the user that login registration needs manual recovery.
@@ -145,6 +163,17 @@ final class SettingsCoordinator {
             return .inputMonitoring
         }
         return nil
+    }
+
+    /// The System Settings deep links are intentionally a pure mapping so it
+    /// can be tested without opening a user-facing settings pane.
+    static func permissionSettingsURL(for permission: TidyTapPermission) -> URL {
+        switch permission {
+        case .accessibility:
+            URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!
+        case .inputMonitoring:
+            URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent")!
+        }
     }
 
     /// Foreground refresh is intentionally limited to an existing permission

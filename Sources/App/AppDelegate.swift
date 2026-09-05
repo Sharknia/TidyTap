@@ -6,6 +6,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsCoordinator: SettingsCoordinator?
     private var observesApplyResults = false
     private let launchSmoke = TidyTapLaunchSmoke.current()
+    private let permissionSettingsOpener: TidyTapPermissionSettingsOpening
+    private var pendingPermissionSettingsOpen: TidyTapPendingPermissionSettingsOpen?
+
+    init(permissionSettingsOpener: TidyTapPermissionSettingsOpening = SystemPermissionSettingsOpener()) {
+        self.permissionSettingsOpener = permissionSettingsOpener
+        super.init()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // The settings app is a regular, user-facing application even though
@@ -123,11 +130,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
               coordinator.permissionSettingsPane(for: status) != nil else {
             return false
         }
+        let requestedPane = pendingPermissionSettingsOpen?.consume(matching: result.requestID)
         let missing = coordinator.permissionSettingsPane(for: status, confirmed: result.state)
         controller.showPermissionMessage(
             missing.map { permissionMessage(for: $0) },
             permission: missing
         )
+        if let requestedPane, requestedPane == missing {
+            permissionSettingsOpener.open(requestedPane)
+        }
         return true
     }
 
@@ -187,11 +198,34 @@ extension AppDelegate: SettingsViewControllerDelegate {
     func settingsViewControllerRequestsPermissionSettings(_ controller: SettingsViewController, permission: TidyTapPermission) -> Bool {
         guard let coordinator = settingsCoordinator else { return false }
         do {
-            try coordinator.requestPermission(permission)
+            let requestID = try coordinator.requestPermission(permission)
+            // The helper makes the native request first. System Settings opens
+            // only after its matching response, never for a refresh result.
+            pendingPermissionSettingsOpen = TidyTapPendingPermissionSettingsOpen(
+                requestID: requestID,
+                permission: permission
+            )
             return true
         } catch {
             controller.showPermissionMessage(TidyTapStrings.changesCouldNotBeApplied, permission: permission)
             return true
+        }
+    }
+}
+
+@MainActor
+protocol TidyTapPermissionSettingsOpening: AnyObject {
+    func open(_ permission: TidyTapPermission)
+}
+
+/// Opens the exact Privacy & Security pane after the helper has asked macOS
+/// for access. Keeping this behind a protocol makes smoke/tests non-mutating.
+@MainActor
+final class SystemPermissionSettingsOpener: TidyTapPermissionSettingsOpening {
+    func open(_ permission: TidyTapPermission) {
+        let url = SettingsCoordinator.permissionSettingsURL(for: permission)
+        DispatchQueue.main.async {
+            NSWorkspace.shared.open(url)
         }
     }
 }
