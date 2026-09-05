@@ -8,8 +8,6 @@ enum TidyTapStrings {
     static let sideButtonNavigation = String(localized: "Use side buttons for back/forward in Safari and Finder", bundle: .main)
     static let options = String(localized: "Options", bundle: .main)
     static let launchAtLogin = String(localized: "Start at login", bundle: .main)
-    static let showInMenuBar = String(localized: "Show in menu bar", bundle: .main)
-    static let openApp = String(localized: "Open TidyTap", bundle: .main)
     static let openSystemSettings = String(localized: "Open System Settings", bundle: .main)
     static let versionFormat = String(localized: "Version %@", bundle: .main)
     static let permissionRequired = String(localized: "Permission is required for this feature.", bundle: .main)
