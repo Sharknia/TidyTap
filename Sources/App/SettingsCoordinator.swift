@@ -42,6 +42,7 @@ final class SettingsCoordinator {
     private(set) var latestRequestID: UUID?
     private(set) var latestApplyStatus: TidyTapApplyStatus?
     private(set) var latestPermissionRequestID: UUID?
+    private(set) var latestPermissionState: TidyTapFeaturePermissionState?
     private var settingsBeforeLatestRequest: TidyTapSettings?
 
     init(
@@ -176,12 +177,14 @@ final class SettingsCoordinator {
         }
     }
 
-    /// Foreground refresh is intentionally limited to an existing permission
-    /// notice and is read-only inside the helper.
+    /// Foreground refresh is limited to an existing permission notice or a
+    /// previously confirmed snapshot and is read-only inside the helper.
     @discardableResult
     func refreshPermissionsIfNeeded() throws -> UUID? {
-        guard let status = latestApplyStatus,
-              permissionSettingsPane(for: status) != nil,
+        let unresolvedApplyPermission = latestApplyStatus.map {
+            permissionSettingsPane(for: $0) != nil
+        } ?? false
+        guard (unresolvedApplyPermission || latestPermissionState != nil),
               latestPermissionRequestID == nil else {
             return nil
         }
@@ -200,6 +203,7 @@ final class SettingsCoordinator {
             return nil
         }
         latestPermissionRequestID = nil
+        latestPermissionState = result.state
         return result
     }
 

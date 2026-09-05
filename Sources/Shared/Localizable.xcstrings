@@ -1,10 +1,34 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Accessibility" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Accessibility" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "손쉬운 사용" } }
+      }
+    },
+    "Allowed" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Allowed" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "허용됨" } }
+      }
+    },
     "Applying changes…" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Applying changes…" } },
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "변경 사항 적용 중…" } }
+      }
+    },
+    "Back and forward in Safari and Finder" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Back and forward in Safari and Finder" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "Safari · Finder에서 뒤로 및 앞으로" } }
+      }
+    },
+    "Caps Lock input switching" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Caps Lock input switching" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "Caps Lock 한·영 전환" } }
       }
     },
     "Accessibility is required. In System Settings > Privacy & Security > Accessibility, enable TidyTapHelper (it may appear as TidyTap). Return here; TidyTap will refresh to confirm access. Then turn your desired feature back on." : {
@@ -25,6 +49,18 @@
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "변경 사항을 적용할 수 없습니다." } }
       }
     },
+    "General" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "General" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "일반" } }
+      }
+    },
+    "Input Monitoring" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Input Monitoring" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "입력 모니터링" } }
+      }
+    },
     "Open TidyTap" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Open TidyTap" } },
@@ -37,6 +73,48 @@
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "입력 모니터링 권한이 필요합니다. 시스템 설정 > 개인정보 보호 및 보안 > 입력 모니터링에서 TidyTapHelper(목록에는 TidyTap으로 보일 수 있음)를 켜세요. 이 창으로 돌아오면 TidyTap이 권한을 새로 확인합니다. 그 다음 원하는 기능을 다시 켜세요." } }
       }
     },
+    "Keep TidyTap ready after you sign in" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Keep TidyTap ready after you sign in" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "로그인 후 TidyTap을 바로 사용할 수 있어요" } }
+      }
+    },
+    "Keep trackpad scrolling unchanged" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Keep trackpad scrolling unchanged" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "트랙패드는 그대로" } }
+      }
+    },
+    "Keyboard" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Keyboard" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "키보드" } }
+      }
+    },
+    "Keyboard and mouse, simply" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Keyboard and mouse, simply" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "키보드와 마우스를 편하게" } }
+      }
+    },
+    "Missing" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Missing" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "필요함" } }
+      }
+    },
+    "Mouse" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Mouse" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "마우스" } }
+      }
+    },
+    "PERMISSIONS FOR MOUSE FEATURES" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "PERMISSIONS FOR MOUSE FEATURES" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "마우스 기능 권한" } }
+      }
+    },
     "Options" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Options" } },
@@ -47,6 +125,30 @@
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Permission is required for this feature." } },
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "이 기능을 사용하려면 권한이 필요합니다." } }
+      }
+    },
+    "Not checked" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Not checked" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "확인 안 됨" } }
+      }
+    },
+    "Required for wheel reversal and side buttons" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Required for wheel reversal and side buttons" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "휠 방향 반전과 측면 버튼에 필요" } }
+      }
+    },
+    "Required for wheel reversal only" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Required for wheel reversal only" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "휠 방향 반전에만 필요" } }
+      }
+    },
+    "Reverse wheel direction" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Reverse wheel direction" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "휠 방향 반전" } }
       }
     },
     "Reverse vertical mouse wheel direction" : {
@@ -73,10 +175,34 @@
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "로그인할 때 시작" } }
       }
     },
+    "Settings" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Settings" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "권한 설정" } }
+      }
+    },
+    "Side-button navigation" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Side-button navigation" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "측면 버튼 탐색" } }
+      }
+    },
+    "Switch input sources without changing letter case" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Switch input sources without changing letter case" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "대문자 고정 없이 입력 소스 전환" } }
+      }
+    },
     "TidyTap" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "TidyTap" } },
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "TidyTap" } }
+      }
+    },
+    "Review the mouse permission status below." : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Review the mouse permission status below." } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "아래 마우스 권한 상태를 확인하세요." } }
       }
     },
     "Use Caps Lock to switch input source" : {
