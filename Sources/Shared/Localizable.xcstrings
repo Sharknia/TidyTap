@@ -67,12 +67,6 @@
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "입력 모니터링 권한 요청" } }
       }
     },
-    "Show in menu bar" : {
-      "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Show in menu bar" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "메뉴 막대에 표시" } }
-      }
-    },
     "Start at login" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Start at login" } },

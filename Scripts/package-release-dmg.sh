@@ -172,6 +172,13 @@ candidate_dmg="$candidate_dir/$dmg_name"
 staging_dir="$candidate_dir/staging"
 mkdir "$staging_dir"
 /usr/bin/ditto "$app_path" "$staging_dir/TidyTap.app"
+/bin/ln -s /Applications "$staging_dir/Applications"
+/usr/bin/tee "$staging_dir/Install TidyTap.txt" >/dev/null <<'EOF'
+TidyTap 설치 / Install TidyTap
+
+TidyTap.app을 Applications 폴더로 드래그하세요.
+Drag TidyTap.app to the Applications folder.
+EOF
 run_step \
   "Release DMG creation" \
   "Check available disk space and the archived app bundle." \

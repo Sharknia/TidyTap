@@ -6,23 +6,30 @@ struct TidyTapSettings: Codable, Equatable {
     var reverseMouseWheelVertically: Bool
     var sideButtonNavigation: Bool
     var launchAtLogin: Bool
-    var showInMenuBar: Bool
 
     static let defaults = TidyTapSettings(
         capsLockInputSourceSwitching: false,
         reverseMouseWheelVertically: false,
         sideButtonNavigation: false,
-        launchAtLogin: false,
-        showInMenuBar: false
+        launchAtLogin: false
     )
 
     /// The login-item preference alone must not keep a helper process alive.
     var requiresHelper: Bool {
         capsLockInputSourceSwitching ||
             reverseMouseWheelVertically ||
-            sideButtonNavigation ||
-            showInMenuBar
+            sideButtonNavigation
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case capsLockInputSourceSwitching
+        case reverseMouseWheelVertically
+        case sideButtonNavigation
+        case launchAtLogin
+    }
+
+    /// Older snapshots can contain `showInMenuBar`. Codable ignores that
+    /// unknown key during decoding, and it is deliberately not re-encoded.
 }
 
 enum TidyTapFeature: String, Codable, CaseIterable {
