@@ -7,6 +7,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var observesApplyResults = false
     private let launchSmoke = TidyTapLaunchSmoke.current()
     private let permissionSettingsOpener: TidyTapPermissionSettingsOpening
+    private var pendingPermissionSettingsOpen: TidyTapPendingPermissionSettingsOpen?
 
     init(permissionSettingsOpener: TidyTapPermissionSettingsOpening = SystemPermissionSettingsOpener()) {
         self.permissionSettingsOpener = permissionSettingsOpener
@@ -129,11 +130,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
               coordinator.permissionSettingsPane(for: status) != nil else {
             return false
         }
+        let requestedPane = pendingPermissionSettingsOpen?.consume(matching: result.requestID)
         let missing = coordinator.permissionSettingsPane(for: status, confirmed: result.state)
         controller.showPermissionMessage(
             missing.map { permissionMessage(for: $0) },
             permission: missing
         )
+        if let requestedPane, requestedPane == missing {
+            permissionSettingsOpener.open(requestedPane)
+        }
         return true
     }
 
@@ -193,10 +198,13 @@ extension AppDelegate: SettingsViewControllerDelegate {
     func settingsViewControllerRequestsPermissionSettings(_ controller: SettingsViewController, permission: TidyTapPermission) -> Bool {
         guard let coordinator = settingsCoordinator else { return false }
         do {
-            try coordinator.requestPermission(permission)
-            // Queue the helper-owned request before opening System Settings.
-            // This is still useful after macOS has denied a prior prompt.
-            permissionSettingsOpener.open(permission)
+            let requestID = try coordinator.requestPermission(permission)
+            // The helper makes the native request first. System Settings opens
+            // only after its matching response, never for a refresh result.
+            pendingPermissionSettingsOpen = TidyTapPendingPermissionSettingsOpen(
+                requestID: requestID,
+                permission: permission
+            )
             return true
         } catch {
             controller.showPermissionMessage(TidyTapStrings.changesCouldNotBeApplied, permission: permission)

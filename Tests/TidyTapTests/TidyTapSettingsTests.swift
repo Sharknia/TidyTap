@@ -45,6 +45,18 @@ final class TidyTapSettingsTests: XCTestCase {
         )
     }
 
+    func testExplicitPermissionPaneOpenConsumesOnlyItsMatchingHelperResult() {
+        let requestID = UUID()
+        var pending = TidyTapPendingPermissionSettingsOpen(
+            requestID: requestID,
+            permission: .inputMonitoring
+        )
+
+        XCTAssertNil(pending.consume(matching: UUID()))
+        XCTAssertEqual(pending.consume(matching: requestID), .inputMonitoring)
+        XCTAssertNil(pending.consume(matching: requestID))
+    }
+
     func testOnlyCoreFeaturesKeepHelperAlive() {
         XCTAssertFalse(TidyTapSettings.defaults.requiresHelper)
 
