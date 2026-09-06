@@ -43,7 +43,7 @@ Developer ID preview 패키징을 실제 실행한 `8b322a2` 후보의 앱/Worke
 - 실제 격리 프로세스 테스트: 같은 경로 파일 교체, DR 유지/변경 두 경우의 stale 감지와 새 Worker 요청 처리, all-off 정상 종료 확인. 0.0.2 종료 순서 및 신원 불확실 상태의 차단은 회귀 테스트로 검사했다.
 - 최종 Release launch smoke 통과: 창, 중복 Worker 방지, 재시작, 고정 크기 단독 실행·종료, 운영 입력/설정 비변경 검사.
 - 패키징 fixture 8개 및 release workflow 회귀 검사 통과.
-- 구현마다 새 Sol을 사용해 읽기 전용 독립 리뷰를 수행했다. 응답 상태의 실제 값 보존, 커밋·소스 불일치, 기존 0.0.2 종료 경로 회귀를 수정했다. 다른 설치 경로의 동일 사용자 legacy Helper가 발견되면 임의로 종료하지 않고 새 Worker 시작을 차단하도록 `0b0de01`에서 추가 보완했다. 이 마지막 보완의 재리뷰는 진행 중이다.
+- 구현마다 새 Sol을 사용해 읽기 전용 독립 리뷰를 수행했다. 응답 상태의 실제 값 보존, 커밋·소스 불일치, 기존 0.0.2 종료 경로 회귀를 수정했다. 다른 설치 경로의 동일 사용자 legacy Helper가 발견되면 임의로 종료하지 않고 새 Worker 시작을 차단하도록 `0b0de01`에서 추가 보완했다. 마지막 새 Sol 재리뷰는 지적 사항 없이 끝났고 리뷰어도 앱 테스트 91개 통과를 확인했다.
 
 ## 서명 검증 후보
 
@@ -55,3 +55,14 @@ Developer ID preview 패키징을 실제 실행한 `8b322a2` 후보의 앱/Worke
 - DMG 무결성, portable checksum sidecar, 앱/Worker 서명·리소스 seal 검증 통과.
 - 최종 DMG에서도 앱/Worker DR이 위 정식 배포본 해시와 정확히 일치함을 확인했다.
 - 공개 배포·공증·설치 없음. 실제 교체 설치 후 권한 인식, 새 토글 상태 및 물리 휠 동작은 사용자 테스트가 남아 있다.
+
+## 전달한 최종 후보
+
+빌드 소스: `8310e0e9d581` (마지막 충돌 차단 보완 포함).
+
+`build/artifacts/TidyTap-0.1.0-preview-developer-id-8310e0e9d581/TidyTap-0.1.0-preview-developer-id-8310e0e9d581.dmg`
+
+- SHA-256: `ec9428cdeda0850fcc3055a04da91f806e597f3408eb3d8f73f3323057feb61d`
+- 실제 Developer ID 서명 빌드, DMG 생성/복사/seal/무결성 및 portable sidecar 검증 통과.
+- 최종 파일을 다시 읽기 전용으로 마운트해 앱과 Worker 각각의 DR이 기존 정식 DMG와 동일함을 재확인했다.
+- 코드와 검증 기록은 `codex/wheel-step-size`로 푸시했다. GitHub Release·태그·설치·공증 업로드는 하지 않았다.
