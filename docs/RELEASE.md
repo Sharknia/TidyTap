@@ -27,6 +27,37 @@ directory and checked there with `shasum -a 256 -c <sidecar>`. It is only
 suitable for local development: Gatekeeper will not accept it as a public
 distribution package. The generated files are ignored by Git.
 
+## Local Developer ID preview
+
+When a fresh local worker needs the same Developer ID identity used by the
+release build, pass the already-existing ignored signing config explicitly:
+
+```sh
+Scripts/package-preview-dmg.sh --developer-id-config /absolute/path/to/Config/LocalSigning.xcconfig
+```
+
+The supplied file is read in place; it is never copied or printed. This mode
+requires a valid `TIDYTAP_DEVELOPMENT_TEAM` and matching
+`TIDYTAP_DEVELOPER_ID_APPLICATION` identity already available in Keychain. It
+passes that config to `xcodebuild -xcconfig` while keeping the Release target's
+`Config/Signing.xcconfig` settings, so the app and plain `TidyTapHelper` retain
+the Release signing identifiers, hardened runtime, and timestamping. The
+script does not ad-hoc re-sign either executable in this mode.
+
+Before publishing a local candidate, it verifies the configured Developer ID
+certificate chain and team on the app, plain worker, and signed DMG; verifies
+the app resource seal; mounts the DMG read-only; copies its app to an isolated
+temporary location; and repeats the app, worker, and seal checks there. It
+writes and verifies a SHA-256 sidecar. The output is commit-specific and never
+overwrites a prior candidate:
+`build/artifacts/TidyTap-<version>-preview-developer-id-<commit>/`.
+
+This is intentionally a local packaging preview. It does not install the app,
+create tags or GitHub releases, or submit, staple, or validate a notarization.
+It verifies signing continuity only; it does not claim to preserve or test
+Accessibility or Input Monitoring consent. Compare designated requirements on
+the resulting candidate separately when that acceptance evidence is needed.
+
 ## Prerequisites for a public DMG
 
 The release operator needs all of the following on the release Mac:
@@ -98,6 +129,15 @@ Scripts/test-release-dmg-workflow.sh
 
 It is a static check only: it does not build, sign, notarize, install, or
 publish an artifact.
+
+For the preview-mode CLI, signature, non-release, and no-overwrite contracts:
+
+```sh
+Scripts/test-preview-dmg-workflow.sh
+```
+
+This is static plus a missing-argument check only: it does not build, sign,
+mount, install, notarize, or publish an artifact.
 
 ## Final manual checks
 
