@@ -52,6 +52,14 @@ writes and verifies a SHA-256 sidecar. The output is commit-specific and never
 overwrites a prior candidate:
 `build/artifacts/TidyTap-<version>-preview-developer-id-<commit>/`.
 
+Developer ID previews require a clean tracked and untracked worktree (ignored
+signing configuration and build output are allowed). The script captures the
+full HEAD before building and uses its first 12 characters in the filename.
+Immediately before publishing the pair, it checks that HEAD is unchanged and
+the worktree is still clean. If either changed, it discards the temporary
+candidate without consuming that output name. Commit source changes before
+running this mode. The default ad-hoc mode does not require a clean worktree.
+
 This is intentionally a local packaging preview. It does not install the app,
 create tags or GitHub releases, or submit, staple, or validate a notarization.
 It verifies signing continuity only; it does not claim to preserve or test
@@ -136,8 +144,11 @@ For the preview-mode CLI, signature, non-release, and no-overwrite contracts:
 Scripts/test-preview-dmg-workflow.sh
 ```
 
-This is static plus a missing-argument check only: it does not build, sign,
-mount, install, notarize, or publish an artifact.
+This combines static and missing-argument checks with disposable Git fixtures
+that exercise the source guard and publication boundary using a fake build.
+It tests clean success, tracked/staged/untracked dirt before building, and
+tracked/untracked edits or HEAD changes before publication. It does not run
+a real build, sign, mount, install, notarize, or publish a release artifact.
 
 ## Final manual checks
 

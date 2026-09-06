@@ -24,6 +24,33 @@ developer_id_preview=false
 identity=""
 team_id=""
 
+# Source identity is captured before any build work and checked again at the
+# publication boundary. Ignored signing config and build output are permitted.
+require_unchanged_preview_source() {
+  local current_head tree_status
+  current_head=$(/usr/bin/git rev-parse --verify 'HEAD^{commit}' 2>/dev/null) || {
+    print -u2 -- "Could not determine the Developer ID preview source commit."
+    exit 1
+  }
+  tree_status=$(/usr/bin/git status --porcelain=v1 --untracked-files=all --ignore-submodules=none 2>/dev/null) || {
+    print -u2 -- "Could not check the Developer ID preview worktree."
+    exit 1
+  }
+  if [[ "$current_head" != "$source_commit" || -n "$tree_status" ]]; then
+    print -u2 -- "Developer ID preview requires an unchanged HEAD and clean tracked/untracked worktree; no candidate was published."
+    exit 1
+  fi
+}
+
+if [[ -n "$developer_id_config" ]]; then
+  source_commit=$(/usr/bin/git rev-parse --verify 'HEAD^{commit}' 2>/dev/null) || {
+    print -u2 -- "Could not determine the Developer ID preview source commit."
+    exit 1
+  }
+  require_unchanged_preview_source
+  commit="${source_commit[1,12]}"
+fi
+
 read_xcconfig_value() {
   local key="$1"
   /usr/bin/awk -v key="$key" '
@@ -251,10 +278,6 @@ if [[ -z "$version" ]]; then
 fi
 
 if $developer_id_preview; then
-  commit=$(/usr/bin/git rev-parse --verify --short=12 HEAD 2>/dev/null) || {
-    print -u2 -- "Could not determine the source commit for the Developer ID preview."
-    exit 1
-  }
   dmg_name="TidyTap-$version-preview-developer-id-$commit.dmg"
   volume_name="TidyTap Developer ID Preview"
   preview_label="Developer ID local preview"
@@ -366,6 +389,9 @@ publication_dir="$candidate_dir/publication"
 mkdir "$publication_dir"
 mv "$candidate_dmg" "$publication_dir/$dmg_name"
 mv "$candidate_sidecar" "$publication_dir/${dmg_name}.sha256"
+if $developer_id_preview; then
+  require_unchanged_preview_source
+fi
 mv "$publication_dir" "$final_dir"
 rmdir "$publication_lock"
 publication_lock=""
