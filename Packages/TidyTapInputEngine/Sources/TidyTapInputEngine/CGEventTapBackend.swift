@@ -29,7 +29,7 @@ public final class CGEventTapBackend: EventTapBackend, @unchecked Sendable {
         lock.unlock()
 
         var eventMask: CGEventMask = 0
-        if configuration.reverseMouseScroll {
+        if configuration.needsScrollProcessing {
             eventMask |= Self.mask(for: .scrollWheel)
         }
         if captureSideButtons {
@@ -57,7 +57,7 @@ public final class CGEventTapBackend: EventTapBackend, @unchecked Sendable {
         self.tap = tap
         runLoopSource = source
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        if configuration.reverseMouseScroll {
+        if configuration.needsScrollProcessing {
             installGestureMonitor()
         }
         CGEvent.tapEnable(tap: tap, enable: true)
@@ -128,16 +128,33 @@ public final class CGEventTapBackend: EventTapBackend, @unchecked Sendable {
             return Unmanaged.passUnretained(event)
         }
 
-        switch currentHandler()?(input) ?? .passThrough {
+        switch Self.apply(currentHandler()?(input) ?? .passThrough, to: event) {
         case .passThrough:
             return Unmanaged.passUnretained(event)
         case .consume:
             return nil
+        }
+    }
+
+    enum EventDisposition {
+        case passThrough
+        case consume
+    }
+
+    static func apply(_ output: EventTapOutput, to event: CGEvent) -> EventDisposition {
+        switch output {
+        case .passThrough:
+            return .passThrough
+        case .consume:
+            return .consume
         case .replaceScrollDeltas(let deltas):
             event.setIntegerValueField(.scrollWheelEventDeltaAxis1, value: deltas.verticalLine)
             event.setIntegerValueField(.scrollWheelEventPointDeltaAxis1, value: deltas.verticalPoint)
             event.setIntegerValueField(.scrollWheelEventFixedPtDeltaAxis1, value: deltas.verticalFixed)
-            return Unmanaged.passUnretained(event)
+            return .passThrough
+        case .setVerticalScrollStep(let lines):
+            event.setIntegerValueField(.scrollWheelEventDeltaAxis1, value: lines)
+            return .passThrough
         }
     }
 

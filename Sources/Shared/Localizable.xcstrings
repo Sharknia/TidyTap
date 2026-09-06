@@ -49,6 +49,12 @@
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "변경 사항을 적용할 수 없습니다." } }
       }
     },
+    "Fixed wheel step size" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Fixed wheel step size" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "휠 단계 크기 고정" } }
+      }
+    },
     "General" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "General" } },
@@ -83,6 +89,12 @@
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Keep trackpad scrolling unchanged" } },
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "트랙패드는 그대로" } }
+      }
+    },
+    "Scroll a consistent amount for each wheel click" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Scroll a consistent amount for each wheel click" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "휠 한 칸마다 일정한 양으로 스크롤" } }
       }
     },
     "Keyboard" : {
@@ -133,16 +145,16 @@
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "확인 안 됨" } }
       }
     },
-    "Required for wheel reversal and side buttons" : {
+    "Required for wheel settings and side buttons" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Required for wheel reversal and side buttons" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "휠 방향 반전과 측면 버튼에 필요" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Required for wheel settings and side buttons" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "휠 설정과 측면 버튼에 필요" } }
       }
     },
-    "Required for wheel reversal only" : {
+    "Required for wheel settings" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Required for wheel reversal only" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "휠 방향 반전에만 필요" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Required for wheel settings" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "휠 설정에 필요" } }
       }
     },
     "Reverse wheel direction" : {
@@ -181,6 +193,12 @@
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "권한 설정" } }
       }
     },
+    "Step size" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Step size" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "한 단계 이동량" } }
+      }
+    },
     "Side-button navigation" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Side-button navigation" } },
@@ -205,6 +223,12 @@
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "TidyTap" } }
       }
     },
+    "Use the arrow keys to choose one to ten lines per wheel step" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Use the arrow keys to choose one to ten lines per wheel step" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "화살표 키로 휠 한 칸당 1줄부터 10줄까지 선택합니다" } }
+      }
+    },
     "Review the mouse permission status below." : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Review the mouse permission status below." } },
@@ -227,6 +251,18 @@
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Version %@" } },
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "버전 %@" } }
+      }
+    },
+    "1 line" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "1 line" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "1줄" } }
+      }
+    },
+    "%d lines" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "%d lines" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "%d줄" } }
       }
     }
   },
