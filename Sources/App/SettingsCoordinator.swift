@@ -68,7 +68,11 @@ final class SettingsCoordinator {
         try? loginItemManager.setEnabled(request.settings.launchAtLogin)
         latestRequestID = request.applyRequestID
         let status = preferences.readApplyStatus()
-        latestApplyStatus = status?.applyRequestID == request.applyRequestID ? status : nil
+        if let status, status.applyRequestID == request.applyRequestID {
+            latestApplyStatus = validatedApplyStatus(status, for: request)
+        } else {
+            latestApplyStatus = nil
+        }
         // Every settings launch gets a current worker snapshot, including a
         // fresh install or a previous successful run. Stored failures aren't
         // the authority for today's permission display.
@@ -85,9 +89,13 @@ final class SettingsCoordinator {
     func settingsForUI() -> TidyTapSettings {
         let request = preferences.readRequest()
         let status = preferences.readApplyStatus()
-        var settings = status?.applyRequestID == request.applyRequestID
-            ? status?.effectiveSettings ?? request.settings
-            : request.settings
+        let correlatedStatus: TidyTapApplyStatus?
+        if let status, status.applyRequestID == request.applyRequestID {
+            correlatedStatus = validatedApplyStatus(status, for: request)
+        } else {
+            correlatedStatus = nil
+        }
+        var settings = correlatedStatus?.effectiveSettings ?? request.settings
         settings.launchAtLogin = loginItemManager.status() == .enabled
         return settings
     }
@@ -140,20 +148,23 @@ final class SettingsCoordinator {
               status.applyRequestID == request.applyRequestID else {
             return nil
         }
+        let validatedStatus = validatedApplyStatus(status, for: request)
         latestRequestID = request.applyRequestID
-        latestApplyStatus = status
-        applyExplicitPermissionDowngrade(from: status)
-        return status
+        latestApplyStatus = validatedStatus
+        applyExplicitPermissionDowngrade(from: validatedStatus)
+        return validatedStatus
     }
 
     /// A rejected helper request has already been restored by the helper. Keep
     /// the visible UI truthful without issuing a second settings submission.
     func visibleSettings(for status: TidyTapApplyStatus) -> TidyTapSettings {
+        let request = preferences.readRequest()
+        let validatedStatus = validatedApplyStatus(status, for: request)
         var settings: TidyTapSettings
-        if let effective = status.effectiveSettings {
+        if let effective = validatedStatus.effectiveSettings {
             settings = effective
         } else {
-            switch status.outcome {
+            switch validatedStatus.outcome {
             case .failed, .recoveryRequired:
                 settings = settingsBeforeLatestRequest ?? persistedSettings()
             case .pending, .applied, .partiallyApplied:
@@ -233,6 +244,50 @@ final class SettingsCoordinator {
             return []
         }
         return Set(TidyTapPermission.allCases.filter { code.split(separator: ".").contains(Substring($0.rawValue)) })
+    }
+
+    /// A pre-fixed-step worker silently ignores the new request fields, then
+    /// reports its old snapshot as applied. A request ID proves only that this
+    /// worker handled the request; the echoed effective state proves whether
+    /// it understood the enabled fixed-step feature.
+    private func validatedApplyStatus(
+        _ status: TidyTapApplyStatus,
+        for request: TidyTapSettingsRequest
+    ) -> TidyTapApplyStatus {
+        guard request.settings.fixedMouseWheelStepEnabled,
+              status.outcome == .applied else {
+            return status
+        }
+        guard
+              status.effectiveSettings?.fixedMouseWheelStepEnabled == true,
+              status.effectiveSettings?.mouseWheelStepLines == request.settings.mouseWheelStepLines else {
+            return incompatibleFixedStepStatus(status, request: request)
+        }
+        return status
+    }
+
+    private func incompatibleFixedStepStatus(
+        _ status: TidyTapApplyStatus,
+        request: TidyTapSettingsRequest
+    ) -> TidyTapApplyStatus {
+        // The reply remains the authority for the old worker's effective
+        // switches. The requested line count is a user preference, though,
+        // and must not be replaced by a legacy/defaulted response value.
+        var effective = status.effectiveSettings
+            ?? settingsBeforeLatestRequest
+            ?? request.settings
+        if status.effectiveSettings == nil {
+            effective.fixedMouseWheelStepEnabled = false
+        }
+        effective.mouseWheelStepLines = request.settings.mouseWheelStepLines
+
+        return TidyTapApplyStatus(
+            applyRequestID: status.applyRequestID,
+            outcome: .failed,
+            failedComponent: .eventTap,
+            errorCode: "eventTap.incompatibleFixedWheelStep",
+            effectiveSettings: effective
+        )
     }
 
     /// A permission failure is affirmative helper evidence for only the names

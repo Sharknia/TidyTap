@@ -851,6 +851,95 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(coordinator.settingsForUI(), effective)
     }
 
+    func testLegacyFourFieldFixedStepAppliedReplyFailsClosedAcrossStartupAndNotification() throws {
+        let requestID = UUID()
+        var requested = TidyTapSettings.defaults
+        requested.fixedMouseWheelStepEnabled = true
+        requested.mouseWheelStepLines = 7
+        let legacyReply = try JSONDecoder().decode(TidyTapApplyStatus.self, from: Data("""
+        {
+          "applyRequestID":"\(requestID.uuidString)",
+          "outcome":"applied",
+          "effectiveSettings":{
+            "capsLockInputSourceSwitching":false,
+            "reverseMouseWheelVertically":false,
+            "sideButtonNavigation":false,
+            "launchAtLogin":false
+          }
+        }
+        """.utf8))
+        let store = InMemoryPreferences(request: .init(settings: requested, applyRequestID: requestID))
+        store.status = legacyReply
+        let coordinator = SettingsCoordinator(
+            preferences: store,
+            helperLauncher: RecordingHelperLauncher(),
+            loginItemManager: StatefulLoginItem(status: .disabled)
+        )
+
+        coordinator.restoreSession()
+
+        let startupStatus = try XCTUnwrap(coordinator.latestApplyStatus)
+        XCTAssertEqual(startupStatus.outcome, .failed)
+        XCTAssertEqual(startupStatus.failedComponent, .eventTap)
+        XCTAssertEqual(startupStatus.errorCode, "eventTap.incompatibleFixedWheelStep")
+        XCTAssertFalse(startupStatus.effectiveSettings?.fixedMouseWheelStepEnabled ?? true)
+        XCTAssertEqual(startupStatus.effectiveSettings?.mouseWheelStepLines, 7)
+        XCTAssertEqual(coordinator.settingsForUI(), try XCTUnwrap(startupStatus.effectiveSettings))
+        XCTAssertEqual(coordinator.receiveApplyResult(), startupStatus)
+        XCTAssertEqual(store.status, legacyReply, "the app must not overwrite a result still owned by the worker")
+
+        store.status = .applied(requestID)
+        let missingEffective = try XCTUnwrap(coordinator.receiveApplyResult())
+        XCTAssertEqual(missingEffective.outcome, .failed)
+        XCTAssertFalse(missingEffective.effectiveSettings?.fixedMouseWheelStepEnabled ?? true)
+        XCTAssertEqual(missingEffective.effectiveSettings?.mouseWheelStepLines, 7)
+    }
+
+    func testMatchingFixedStepAppliedReplyRemainsApplied() {
+        let requestID = UUID()
+        var requested = TidyTapSettings.defaults
+        requested.fixedMouseWheelStepEnabled = true
+        requested.mouseWheelStepLines = 7
+        let store = InMemoryPreferences(request: .init(settings: requested, applyRequestID: requestID))
+        let reply = TidyTapApplyStatus.applied(requestID, effectiveSettings: requested)
+        store.status = reply
+        let coordinator = SettingsCoordinator(
+            preferences: store,
+            helperLauncher: RecordingHelperLauncher(),
+            loginItemManager: StatefulLoginItem(status: .disabled)
+        )
+
+        XCTAssertEqual(coordinator.receiveApplyResult(), reply)
+        XCTAssertEqual(coordinator.settingsForUI(), requested)
+    }
+
+    func testFixedStepAppliedReplyWithMismatchedSizeFailsButRetainsEffectiveEnablementAndRequestedSize() throws {
+        let requestID = UUID()
+        var requested = TidyTapSettings.defaults
+        requested.fixedMouseWheelStepEnabled = true
+        requested.mouseWheelStepLines = 7
+        var actual = requested
+        actual.mouseWheelStepLines = 3
+        let store = InMemoryPreferences(request: .init(settings: requested, applyRequestID: requestID))
+        store.status = .applied(requestID, effectiveSettings: actual)
+        let coordinator = SettingsCoordinator(
+            preferences: store,
+            helperLauncher: RecordingHelperLauncher(),
+            loginItemManager: StatefulLoginItem(status: .disabled)
+        )
+
+        let result = coordinator.receiveApplyResult()
+
+        XCTAssertEqual(result?.outcome, .failed)
+        XCTAssertEqual(result?.errorCode, "eventTap.incompatibleFixedWheelStep")
+        XCTAssertTrue(result?.effectiveSettings?.fixedMouseWheelStepEnabled ?? false)
+        XCTAssertEqual(result?.effectiveSettings?.mouseWheelStepLines, 7)
+        XCTAssertEqual(
+            coordinator.visibleSettings(for: try XCTUnwrap(result)),
+            try XCTUnwrap(result?.effectiveSettings)
+        )
+    }
+
     func testApplyResultAlwaysRenormalizesLoginItemFromLiveServiceTruth() {
         let requestID = UUID()
         var persisted = TidyTapSettings.defaults
