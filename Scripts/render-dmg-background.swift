@@ -41,7 +41,7 @@ for scale in [1, 2] {
     NSGradient(starting: rgb(0.96, 0.977, 0.979), ending: rgb(0.91, 0.947, 0.953))!
         .draw(in: bounds, angle: -90)
     text("TidyTap", top: 40, size: 28, weight: .semibold, color: rgb(0.16, 0.25, 0.28))
-    text("Keyboard and mouse, simply", top: 82, size: 12, weight: .regular,
+    text("키보드와 마우스를 편하게", top: 82, size: 12, weight: .regular,
          color: rgb(0.38, 0.47, 0.50))
 
     let symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 32, weight: .regular)
@@ -52,9 +52,9 @@ for scale in [1, 2] {
     }
     arrow.draw(in: NSRect(x: 300, y: 181, width: 40, height: 30))
 
-    text("TidyTap을 Applications 폴더로 드래그하세요", top: 301, size: 13,
+    text("TidyTap을 응용 프로그램 폴더로 드래그하세요", top: 301, size: 13,
          weight: .medium, color: rgb(0.24, 0.35, 0.38))
-    text("Drag TidyTap to Applications to install", top: 326, size: 12,
+    text("설치 후 응용 프로그램에서 TidyTap을 실행하세요", top: 326, size: 12,
          weight: .regular, color: rgb(0.38, 0.47, 0.50))
     NSGraphicsContext.restoreGraphicsState()
     representations.append(bitmap)

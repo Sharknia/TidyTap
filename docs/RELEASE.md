@@ -5,7 +5,7 @@ repository never contains a certificate, private key, Apple ID, app-specific
 password, App Store Connect API key, or a notarytool profile export.
 
 Both preview and public DMGs use the conventional Finder installer layout:
-only the native `TidyTap.app` icon and an `Applications` shortcut are visible.
+only the native `TidyTap.app` icon and an `응용 프로그램` shortcut to `/Applications` are visible.
 Drag the app onto the shortcut to install it. There is deliberately no
 supplemental text file, custom app icon, or Finder/AppleScript automation.
 The committed `Resources/DMGBackground.tiff` supplies the 640 by 400 point

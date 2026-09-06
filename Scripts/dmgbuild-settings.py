@@ -20,7 +20,7 @@ background_path = required_path("background_path")
 # dotfile, which Finder already hides; adding a synthetic .background path would
 # make dmgbuild try to hide a file that does not exist.
 files = [(app_path, "TidyTap.app")]
-symlinks = {"Applications": "/Applications"}
+symlinks = {"응용 프로그램": "/Applications"}
 hide_extensions = ["TidyTap.app"]
 
 format = "UDZO"
@@ -37,5 +37,5 @@ include_icon_view_settings = True
 icon_size = 112
 icon_locations = {
     "TidyTap.app": (170, 200),
-    "Applications": (470, 200),
+    "응용 프로그램": (470, 200),
 }
