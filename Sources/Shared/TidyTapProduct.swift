@@ -6,6 +6,9 @@ enum TidyTapProduct {
     static let helperBundleIdentifier = "com.sharknia.TidyTap.Helper"
     static let agentPlistName = "com.sharknia.TidyTap.Agent.plist"
     static let helperExecutablePath = "Contents/MacOS/TidyTapHelper"
+    static let legacyHelperBundlePath = "Contents/Library/LoginItems/TidyTapHelper.app"
+    static let legacyHelperExecutablePath =
+        "Contents/Library/LoginItems/TidyTapHelper.app/Contents/MacOS/TidyTapHelper"
     static let workerLaunchNonceEnvironmentKey = "TIDYTAP_WORKER_LAUNCH_NONCE"
 
     static func workerLockURL(

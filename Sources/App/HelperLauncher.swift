@@ -1,4 +1,5 @@
 import Darwin
+import AppKit
 import Foundation
 import Security
 
@@ -28,8 +29,10 @@ protocol TidyTapWorkerRuntime: AnyObject {
     func inspectLock() throws -> TidyTapWorkerLockState
     func inspectProcess(_ owner: TidyTapWorkerLockOwner) -> TidyTapWorkerCodeState
     func workersAtExpectedPath() throws -> [(TidyTapWorkerLockOwner, TidyTapWorkerCodeState)]
+    func legacyWorkers() throws -> [TidyTapWorkerLockOwner]
     func launch(nonce: UUID) throws
     func terminate(_ owner: TidyTapWorkerLockOwner) throws
+    func terminateLegacy(_ owner: TidyTapWorkerLockOwner) throws
     func pause()
 }
 
@@ -54,8 +57,19 @@ final class HelperLauncher: TidyTapHelperLaunching {
         var launches = 0
         var attemptsAfterLaunch = maximumAttempts
         var signaled = Set<TidyTapWorkerLockOwner.ProcessIdentity>()
+        var signaledLegacy = Set<TidyTapWorkerLockOwner.ProcessIdentity>()
 
         for _ in 0..<maximumAttempts {
+            let legacyWorkers = try runtime.legacyWorkers()
+            if !legacyWorkers.isEmpty {
+                for legacy in legacyWorkers
+                    where signaledLegacy.insert(legacy.processIdentity).inserted {
+                    try runtime.terminateLegacy(legacy)
+                }
+                runtime.pause()
+                continue
+            }
+
             switch try runtime.inspectLock() {
             case .free(let lastOwner):
                 if lastOwner?.readiness == .acknowledged,
@@ -121,6 +135,8 @@ final class HelperLauncher: TidyTapHelperLaunching {
 
 final class SystemTidyTapWorkerRuntime: TidyTapWorkerRuntime {
     private let expectedExecutableURL: URL
+    private let expectedLegacyBundleURL: URL
+    private let expectedLegacyExecutableURL: URL
     private let lockURL: URL
     private let expectedUID: uid_t
     private let applicationBundleIsValid: () -> Bool
@@ -134,6 +150,7 @@ final class SystemTidyTapWorkerRuntime: TidyTapWorkerRuntime {
             .appendingPathComponent(TidyTapProduct.helperExecutablePath)
         self.init(
             expectedExecutableURL: expectedExecutableURL,
+            applicationBundleURL: bundle.bundleURL,
             lockURL: TidyTapProduct.workerLockURL(),
             expectedUID: expectedUID,
             additionalLaunchEnvironment: [:],
@@ -145,12 +162,26 @@ final class SystemTidyTapWorkerRuntime: TidyTapWorkerRuntime {
 
     init(
         expectedExecutableURL: URL,
+        applicationBundleURL: URL? = nil,
         lockURL: URL,
         expectedUID: uid_t,
         additionalLaunchEnvironment: [String: String] = [:],
         applicationBundleIsValid: @escaping () -> Bool
     ) {
         self.expectedExecutableURL = expectedExecutableURL
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+        let derivedApplicationBundleURL = expectedExecutableURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let applicationBundleURL = applicationBundleURL ?? derivedApplicationBundleURL
+        expectedLegacyBundleURL = applicationBundleURL
+            .appendingPathComponent(TidyTapProduct.legacyHelperBundlePath)
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+        expectedLegacyExecutableURL = applicationBundleURL
+            .appendingPathComponent(TidyTapProduct.legacyHelperExecutablePath)
             .standardizedFileURL
             .resolvingSymlinksInPath()
         self.lockURL = lockURL
@@ -248,6 +279,22 @@ final class SystemTidyTapWorkerRuntime: TidyTapWorkerRuntime {
     }
 
     func workersAtExpectedPath() throws -> [(TidyTapWorkerLockOwner, TidyTapWorkerCodeState)] {
+        try processOwners(at: expectedExecutableURL.path).map { owner in
+            (owner, inspectProcess(owner))
+        }
+    }
+
+    func legacyWorkers() throws -> [TidyTapWorkerLockOwner] {
+        var validated = [TidyTapWorkerLockOwner]()
+        for owner in try processOwners(at: expectedLegacyExecutableURL.path) {
+            if try validatedLegacyApplication(owner) != nil {
+                validated.append(owner)
+            }
+        }
+        return validated
+    }
+
+    private func processOwners(at executablePath: String) throws -> [TidyTapWorkerLockOwner] {
         let capacity = max(proc_listallpids(nil, 0), 64)
         var processIdentifiers = [pid_t](repeating: 0, count: Int(capacity))
         let count = processIdentifiers.withUnsafeMutableBytes { bytes in
@@ -259,11 +306,11 @@ final class SystemTidyTapWorkerRuntime: TidyTapWorkerRuntime {
             guard processIdentifier > 0,
                   processIdentifier != getpid(),
                   processUID(processIdentifier) == expectedUID,
-                  processPath(processIdentifier) == expectedExecutableURL.path,
+                  processPath(processIdentifier) == executablePath,
                   let owner = TidyTapWorkerLockOwner.process(processIdentifier: processIdentifier) else {
                 return nil
             }
-            return (owner, inspectProcess(owner))
+            return owner
         }
     }
 
@@ -300,6 +347,13 @@ final class SystemTidyTapWorkerRuntime: TidyTapWorkerRuntime {
         }
     }
 
+    func terminateLegacy(_ owner: TidyTapWorkerLockOwner) throws {
+        guard let application = try validatedLegacyApplication(owner) else { return }
+        guard application.terminate() else {
+            throw HelperLauncherError.workerTerminationFailed(owner.processIdentifier, EPERM)
+        }
+    }
+
     func pause() {
         usleep(50_000)
     }
@@ -315,6 +369,32 @@ final class SystemTidyTapWorkerRuntime: TidyTapWorkerRuntime {
             Int32(expectedSize)
         )
         return actualSize == expectedSize ? info.pbi_uid : nil
+    }
+
+    private func validatedLegacyApplication(
+        _ owner: TidyTapWorkerLockOwner
+    ) throws -> NSRunningApplication? {
+        guard let current = TidyTapWorkerLockOwner.process(
+            processIdentifier: owner.processIdentifier
+        ), current.processIdentity == owner.processIdentity else {
+            return nil
+        }
+        guard processUID(owner.processIdentifier) == expectedUID,
+              processPath(owner.processIdentifier) == expectedLegacyExecutableURL.path,
+              let application = NSRunningApplication(processIdentifier: owner.processIdentifier),
+              application.bundleIdentifier == TidyTapProduct.helperBundleIdentifier,
+              application.bundleURL.map(canonicalPath) == expectedLegacyBundleURL.path,
+              application.executableURL.map(canonicalPath) == expectedLegacyExecutableURL.path else {
+            throw HelperLauncherError.workerIdentityCouldNotBeVerified(
+                owner.processIdentifier,
+                errSecCSReqFailed
+            )
+        }
+        return application
+    }
+
+    private func canonicalPath(_ url: URL) -> String {
+        url.standardizedFileURL.resolvingSymlinksInPath().path
     }
 
     private func processPath(_ processIdentifier: pid_t) -> String? {

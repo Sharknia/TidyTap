@@ -142,6 +142,33 @@ final class HelperLauncherTests: XCTestCase {
         XCTAssertEqual(runtime.launchCount, 2)
     }
 
+    func testVerifiedLegacyWorkerIsRetiredBeforeCurrentWorkerLaunch() throws {
+        let runtime = FakeWorkerRuntime(
+            lockStates: [.free(lastOwner: nil), .held(owner: current)],
+            processStates: [current: .current],
+            legacyWorkerSnapshots: [[stale], []]
+        )
+
+        try makeLauncher(runtime).ensureHelperRunning()
+
+        XCTAssertEqual(runtime.legacyTerminated, [stale])
+        XCTAssertEqual(runtime.launchCount, 1)
+        XCTAssertEqual(runtime.operations, ["terminate-legacy-101", "launch"])
+    }
+
+    func testLegacyWorkerThatDoesNotExitBlocksNewWorkerAndTimesOut() {
+        let runtime = FakeWorkerRuntime(
+            lockStates: [.free(lastOwner: nil)],
+            legacyWorkerSnapshots: [[stale], [stale], [stale]]
+        )
+
+        XCTAssertThrowsError(try makeLauncher(runtime, attempts: 3).ensureHelperRunning()) { error in
+            XCTAssertEqual(error as? HelperLauncherError, .workerDidNotBecomeReady)
+        }
+        XCTAssertEqual(runtime.legacyTerminated, [stale])
+        XCTAssertEqual(runtime.launchCount, 0)
+    }
+
     func testActualAllOffWorkerAcknowledgesBeforeFastExit() throws {
         let fileManager = FileManager.default
         let fixtureDirectory = fileManager.temporaryDirectory
@@ -470,6 +497,7 @@ private final class FakeWorkerRuntime: TidyTapWorkerRuntime {
     private var lockStates: [TidyTapWorkerLockState]
     private var lastLockState: TidyTapWorkerLockState
     private var processStates: [TidyTapWorkerLockOwner: TidyTapWorkerCodeState]
+    private var legacyWorkerSnapshots: [[TidyTapWorkerLockOwner]]
     var pathCandidates: [(TidyTapWorkerLockOwner, TidyTapWorkerCodeState)]
     var clearCandidatesAfterTermination = false
     var acknowledgeAndExitOnLaunch = false
@@ -477,16 +505,20 @@ private final class FakeWorkerRuntime: TidyTapWorkerRuntime {
     private(set) var launchCount = 0
     private(set) var pauseCount = 0
     private(set) var terminated = [TidyTapWorkerLockOwner]()
+    private(set) var legacyTerminated = [TidyTapWorkerLockOwner]()
+    private(set) var operations = [String]()
 
     init(
         lockStates: [TidyTapWorkerLockState],
         processStates: [TidyTapWorkerLockOwner: TidyTapWorkerCodeState] = [:],
-        pathCandidates: [(TidyTapWorkerLockOwner, TidyTapWorkerCodeState)] = []
+        pathCandidates: [(TidyTapWorkerLockOwner, TidyTapWorkerCodeState)] = [],
+        legacyWorkerSnapshots: [[TidyTapWorkerLockOwner]] = []
     ) {
         self.lockStates = lockStates
         self.lastLockState = lockStates.last ?? .free(lastOwner: nil)
         self.processStates = processStates
         self.pathCandidates = pathCandidates
+        self.legacyWorkerSnapshots = legacyWorkerSnapshots
     }
 
     func prepare() throws {}
@@ -510,8 +542,14 @@ private final class FakeWorkerRuntime: TidyTapWorkerRuntime {
         pathCandidates
     }
 
+    func legacyWorkers() throws -> [TidyTapWorkerLockOwner] {
+        guard !legacyWorkerSnapshots.isEmpty else { return [] }
+        return legacyWorkerSnapshots.removeFirst()
+    }
+
     func launch(nonce: UUID) throws {
         launchCount += 1
+        operations.append("launch")
         if acknowledgeAndExitOnLaunch {
             acknowledgedOwner = TidyTapWorkerLockOwner(
                 processIdentifier: 303,
@@ -528,6 +566,11 @@ private final class FakeWorkerRuntime: TidyTapWorkerRuntime {
         if clearCandidatesAfterTermination {
             pathCandidates = []
         }
+    }
+
+    func terminateLegacy(_ owner: TidyTapWorkerLockOwner) throws {
+        legacyTerminated.append(owner)
+        operations.append("terminate-legacy-\(owner.processIdentifier)")
     }
 
     func pause() {
