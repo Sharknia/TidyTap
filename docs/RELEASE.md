@@ -1,6 +1,6 @@
 # TidyTap direct-distribution release
 
-`0.1.0` is distributed as a Developer ID-signed, Apple-notarized DMG. The
+TidyTap public releases use Developer ID-signed, Apple-notarized DMGs. The
 repository never contains a certificate, private key, Apple ID, app-specific
 password, App Store Connect API key, or a notarytool profile export.
 
@@ -168,6 +168,11 @@ On the supported Mac and clean macOS user account, run
 the acceptance checks in `docs/MVP_PLAN.md`, including first launch through
 Gatekeeper. Only after those checks may a maintainer create the GitHub Release
 and upload the two generated files.
+
+For `0.1.1`, the maintainer requested publication after the completed automated
+checks and distribution-artifact verification, with physical wheel, clean-account
+TCC, and reboot checks remaining outstanding. Record those limits in the release
+notes; successful signing or packaging is not evidence that manual checks passed.
 
 ## TidyTap Release skill
 
