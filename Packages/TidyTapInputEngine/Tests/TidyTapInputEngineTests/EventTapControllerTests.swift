@@ -51,6 +51,32 @@ private final class FakeEventTapBackend: EventTapBackend, @unchecked Sendable {
 }
 
 final class EventTapControllerTests: XCTestCase {
+    func testConfigurationClampsStepAndDerivesScrollProcessing() {
+        let low = EventTapConfiguration(
+            reverseMouseScroll: false,
+            sideButtonNavigation: false,
+            fixedMouseWheelStepEnabled: true,
+            mouseWheelStepLines: -4
+        )
+        let high = EventTapConfiguration(
+            reverseMouseScroll: false,
+            sideButtonNavigation: false,
+            fixedMouseWheelStepEnabled: true,
+            mouseWheelStepLines: 42
+        )
+        let legacy = EventTapConfiguration(
+            reverseMouseScroll: false,
+            sideButtonNavigation: true
+        )
+
+        XCTAssertTrue(low.needsScrollProcessing)
+        XCTAssertEqual(low.mouseWheelStepLines, 1)
+        XCTAssertEqual(high.mouseWheelStepLines, 10)
+        XCTAssertFalse(legacy.fixedMouseWheelStepEnabled)
+        XCTAssertEqual(legacy.mouseWheelStepLines, 3)
+        XCTAssertFalse(legacy.needsScrollProcessing)
+    }
+
     func testNoFeaturesStopsWithoutPermissionCheckOrInstall() {
         let (controller, _, backend, _) = makeController(accessibility: false, inputMonitoring: false)
 
@@ -75,6 +101,93 @@ final class EventTapControllerTests: XCTestCase {
 
         XCTAssertEqual(controller.start(configuration: configuration), .permissionDenied([.inputMonitoring]))
         XCTAssertEqual(backend.installCount, 0)
+    }
+
+    func testFixedStepOnlyRequiresBothPermissionsAndInstallsScrollTap() {
+        let (denied, _, deniedBackend, _) = makeController(
+            accessibility: true,
+            inputMonitoring: false
+        )
+        let configuration = EventTapConfiguration(
+            reverseMouseScroll: false,
+            sideButtonNavigation: false,
+            fixedMouseWheelStepEnabled: true,
+            mouseWheelStepLines: 5
+        )
+
+        XCTAssertEqual(
+            denied.start(configuration: configuration),
+            .permissionDenied([.inputMonitoring])
+        )
+        XCTAssertEqual(deniedBackend.installCount, 0)
+
+        let (allowed, _, allowedBackend, _) = makeController(
+            accessibility: true,
+            inputMonitoring: true
+        )
+        XCTAssertEqual(allowed.start(configuration: configuration), .running(configuration))
+        XCTAssertEqual(allowedBackend.installedConfigurations, [configuration])
+    }
+
+    func testFixedStepOnlyProducesLineOnlyMutationCommand() {
+        let (controller, _, backend, _) = makeController(
+            accessibility: true,
+            inputMonitoring: true
+        )
+        _ = controller.start(configuration: .init(
+            reverseMouseScroll: false,
+            sideButtonNavigation: false,
+            fixedMouseWheelStepEnabled: true,
+            mouseWheelStepLines: 5
+        ))
+
+        XCTAssertEqual(
+            backend.send(.scroll(.init(
+                timestampNanoseconds: 1,
+                isContinuous: false,
+                deltas: .init(
+                    verticalLine: -1,
+                    verticalPoint: -19,
+                    verticalFixed: -65_536,
+                    horizontalLine: 2,
+                    horizontalPoint: 13,
+                    horizontalFixed: 131_072
+                ),
+                phase: [],
+                momentumPhase: []
+            ))),
+            .setVerticalScrollStep(lines: -5)
+        )
+    }
+
+    func testPermissionLossDisablesFixedStepButPreservesConfiguredSize() {
+        let (controller, permissions, backend, _) = makeController(
+            accessibility: true,
+            inputMonitoring: true
+        )
+        let configuration = EventTapConfiguration(
+            reverseMouseScroll: false,
+            sideButtonNavigation: true,
+            fixedMouseWheelStepEnabled: true,
+            mouseWheelStepLines: 8
+        )
+        _ = controller.start(configuration: configuration)
+        permissions.inputMonitoringAllowed = false
+
+        XCTAssertEqual(backend.send(.disabled(.userInput)), .passThrough)
+        XCTAssertEqual(
+            controller.status,
+            .partiallyRunning(configuration, unavailablePermissions: [.inputMonitoring])
+        )
+        XCTAssertEqual(
+            controller.currentConfiguration,
+            EventTapConfiguration(
+                reverseMouseScroll: false,
+                sideButtonNavigation: true,
+                fixedMouseWheelStepEnabled: false,
+                mouseWheelStepLines: 8
+            )
+        )
     }
 
     func testNavigationRequiresAccessibilityButNotInputMonitoring() {
