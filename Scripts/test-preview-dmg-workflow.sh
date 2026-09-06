@@ -79,7 +79,11 @@ fixture_root=$(mktemp -d "${TMPDIR:-/tmp}/tidytap-preview-source.XXXXXX")
 trap 'rm -rf "$fixture_root"' EXIT
 /usr/bin/awk '/^# Source identity is captured/,/^read_xcconfig_value\(\)/ { if ($0 !~ /^read_xcconfig_value\(\)/) print }' "$preview_script" > "$fixture_root/source-guard.zsh"
 /usr/bin/awk '/^cleanup\(\)/,/^trap cleanup EXIT/' "$preview_script" > "$fixture_root/cleanup.zsh"
+/usr/bin/awk '/^run_step\(\)/,/^}/' "$preview_script" > "$fixture_root/run-step.zsh"
+/usr/bin/awk '/^  sources_dir=/,/^  # The passed file/ { if ($0 !~ /^  # The passed file/) print }' "$preview_script" > "$fixture_root/snapshot.zsh"
 /usr/bin/awk '/^mkdir -p "\$output_dir"/ { emit=1 } emit' "$preview_script" > "$fixture_root/publication.zsh"
+require_source '-project "\$sources_dir/TidyTap\.xcodeproj"'
+require_source '/usr/bin/git archive .* "\$source_commit"'
 
 # Keep the extracted guard before the real build and the final check directly
 # before the atomic move. This catches relocating checks outside these seams.
@@ -105,6 +109,10 @@ run_source_case() {
     /usr/bin/git config user.email 'preview@example.invalid'
     /usr/bin/git config commit.gpgsign false
     print -r -- 'build/' > .gitignore
+    print -r -- 'Config/LocalSigning.xcconfig' >> .gitignore
+    print -r -- 'Sources/Ignored.swift' >> .gitignore
+    mkdir Sources
+    print -r -- '// committed Swift source' > Sources/Tracked.swift
     print -r -- 'original' > tracked.txt
     /usr/bin/git add .
     /usr/bin/git commit -qm initial
@@ -112,6 +120,12 @@ run_source_case() {
       tracked) print -r -- 'changed' >> tracked.txt ;;
       staged) print -r -- 'changed' >> tracked.txt; /usr/bin/git add tracked.txt ;;
       untracked) print -r -- 'new' > untracked.txt ;;
+      ignored)
+        mkdir -p Config build
+        print -r -- '// ignored Swift source' > Sources/Ignored.swift
+        print -r -- '// inert config fixture, no credentials' > Config/LocalSigning.xcconfig
+        print -r -- 'old build output' > build/existing-output
+        ;;
     esac
   )
   local result=0
@@ -127,6 +141,18 @@ run_source_case() {
     publication_lock=""
     mounted_image=false
     source "$fixture_root/cleanup.zsh"
+    step_number=0
+    # Run the production archive/extraction commands on this fixture's HEAD.
+    print_sanitized_log() { print -u2 -- 'Fixture snapshot command failed.'; }
+    source "$fixture_root/run-step.zsh"
+    source "$fixture_root/snapshot.zsh"
+    if [[ ! -f "$sources_dir/Sources/Tracked.swift" ||
+          -e "$sources_dir/Sources/Ignored.swift" ||
+          -e "$sources_dir/Config/LocalSigning.xcconfig" ||
+          -e "$sources_dir/build" ]]; then
+      print -u2 -- 'Snapshot did not contain only committed fixture sources.'
+      exit 1
+    fi
     touch build/build-started
     dmg_name="TidyTap-0.1.0-preview-developer-id-$commit.dmg"
     candidate_dmg="$candidate_dir/$dmg_name"
@@ -164,6 +190,7 @@ run_source_case() {
 }
 
 run_source_case clean clean none success
+run_source_case ignored-source-and-local-files ignored none success
 run_source_case dirty-tracked tracked none failure
 run_source_case dirty-staged staged none failure
 run_source_case dirty-untracked untracked none failure
@@ -171,4 +198,4 @@ run_source_case changed-tracked clean tracked failure
 run_source_case changed-untracked clean untracked failure
 run_source_case changed-head clean head failure
 
-print -- "Preview DMG workflow checks passed, including seven source/publication fixtures."
+print -- "Preview DMG workflow checks passed, including eight snapshot/source/publication fixtures."

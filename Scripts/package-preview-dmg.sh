@@ -158,6 +158,16 @@ run_step() {
 
 derived_data="$candidate_dir/derived-data"
 if $developer_id_preview; then
+  sources_dir="$candidate_dir/sources"
+  mkdir "$sources_dir"
+  run_step \
+    "Developer ID preview source archive" \
+    "Check that the captured source commit is available." \
+    /usr/bin/git archive --format=tar --output="$candidate_dir/sources.tar" "$source_commit"
+  run_step \
+    "Developer ID preview source extraction" \
+    "Check available disk space for the committed source snapshot." \
+    /usr/bin/tar -xf "$candidate_dir/sources.tar" -C "$sources_dir"
   # The passed file is the existing ignored local config. It overrides only its
   # local values; the target's Release settings and Config/Signing.xcconfig
   # still supply manual signing, hardened runtime, bundle IDs, and timestamping.
@@ -166,7 +176,7 @@ if $developer_id_preview; then
     "Check the Release build settings, source errors, and local signing identity." \
     xcodebuild \
       -quiet \
-      -project TidyTap.xcodeproj \
+      -project "$sources_dir/TidyTap.xcodeproj" \
       -scheme TidyTap \
       -configuration "$configuration" \
       -derivedDataPath "$derived_data" \

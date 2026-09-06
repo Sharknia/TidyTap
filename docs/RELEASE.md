@@ -55,6 +55,10 @@ overwrites a prior candidate:
 Developer ID previews require a clean tracked and untracked worktree (ignored
 signing configuration and build output are allowed). The script captures the
 full HEAD before building and uses its first 12 characters in the filename.
+It archives that commit into the temporary candidate's `sources/` directory
+and builds the project there, so ignored Swift sources cannot enter the build.
+The external signing config is still passed in place with `-xcconfig`, and
+derived data remains inside the temporary candidate.
 Immediately before publishing the pair, it checks that HEAD is unchanged and
 the worktree is still clean. If either changed, it discards the temporary
 candidate without consuming that output name. Commit source changes before
@@ -146,7 +150,8 @@ Scripts/test-preview-dmg-workflow.sh
 
 This combines static and missing-argument checks with disposable Git fixtures
 that exercise the source guard and publication boundary using a fake build.
-It tests clean success, tracked/staged/untracked dirt before building, and
+It tests clean success, ignored source exclusion from the committed snapshot
+alongside allowed ignored build/config files, tracked/staged/untracked dirt before building, and
 tracked/untracked edits or HEAD changes before publication. It does not run
 a real build, sign, mount, install, notarize, or publish a release artifact.
 
