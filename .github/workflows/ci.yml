@@ -9,6 +9,10 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    shell: zsh -e -u -o pipefail {0}
+
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -22,7 +26,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Verify runner and SDK
-        shell: zsh {0}
+        shell: zsh -e -u -o pipefail {0}
         run: |
           set -euo pipefail
           [[ "$(uname -m)" == "arm64" ]]
@@ -45,7 +49,7 @@ jobs:
         run: Scripts/test-release-dmg-workflow.sh
 
       - name: Check shell scripts
-        shell: zsh {0}
+        shell: zsh -e -u -o pipefail {0}
         run: |
           set -euo pipefail
           for script in Scripts/*.sh; do
