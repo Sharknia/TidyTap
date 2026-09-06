@@ -199,7 +199,24 @@ final class HelperLauncherTests: XCTestCase {
         XCTAssertEqual(runtime.inspectProcess(lastOwner), .gone)
     }
 
-    func testDynamicIdentityDetectsRunningHelperAfterSamePathReplacement() throws {
+    func testDynamicIdentityDetectsReplacementWhenDesignatedRequirementMatches() throws {
+        try assertDynamicIdentityDetectsSamePathReplacement(
+            explicitRequirement: "=designated => identifier \"\(TidyTapProduct.helperBundleIdentifier)\"",
+            designatedRequirementsShouldMatch: true
+        )
+    }
+
+    func testDynamicIdentityDetectsReplacementWhenAdHocDesignatedRequirementChanges() throws {
+        try assertDynamicIdentityDetectsSamePathReplacement(
+            explicitRequirement: nil,
+            designatedRequirementsShouldMatch: false
+        )
+    }
+
+    private func assertDynamicIdentityDetectsSamePathReplacement(
+        explicitRequirement: String?,
+        designatedRequirementsShouldMatch: Bool
+    ) throws {
         let fileManager = FileManager.default
         let builtHelperURL = builtHelperURL()
         XCTAssertTrue(fileManager.isExecutableFile(atPath: builtHelperURL.path))
@@ -219,16 +236,18 @@ final class HelperLauncherTests: XCTestCase {
         try fileManager.copyItem(at: builtHelperURL, to: fixtureURL)
         try fileManager.copyItem(at: builtHelperURL, to: replacementURL)
 
-        let requirement = "=designated => identifier \"\(TidyTapProduct.helperBundleIdentifier)\""
-        try codesign(fixtureURL, requirement: requirement, hardenedRuntime: false)
-        try codesign(replacementURL, requirement: requirement, hardenedRuntime: true)
+        try codesign(fixtureURL, requirement: explicitRequirement, hardenedRuntime: false)
+        try codesign(replacementURL, requirement: explicitRequirement, hardenedRuntime: true)
         let oldHash = try codeHash(at: fixtureURL)
         let replacementHash = try codeHash(at: replacementURL)
         XCTAssertNotEqual(oldHash, replacementHash)
-        XCTAssertEqual(
-            try designatedRequirement(at: fixtureURL),
-            try designatedRequirement(at: replacementURL)
-        )
+        let oldRequirement = try designatedRequirement(at: fixtureURL)
+        let replacementRequirement = try designatedRequirement(at: replacementURL)
+        if designatedRequirementsShouldMatch {
+            XCTAssertEqual(oldRequirement, replacementRequirement)
+        } else {
+            XCTAssertNotEqual(oldRequirement, replacementRequirement)
+        }
 
         let suite = TidyTapLaunchSmoke.suitePrefix + UUID().uuidString
         UserDefaults.standard.removePersistentDomain(forName: suite)
@@ -236,7 +255,8 @@ final class HelperLauncherTests: XCTestCase {
         guard let defaults = UserDefaults(suiteName: suite) else {
             return XCTFail("Could not create isolated worker preferences")
         }
-        try TidyTapPreferencesStore(defaults: defaults).write(
+        let preferences = TidyTapPreferencesStore(defaults: defaults)
+        try preferences.write(
             settings: TidyTapSettings(
                 capsLockInputSourceSwitching: true,
                 reverseMouseWheelVertically: false,
@@ -251,6 +271,10 @@ final class HelperLauncherTests: XCTestCase {
             expectedExecutableURL: fixtureURL,
             lockURL: lockURL,
             expectedUID: getuid(),
+            additionalLaunchEnvironment: [
+                TidyTapLaunchSmoke.enabledKey: "1",
+                TidyTapLaunchSmoke.preferencesSuiteKey: suite
+            ],
             applicationBundleIsValid: { true }
         )
         try runtime.prepare()
@@ -288,6 +312,23 @@ final class HelperLauncherTests: XCTestCase {
         XCTAssertEqual(discovered.count, 1)
         XCTAssertEqual(discovered.first?.0.processIdentity, owner.processIdentity)
         XCTAssertEqual(discovered.first?.1, .stale)
+
+        let replacementRequestID = UUID()
+        try preferences.write(settings: .defaults, applyRequestID: replacementRequestID)
+        try HelperLauncher(
+            runtime: runtime,
+            maximumAttempts: 100,
+            maximumLaunches: 2
+        ).ensureHelperRunning()
+
+        try waitForProcessExit(process)
+        XCTAssertEqual(preferences.readApplyStatus()?.applyRequestID, replacementRequestID)
+        XCTAssertEqual(preferences.readApplyStatus()?.outcome, .applied)
+        let replacementOwner = try waitForFreeAcknowledgement(runtime: runtime)
+        XCTAssertNotEqual(replacementOwner.processIdentity, owner.processIdentity)
+        XCTAssertNotNil(replacementOwner.launchNonce)
+        XCTAssertEqual(runtime.inspectProcess(replacementOwner), .gone)
+        XCTAssertEqual(try runtime.workersAtExpectedPath().count, 0)
     }
 
     private func makeLauncher(
@@ -299,17 +340,21 @@ final class HelperLauncherTests: XCTestCase {
 
     private func codesign(
         _ url: URL,
-        requirement: String,
+        requirement: String?,
         hardenedRuntime: Bool
     ) throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/codesign")
-        process.arguments = [
+        var arguments = [
             "--force", "--sign", "-",
             "--identifier", TidyTapProduct.helperBundleIdentifier,
-            "--requirements", requirement,
             "--timestamp=none"
-        ] + (hardenedRuntime ? ["--options", "runtime"] : []) + [url.path]
+        ]
+        if let requirement {
+            arguments += ["--requirements", requirement]
+        }
+        arguments += (hardenedRuntime ? ["--options", "runtime"] : []) + [url.path]
+        process.arguments = arguments
         try process.run()
         process.waitUntilExit()
         guard process.terminationStatus == 0 else {
@@ -389,6 +434,17 @@ final class HelperLauncherTests: XCTestCase {
         throw HelperLauncherTestError.workerDidNotStart
     }
 
+    private func waitForProcessExit(_ process: Process) throws {
+        for _ in 0..<200 {
+            if !process.isRunning {
+                process.waitUntilExit()
+                return
+            }
+            usleep(10_000)
+        }
+        throw HelperLauncherTestError.workerDidNotExit
+    }
+
     private func processPath(_ processIdentifier: pid_t) -> String? {
         var buffer = [CChar](repeating: 0, count: 4 * 1_024)
         guard proc_pidpath(processIdentifier, &buffer, UInt32(buffer.count)) > 0 else {
@@ -407,6 +463,7 @@ private enum HelperLauncherTestError: Error {
     case processExited(Int32)
     case securityStatus(OSStatus)
     case workerDidNotStart
+    case workerDidNotExit
 }
 
 private final class FakeWorkerRuntime: TidyTapWorkerRuntime {
