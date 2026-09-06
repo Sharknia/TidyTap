@@ -42,7 +42,6 @@ fi
 team_id=$(read_xcconfig_value TIDYTAP_DEVELOPMENT_TEAM)
 identity=$(read_xcconfig_value TIDYTAP_DEVELOPER_ID_APPLICATION)
 notary_profile=$(read_xcconfig_value TIDYTAP_NOTARYTOOL_KEYCHAIN_PROFILE)
-notary_keychain_path="${TIDYTAP_NOTARYTOOL_KEYCHAIN_PATH:-}"
 require_value TIDYTAP_DEVELOPMENT_TEAM "$team_id"
 require_value TIDYTAP_DEVELOPER_ID_APPLICATION "$identity"
 require_value TIDYTAP_NOTARYTOOL_KEYCHAIN_PROFILE "$notary_profile"
@@ -60,16 +59,9 @@ if ! /usr/bin/security find-identity -v -p codesigning 2>/dev/null | /usr/bin/gr
   print -u2 -- "The configured Developer ID Application identity is unavailable in this keychain."
   exit 2
 fi
-if [[ -n "$notary_keychain_path" ]]; then
-  if ! /usr/bin/xcrun notarytool history --keychain-profile "$notary_profile" --keychain "$notary_keychain_path" >/dev/null 2>&1; then
-    print -u2 -- "The configured notarytool keychain profile is unavailable or unusable."
-    exit 2
-  fi
-else
-  if ! /usr/bin/xcrun notarytool history --keychain-profile "$notary_profile" >/dev/null 2>&1; then
-    print -u2 -- "The configured notarytool keychain profile is unavailable or unusable."
-    exit 2
-  fi
+if ! /usr/bin/xcrun notarytool history --keychain-profile "$notary_profile" >/dev/null 2>&1; then
+  print -u2 -- "The configured notarytool keychain profile is unavailable or unusable."
+  exit 2
 fi
 
 candidate_dir=$(mktemp -d "$build_root/.release-candidate.XXXXXX")
@@ -206,17 +198,10 @@ if ! /usr/bin/grep -Eq '^Timestamp=.+$' <<<"$release_dmg_signature_details"; the
   exit 1
 fi
 
-if [[ -n "$notary_keychain_path" ]]; then
-  run_step \
-    "Notarization submission" \
-    "Check Apple notarization service availability and the temporary keychain profile." \
-    /usr/bin/xcrun notarytool submit "$candidate_dmg" --keychain-profile "$notary_profile" --keychain "$notary_keychain_path" --wait
-else
-  run_step \
-    "Notarization submission" \
-    "Check Apple notarization service availability and the local keychain profile." \
-    /usr/bin/xcrun notarytool submit "$candidate_dmg" --keychain-profile "$notary_profile" --wait
-fi
+run_step \
+  "Notarization submission" \
+  "Check Apple notarization service availability and the local keychain profile." \
+  /usr/bin/xcrun notarytool submit "$candidate_dmg" --keychain-profile "$notary_profile" --wait
 run_step \
   "Notarization stapling" \
   "Apple accepted the candidate, but its ticket could not be attached." \
