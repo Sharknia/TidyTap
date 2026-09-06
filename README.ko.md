@@ -8,16 +8,16 @@
 TidyTap은 macOS 입력 불편 세 가지를 해결하는 작은 유틸리티입니다.
 
 - Caps Lock을 대문자 고정 없이 두 입력 소스 전환키(F18 매핑)로 사용합니다.
-- 모든 비연속 line-based 마우스 휠 이벤트의 세로 방향을 반전하고 트랙패드 스크롤은 그대로 둡니다. `0.1.0`에서 물리 검증 및 지원을 보장하는 장치는 VXE Mouse 1K Dongle뿐이며, 구현에 제조사 필터는 없습니다.
+- 모든 비연속 line-based 마우스 휠 이벤트의 세로 방향을 반전하고 트랙패드 스크롤은 그대로 둡니다. `0.1.1`에서 물리 검증 및 지원을 보장하는 장치는 VXE Mouse 1K Dongle뿐이며, 구현에 제조사 필터는 없습니다.
 - 활성 Safari 또는 Finder 창에서 마우스 버튼 3/4를 뒤로/앞으로 이동키로 사용합니다.
 
 세 기능은 각각 토글할 수 있습니다. 설정 창에는 **로그인할 때 시작** 옵션도 있습니다. 손쉬운 사용과 입력 모니터링은 **TidyTap**에 허용하면 됩니다. Worker는 같은 앱 내부 실행 파일이며 별도의 권한 대상이 아닙니다. TidyTap은 Dock에 표시되는 일반 앱이며, `Command-Q`로 설정 앱을 종료해도 켜진 helper는 계속 실행됩니다.
 
 ## 지원 범위와 상태
 
-개발 빌드는 MacBook Pro `Mac15,6`(Apple M3 Pro)와 macOS 26.6.2(`25G83`)에서 확인 중입니다. 현재 물리 검증은 스크롤 장치 분류(VXE와 내장·Magic Trackpad 구분)와 VXE 측면 버튼이 Core Graphics 버튼 3/4로 보고되는지에 한정됩니다. Caps Lock 입력 소스 백업·복원, 권한 허용·회수, 휠 및 Safari/Finder 탐색 통합 동작, helper 수명·로그인 동작, 지원 제거 순서는 아직 통합 라이브 검증이 남아 있으며 완료를 주장하지 않습니다. UI는 한국어와 영어를 지원합니다. 다른 Mac이나 macOS 버전에서 실행될 수는 있지만 `0.1.0` 호환성을 보장하지 않습니다.
+개발 빌드는 MacBook Pro `Mac15,6`(Apple M3 Pro)와 macOS 26.6.2(`25G83`)에서 확인 중입니다. 현재 물리 검증은 스크롤 장치 분류(VXE와 내장·Magic Trackpad 구분)와 VXE 측면 버튼이 Core Graphics 버튼 3/4로 보고되는지에 한정됩니다. Caps Lock 입력 소스 백업·복원, 권한 허용·회수, 휠 및 Safari/Finder 탐색 통합 동작, helper 수명·로그인 동작, 지원 제거 순서는 아직 통합 라이브 검증이 남아 있으며 완료를 주장하지 않습니다. UI는 한국어와 영어를 지원합니다. 다른 Mac이나 macOS 버전에서 실행될 수는 있지만 `0.1.1` 호환성을 보장하지 않습니다.
 
-상태: `0.1.0` 릴리스. 공증된 `v0.1.0` 릴리스를 배포합니다.
+상태: `0.1.1` 릴리스 후보. 공개 태그와 릴리스는 릴리스 워크플로가 완료된 뒤에만 생성합니다.
 
 [MVP 작업 계획](docs/MVP_PLAN.md)과 [English README](README.md)도 참고하세요.
 
@@ -31,7 +31,7 @@ TidyTap은 macOS 입력 불편 세 가지를 해결하는 작은 유틸리티입
 
 ## 설치 및 실행
 
-공증된 [`v0.1.0` 릴리스](https://github.com/Sharknia/TidyTap/releases/tag/v0.1.0)를 내려받을 수 있습니다. 개발 중에는 앱을 로컬에서 빌드한 뒤 결과물을 여세요.
+`v0.1.1` 릴리스는 버전이 일치하는 main 태그에서 GitHub Actions로 준비합니다. 개발 중에는 앱을 로컬에서 빌드한 뒤 결과물을 여세요.
 
 ```sh
 xcodebuild -project TidyTap.xcodeproj -scheme TidyTap -configuration Debug \

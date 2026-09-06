@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Verify runner and SDK
+        shell: zsh
+        run: |
+          set -euo pipefail
+          [[ "$(uname -m)" == "arm64" ]]
+          sdk_version="$(xcrun --sdk macosx --show-sdk-version)"
+          sdk_major="${sdk_version%%.*}"
+          (( sdk_major >= 26 ))
+          xcodebuild -version
+          printf 'macOS SDK: %s\n' "$sdk_version"
+
+      - name: Run unit tests
+        run: >-
+          xcodebuild test
+          -project TidyTap.xcodeproj
+          -scheme TidyTap
+          -configuration Debug
+          -destination 'platform=macOS'
+          CODE_SIGNING_ALLOWED=NO
+
+      - name: Check release workflow ordering
+        run: Scripts/test-release-dmg-workflow.sh
+
+      - name: Check shell scripts
+        shell: zsh
+        run: |
+          set -euo pipefail
+          for script in Scripts/*.sh; do
+            zsh -n "$script"
+          done
