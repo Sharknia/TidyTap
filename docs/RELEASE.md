@@ -4,9 +4,20 @@ TidyTap public releases use Developer ID-signed, Apple-notarized DMGs. The
 repository never contains a certificate, private key, Apple ID, app-specific
 password, App Store Connect API key, or a notarytool profile export.
 
-Both preview and public DMGs include an `Applications` shortcut and a short
-bilingual `Install TidyTap.txt` note. Drag `TidyTap.app` onto the shortcut
-(`TidyTap.app`을 Applications 폴더로 드래그) to install it.
+Both preview and public DMGs use the conventional Finder installer layout:
+only the native `TidyTap.app` icon and an `Applications` shortcut are visible.
+Drag the app onto the shortcut to install it. There is deliberately no
+supplemental text file, custom app icon, or Finder/AppleScript automation.
+The committed `Resources/DMGBackground.tiff` supplies the 640 by 400 point
+Retina background; the actual draggable icons remain Finder's native icons.
+
+`Scripts/create-installer-dmg.sh` is the single shared DMG-creation helper.
+It invokes official `dmgbuild` 1.6.7 and its pinned dependencies from the
+ignored `build/.dmgbuild-venv` only—never global `pip`. dmgbuild 1.6.7 needs
+Python 3.10 or newer. The helper reports a clear preflight failure if no such
+interpreter is available. For a Developer ID preview it is passed the extracted
+committed source directory, so both the Python settings and TIFF are taken from
+that snapshot, not from ignored or newly edited local files.
 
 ## Local ad-hoc preview
 
@@ -57,8 +68,9 @@ signing configuration and build output are allowed). The script captures the
 full HEAD before building and uses its first 12 characters in the filename.
 It archives that commit into the temporary candidate's `sources/` directory
 and builds the project there, so ignored Swift sources cannot enter the build.
-The external signing config is still passed in place with `-xcconfig`, and
-derived data remains inside the temporary candidate.
+The external signing config is still passed in place with `-xcconfig`, derived
+data remains inside the temporary candidate, and the shared DMG helper reads
+the background and Finder-layout settings from that same snapshot.
 Immediately before publishing the pair, it checks that HEAD is unchanged and
 the worktree is still clean. If either changed, it discards the temporary
 candidate without consuming that output name. Commit source changes before
@@ -154,6 +166,10 @@ It tests clean success, ignored source exclusion from the committed snapshot
 alongside allowed ignored build/config files, tracked/staged/untracked dirt before building, and
 tracked/untracked edits or HEAD changes before publication. It does not run
 a real build, sign, mount, install, notarize, or publish a release artifact.
+It also executes the declarative `dmgbuild` settings fixture for the Finder
+`.DS_Store` contract: a 640 by 400 point icon view with 112 point icons at
+`(170, 200)` and `(470, 200)`, native app/Applications entries only, and all
+toolbar, sidebar, path bar, tab view, and status bar controls hidden.
 
 ## Final manual checks
 

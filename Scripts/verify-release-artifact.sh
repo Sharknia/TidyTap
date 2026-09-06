@@ -44,6 +44,17 @@ if [[ ! -d "$app_path" ]]; then
   print -u2 -- "DMG does not contain a top-level TidyTap.app."
   exit 1
 fi
+applications_target=$(/usr/bin/readlink "$mount_dir/Applications" 2>/dev/null || true)
+if [[ ! -L "$mount_dir/Applications" || "$applications_target" != "/Applications" ]]; then
+  print -u2 -- "DMG does not contain the /Applications install link."
+  exit 1
+fi
+visible_items=("$mount_dir"/*(N))
+if (( ${#visible_items} != 2 )) || \
+  [[ "${visible_items[1]:t}" != "Applications" || "${visible_items[2]:t}" != "TidyTap.app" ]]; then
+  print -u2 -- "DMG must expose only Applications and TidyTap.app."
+  exit 1
+fi
 
 helper_path="$app_path/Contents/MacOS/TidyTapHelper"
 if [[ ! -f "$helper_path" || ! -x "$helper_path" ]]; then
