@@ -13,15 +13,20 @@ protocol TidyTapLoginItemManaging: AnyObject {
     func status() -> TidyTapLoginItemStatus
 }
 
-/// Registers the embedded helper, never the main Dock app, as the login item.
+/// Launchd starts the same in-bundle executable used by manual launches.
 final class LoginItemCoordinator: TidyTapLoginItemManaging {
     private let service: SMAppService
 
-    init(service: SMAppService = .loginItem(identifier: TidyTapProduct.helperBundleIdentifier)) {
+    init(service: SMAppService = .agent(plistName: TidyTapProduct.agentPlistName)) {
         self.service = service
     }
 
     func setEnabled(_ enabled: Bool) throws {
+        // Retire the independently registered 0.0.2 login app during upgrade.
+        let legacy = SMAppService.loginItem(identifier: TidyTapProduct.helperBundleIdentifier)
+        if legacy.status == .enabled || legacy.status == .requiresApproval {
+            try legacy.unregister()
+        }
         if enabled {
             guard service.status != .enabled else { return }
             try service.register()

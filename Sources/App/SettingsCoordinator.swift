@@ -3,7 +3,7 @@ import Foundation
 /// Launching is kept behind a protocol so settings persistence can be tested
 /// without starting a second application process.
 protocol TidyTapHelperLaunching: AnyObject {
-    func launchOrActivateHelper()
+    func ensureHelperRunning() throws
 }
 
 /// A user-initiated settings-pane request is consumed only by the helper
@@ -69,11 +69,13 @@ final class SettingsCoordinator {
         latestRequestID = request.applyRequestID
         let status = preferences.readApplyStatus()
         latestApplyStatus = status?.applyRequestID == request.applyRequestID ? status : nil
-        if let latestApplyStatus, permissionSettingsPane(for: latestApplyStatus) != nil,
-           (try? enqueuePermission(kind: .refresh, permission: nil)) != nil {
+        // Every settings launch gets a current worker snapshot, including a
+        // fresh install or a previous successful run. Stored failures aren't
+        // the authority for today's permission display.
+        if (try? enqueuePermission(kind: .refresh, permission: nil)) != nil {
             return
         }
-        helperLauncher.launchOrActivateHelper()
+        try? helperLauncher.ensureHelperRunning()
     }
 
     func persistedSettings() -> TidyTapSettings {
@@ -124,7 +126,7 @@ final class SettingsCoordinator {
 
         // All-off requests also launch the helper: a prior crash may have left
         // a durable Caps journal that only the helper can safely restore.
-        helperLauncher.launchOrActivateHelper()
+        try helperLauncher.ensureHelperRunning()
         TidyTapIPC.postSettingsDidChange(requestID: requestID)
         return requestID
     }
@@ -184,15 +186,10 @@ final class SettingsCoordinator {
         }
     }
 
-    /// Foreground refresh is limited to an existing permission notice or a
-    /// previously confirmed snapshot and is read-only inside the helper.
+    /// Each foreground return reads the worker's current state without prompts.
     @discardableResult
     func refreshPermissionsIfNeeded() throws -> UUID? {
-        let unresolvedApplyPermission = latestApplyStatus.map {
-            permissionSettingsPane(for: $0) != nil
-        } ?? false
-        guard (unresolvedApplyPermission || latestPermissionState != nil),
-              latestPermissionRequestID == nil else {
+        guard latestPermissionRequestID == nil else {
             return nil
         }
         return try enqueuePermission(kind: .refresh, permission: nil)
@@ -265,7 +262,7 @@ final class SettingsCoordinator {
         )
         try preferences.writePermissionRequest(request)
         latestPermissionRequestID = request.requestID
-        helperLauncher.launchOrActivateHelper()
+        try helperLauncher.ensureHelperRunning()
         TidyTapIPC.postPermissionRequest(request)
         return request.requestID
     }

@@ -8,16 +8,16 @@
 TidyTap은 macOS 입력 불편 세 가지를 해결하는 작은 유틸리티입니다.
 
 - Caps Lock을 대문자 고정 없이 두 입력 소스 전환키(F18 매핑)로 사용합니다.
-- 모든 비연속 line-based 마우스 휠 이벤트의 세로 방향을 반전하고 트랙패드 스크롤은 그대로 둡니다. `0.0.2`에서 물리 검증 및 지원을 보장하는 장치는 VXE Mouse 1K Dongle뿐이며, 구현에 제조사 필터는 없습니다.
+- 모든 비연속 line-based 마우스 휠 이벤트의 세로 방향을 반전하고 트랙패드 스크롤은 그대로 둡니다. `0.1.0`에서 물리 검증 및 지원을 보장하는 장치는 VXE Mouse 1K Dongle뿐이며, 구현에 제조사 필터는 없습니다.
 - 활성 Safari 또는 Finder 창에서 마우스 버튼 3/4를 뒤로/앞으로 이동키로 사용합니다.
 
-세 기능은 각각 토글할 수 있습니다. 설정 창에는 **로그인할 때 시작** 옵션도 있습니다. TidyTap은 Dock에 표시되는 일반 앱이며, `Command-Q`로 설정 앱을 종료해도 켜진 helper는 계속 실행됩니다.
+세 기능은 각각 토글할 수 있습니다. 설정 창에는 **로그인할 때 시작** 옵션도 있습니다. 손쉬운 사용과 입력 모니터링은 **TidyTap**에 허용하면 됩니다. Worker는 같은 앱 내부 실행 파일이며 별도의 권한 대상이 아닙니다. TidyTap은 Dock에 표시되는 일반 앱이며, `Command-Q`로 설정 앱을 종료해도 켜진 helper는 계속 실행됩니다.
 
 ## 지원 범위와 상태
 
-개발 빌드는 MacBook Pro `Mac15,6`(Apple M3 Pro)와 macOS 26.6.2(`25G83`)에서 확인 중입니다. 현재 물리 검증은 스크롤 장치 분류(VXE와 내장·Magic Trackpad 구분)와 VXE 측면 버튼이 Core Graphics 버튼 3/4로 보고되는지에 한정됩니다. Caps Lock 입력 소스 백업·복원, 권한 허용·회수, 휠 및 Safari/Finder 탐색 통합 동작, helper 수명·로그인 동작, 지원 제거 순서는 아직 통합 라이브 검증이 남아 있으며 완료를 주장하지 않습니다. UI는 한국어와 영어를 지원합니다. 다른 Mac이나 macOS 버전에서 실행될 수는 있지만 `0.0.2` 호환성을 보장하지 않습니다.
+개발 빌드는 MacBook Pro `Mac15,6`(Apple M3 Pro)와 macOS 26.6.2(`25G83`)에서 확인 중입니다. 현재 물리 검증은 스크롤 장치 분류(VXE와 내장·Magic Trackpad 구분)와 VXE 측면 버튼이 Core Graphics 버튼 3/4로 보고되는지에 한정됩니다. Caps Lock 입력 소스 백업·복원, 권한 허용·회수, 휠 및 Safari/Finder 탐색 통합 동작, helper 수명·로그인 동작, 지원 제거 순서는 아직 통합 라이브 검증이 남아 있으며 완료를 주장하지 않습니다. UI는 한국어와 영어를 지원합니다. 다른 Mac이나 macOS 버전에서 실행될 수는 있지만 `0.1.0` 호환성을 보장하지 않습니다.
 
-상태: 개발 빌드. 공증된 `v0.0.2` 프리릴리스가 있으며, 현재 개발 변경 사항은 아직 릴리스되지 않았습니다.
+상태: `0.1.0` 릴리스. 공증된 `v0.1.0` 릴리스를 배포합니다.
 
 [MVP 작업 계획](docs/MVP_PLAN.md)과 [English README](README.md)도 참고하세요.
 
@@ -31,7 +31,7 @@ TidyTap은 macOS 입력 불편 세 가지를 해결하는 작은 유틸리티입
 
 ## 설치 및 실행
 
-공증된 [`v0.0.2` 프리릴리스](https://github.com/Sharknia/TidyTap/releases/tag/v0.0.2)를 내려받을 수 있습니다. 개발 중에는 앱을 로컬에서 빌드한 뒤 결과물을 여세요.
+공증된 [`v0.1.0` 릴리스](https://github.com/Sharknia/TidyTap/releases/tag/v0.1.0)를 내려받을 수 있습니다. 개발 중에는 앱을 로컬에서 빌드한 뒤 결과물을 여세요.
 
 ```sh
 xcodebuild -project TidyTap.xcodeproj -scheme TidyTap -configuration Debug \
@@ -40,7 +40,7 @@ xcodebuild -project TidyTap.xcodeproj -scheme TidyTap -configuration Debug \
 open build/Build/Products/Debug/TidyTap.app
 ```
 
-앱은 Dock에 표시되는 일반 macOS 앱으로 설정 창 하나를 엽니다. 핵심 기능을 켜면 내장된 백그라운드 전용 `TidyTapHelper`가 실행되고 저장된 설정을 적용합니다. **로그인할 때 시작**은 다음 로그인부터 helper를 등록합니다. 이 옵션을 끄면 자동 시작만 해제되고 현재 helper는 멈추지 않습니다. 세 기능을 모두 끄면 helper는 소유한 상태를 복원하고 event tap을 제거한 뒤 종료합니다.
+앱은 Dock에 표시되는 일반 macOS 앱으로 설정 창 하나를 엽니다. 핵심 기능을 켜면 내장된 백그라운드 전용 `TidyTapHelper`가 실행되고 저장된 설정을 적용합니다. **로그인할 때 시작**은 다음 로그인부터 helper를 등록합니다. 이 옵션을 끄면 자동 시작을 해제하고 수동 실행한 Worker에서 켜진 기능을 계속 처리합니다. 세 기능을 모두 끄면 helper는 소유한 상태를 복원하고 event tap을 제거한 뒤 종료합니다.
 
 ## 제거 및 복원 순서
 
@@ -85,7 +85,7 @@ Scripts/launch-smoke.sh
 설정으로 앱과 helper를 실행합니다. 설정 창 하나, helper 시작·종료, 실제 입력
 및 운영 preferences 상태가 바뀌지 않았는지를 함께 검증합니다.
 
-서명 archive가 필요하면 `Config/LocalSigning.xcconfig.example`을 gitignore 대상인 `Config/LocalSigning.xcconfig`으로 복사하고 실제 Developer ID 정보를 입력하세요. 서명 값은 커밋하지 마세요. 현재 개발 변경 사항은 릴리스로 공개되지 않았습니다.
+서명 archive가 필요하면 `Config/LocalSigning.xcconfig.example`을 gitignore 대상인 `Config/LocalSigning.xcconfig`으로 복사하고 실제 Developer ID 정보를 입력하세요. 서명 값은 커밋하지 마세요.
 
 ## 개인정보 보호와 제한사항
 

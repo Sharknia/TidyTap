@@ -45,6 +45,28 @@ final class TidyTapSettingsTests: XCTestCase {
         )
     }
 
+    func testFreshSessionChecksActualWorkerPermissionsWithoutEnablingFeatures() throws {
+        let settings = TidyTapSettings.defaults
+        let store = InMemoryPreferences(request: .init(settings: settings, applyRequestID: UUID()))
+        let app = SettingsCoordinator(
+            preferences: store,
+            helperLauncher: RecordingHelperLauncher(),
+            loginItemManager: StatefulLoginItem(status: .disabled)
+        )
+        app.restoreSession()
+        let initialID = try XCTUnwrap(app.latestPermissionRequestID)
+        XCTAssertEqual(store.permissionRequest?.kind, .refresh)
+        XCTAssertNil(try app.refreshPermissionsIfNeeded(), "don't overwrite an in-flight check")
+        store.permissionResult = .init(
+            requestID: initialID,
+            state: .init(accessibility: .authorized, inputMonitoring: .authorized)
+        )
+        XCTAssertNotNil(app.receivePermissionResult())
+        XCTAssertNotNil(try app.refreshPermissionsIfNeeded(), "recheck even after a successful launch")
+        XCTAssertEqual(store.request.settings, settings)
+        XCTAssertNil(store.status)
+    }
+
     func testExplicitPermissionPaneOpenConsumesOnlyItsMatchingHelperResult() {
         let requestID = UUID()
         var pending = TidyTapPendingPermissionSettingsOpen(
@@ -1494,7 +1516,7 @@ private final class RecordingTerminator: TidyTapTerminating {
 
 private final class RecordingHelperLauncher: TidyTapHelperLaunching {
     private(set) var launchCount = 0
-    func launchOrActivateHelper() { launchCount += 1 }
+    func ensureHelperRunning() { launchCount += 1 }
 }
 
 private final class FailingLoginItem: TidyTapLoginItemManaging {
