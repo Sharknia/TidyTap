@@ -112,3 +112,19 @@ On the supported Mac and clean macOS user account, run
 the acceptance checks in `docs/MVP_PLAN.md`, including first launch through
 Gatekeeper. Only after those checks may a maintainer create the GitHub Release
 and upload the two generated files.
+
+## TidyTap Release skill
+
+Use the versioned `.agents/skills/tidytap-release/SKILL.md` or the installed
+`tidytap-release` skill for release requests. It reports the current project
+version, latest published release, latest tag, branch state, worktree state,
+and changes since the last release before recommending a semantic version.
+The user selects the exact version before any version edit, tag, push, or public
+release.
+
+After the version is selected, the skill validates the clean final main commit,
+reuses the local signing configuration and Keychain notary profile, invokes
+`Scripts/package-release-dmg.sh`, and checks the exact DMG with
+`Scripts/verify-release-artifact.sh`. Only a verified candidate may be tagged
+and uploaded to a new GitHub Release. Existing tags and published releases are
+never moved or overwritten.
