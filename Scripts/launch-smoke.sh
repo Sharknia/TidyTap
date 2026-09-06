@@ -13,7 +13,7 @@ helper_log="$smoke_root/helper.log"
 main_suite="com.sharknia.TidyTap.LaunchSmoke.Main.$$.${RANDOM}"
 helper_suite="com.sharknia.TidyTap.LaunchSmoke.Helper.$$.${RANDOM}"
 settings_content_width=560
-settings_content_height=650
+settings_content_height=760
 main_pid=""
 helper_pid=""
 
