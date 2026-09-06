@@ -913,7 +913,7 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(coordinator.settingsForUI(), requested)
     }
 
-    func testFixedStepAppliedReplyWithMismatchedSizeFailsButRetainsEffectiveEnablementAndRequestedSize() throws {
+    func testFixedStepAppliedReplyWithMismatchedSizePreservesActualStateAcrossAllPaths() throws {
         let requestID = UUID()
         var requested = TidyTapSettings.defaults
         requested.fixedMouseWheelStepEnabled = true
@@ -928,16 +928,58 @@ final class TidyTapSettingsTests: XCTestCase {
             loginItemManager: StatefulLoginItem(status: .disabled)
         )
 
-        let result = coordinator.receiveApplyResult()
+        for requestedEnabled in [true, false] {
+            requested.fixedMouseWheelStepEnabled = requestedEnabled
+            store.request = .init(settings: requested, applyRequestID: requestID)
+            coordinator.restoreSession()
+            let startup = try XCTUnwrap(coordinator.latestApplyStatus)
+            XCTAssertEqual(startup.outcome, .failed)
+            XCTAssertEqual(startup.effectiveSettings, actual)
+            let result = try XCTUnwrap(coordinator.receiveApplyResult())
+            XCTAssertEqual(startup, result)
+            XCTAssertEqual(result.applyRequestID, requestID)
+            XCTAssertEqual(result.outcome, .failed)
+            XCTAssertEqual(result.errorCode, "eventTap.incompatibleFixedWheelStep")
+            XCTAssertEqual(result.effectiveSettings, actual)
+            XCTAssertEqual(coordinator.latestApplyStatus, result)
+            XCTAssertEqual(coordinator.settingsForUI(), actual)
+            XCTAssertEqual(coordinator.visibleSettings(for: try XCTUnwrap(store.status)), actual)
+            XCTAssertEqual(coordinator.visibleSettings(for: result), actual)
+            XCTAssertEqual(store.request.settings, requested)
+        }
+    }
 
-        XCTAssertEqual(result?.outcome, .failed)
-        XCTAssertEqual(result?.errorCode, "eventTap.incompatibleFixedWheelStep")
-        XCTAssertTrue(result?.effectiveSettings?.fixedMouseWheelStepEnabled ?? false)
-        XCTAssertEqual(result?.effectiveSettings?.mouseWheelStepLines, 7)
-        XCTAssertEqual(
-            coordinator.visibleSettings(for: try XCTUnwrap(result)),
-            try XCTUnwrap(result?.effectiveSettings)
+    func testDisabledFixedStepLegacyReplyPreservesRememberedSizeAcrossAllPathsAndNextSave() throws {
+        let requestID = UUID()
+        var requested = TidyTapSettings.defaults
+        requested.mouseWheelStepLines = 7
+        let legacy = try JSONDecoder().decode(TidyTapSettings.self, from: Data("""
+        {"capsLockInputSourceSwitching":false,"reverseMouseWheelVertically":false,"sideButtonNavigation":false,"launchAtLogin":false}
+        """.utf8))
+        let reply = TidyTapApplyStatus.applied(requestID, effectiveSettings: legacy)
+        let store = InMemoryPreferences(request: .init(settings: requested, applyRequestID: requestID))
+        store.status = reply
+        let coordinator = SettingsCoordinator(
+            preferences: store,
+            helperLauncher: RecordingHelperLauncher(),
+            loginItemManager: StatefulLoginItem(status: .disabled)
         )
+
+        coordinator.restoreSession()
+        let startup = try XCTUnwrap(coordinator.latestApplyStatus)
+        XCTAssertEqual(startup.outcome, .applied)
+        XCTAssertEqual(startup.applyRequestID, requestID)
+        XCTAssertEqual(startup.effectiveSettings, requested)
+        XCTAssertEqual(coordinator.settingsForUI(), requested)
+        XCTAssertEqual(coordinator.visibleSettings(for: reply), requested)
+        XCTAssertEqual(coordinator.receiveApplyResult(), startup)
+        XCTAssertEqual(coordinator.visibleSettings(for: startup), requested)
+        XCTAssertEqual(store.status, reply)
+
+        var next = coordinator.settingsForUI()
+        next.sideButtonNavigation = true
+        try coordinator.save(next)
+        XCTAssertEqual(store.request.settings.mouseWheelStepLines, 7)
     }
 
     func testApplyResultAlwaysRenormalizesLoginItemFromLiveServiceTruth() {

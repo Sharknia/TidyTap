@@ -254,38 +254,29 @@ final class SettingsCoordinator {
         _ status: TidyTapApplyStatus,
         for request: TidyTapSettingsRequest
     ) -> TidyTapApplyStatus {
-        guard request.settings.fixedMouseWheelStepEnabled,
-              status.outcome == .applied else {
-            return status
+        let requested = request.settings
+        let echoed = status.effectiveSettings
+        let incompatible = status.outcome == .applied && (
+            requested.fixedMouseWheelStepEnabled
+                ? echoed?.fixedMouseWheelStepEnabled != true || echoed?.mouseWheelStepLines != requested.mouseWheelStepLines
+                : echoed?.fixedMouseWheelStepEnabled == true
+        )
+        var effective = echoed
+        if incompatible, effective == nil {
+            effective = settingsBeforeLatestRequest ?? requested
+            effective?.fixedMouseWheelStepEnabled = false
         }
-        guard
-              status.effectiveSettings?.fixedMouseWheelStepEnabled == true,
-              status.effectiveSettings?.mouseWheelStepLines == request.settings.mouseWheelStepLines else {
-            return incompatibleFixedStepStatus(status, request: request)
+        // An inactive size is only a remembered preference. An active size is
+        // worker evidence: keep it even when it disagrees with the request.
+        if effective?.fixedMouseWheelStepEnabled == false {
+            effective?.mouseWheelStepLines = requested.mouseWheelStepLines
         }
-        return status
-    }
-
-    private func incompatibleFixedStepStatus(
-        _ status: TidyTapApplyStatus,
-        request: TidyTapSettingsRequest
-    ) -> TidyTapApplyStatus {
-        // The reply remains the authority for the old worker's effective
-        // switches. The requested line count is a user preference, though,
-        // and must not be replaced by a legacy/defaulted response value.
-        var effective = status.effectiveSettings
-            ?? settingsBeforeLatestRequest
-            ?? request.settings
-        if status.effectiveSettings == nil {
-            effective.fixedMouseWheelStepEnabled = false
-        }
-        effective.mouseWheelStepLines = request.settings.mouseWheelStepLines
 
         return TidyTapApplyStatus(
             applyRequestID: status.applyRequestID,
-            outcome: .failed,
-            failedComponent: .eventTap,
-            errorCode: "eventTap.incompatibleFixedWheelStep",
+            outcome: incompatible ? .failed : status.outcome,
+            failedComponent: incompatible ? .eventTap : status.failedComponent,
+            errorCode: incompatible ? "eventTap.incompatibleFixedWheelStep" : status.errorCode,
             effectiveSettings: effective
         )
     }
