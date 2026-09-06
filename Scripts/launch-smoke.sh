@@ -39,13 +39,14 @@ trap cleanup EXIT
 
 snapshot_live_state() {
   {
-    print -- "UserKeyMapping"
     /usr/bin/hidutil property --get UserKeyMapping 2>&1 || print -- "unavailable"
-    print -- "AppleSymbolicHotKeys"
+  } | /usr/bin/shasum -a 256 | /usr/bin/awk '{ print "UserKeyMapping " $1 }'
+  {
     /usr/bin/defaults export com.apple.symbolichotkeys - 2>&1 || print -- "unavailable"
-    print -- "TidyTap production preferences"
+  } | /usr/bin/shasum -a 256 | /usr/bin/awk '{ print "AppleSymbolicHotKeys " $1 }'
+  {
     /usr/bin/defaults export com.sharknia.TidyTap - 2>&1 || print -- "unavailable"
-  } | /usr/bin/shasum -a 256 | /usr/bin/awk '{ print $1 }'
+  } | /usr/bin/shasum -a 256 | /usr/bin/awk '{ print "TidyTapPreferences " $1 }'
 }
 
 wait_for_log() {
@@ -256,6 +257,8 @@ guard let data = defaults.data(forKey: "applyStatus"),
 live_state_after=$(snapshot_live_state)
 if [[ "$live_state_before" != "$live_state_after" ]]; then
   print -u2 -- "Live HID, symbolic-hotkey, or production preference state changed during smoke."
+  print -u2 -- "Before (hashes only): $live_state_before"
+  print -u2 -- "After (hashes only): $live_state_after"
   exit 1
 fi
 
