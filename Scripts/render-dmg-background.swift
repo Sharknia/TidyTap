@@ -52,9 +52,9 @@ for scale in [1, 2] {
     }
     arrow.draw(in: NSRect(x: 300, y: 181, width: 40, height: 30))
 
-    text("TidyTap을 Applications 폴더로 드래그하세요", top: 323, size: 13,
+    text("TidyTap을 Applications 폴더로 드래그하세요", top: 301, size: 13,
          weight: .medium, color: rgb(0.24, 0.35, 0.38))
-    text("Drag TidyTap to Applications to install", top: 348, size: 12,
+    text("Drag TidyTap to Applications to install", top: 326, size: 12,
          weight: .regular, color: rgb(0.38, 0.47, 0.50))
     NSGraphicsContext.restoreGraphicsState()
     representations.append(bitmap)
