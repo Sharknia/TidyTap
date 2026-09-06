@@ -226,6 +226,63 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(calls.values, ["caps:true", "input:true:false", "input:false:false", "caps:false"])
     }
 
+    func testFirstApplyCapsFailurePreservesPersistedWheelStepBeforeInputIsTouched() {
+        var requested = TidyTapSettings.defaults
+        requested.capsLockInputSourceSwitching = true
+        requested.fixedMouseWheelStepEnabled = true
+        requested.mouseWheelStepLines = 7
+        let store = InMemoryPreferences(request: .init(settings: requested, applyRequestID: UUID()))
+        let calls = CallLog()
+        let input = RecordingInput(calls: calls)
+        let coordinator = ApplyCoordinator(
+            preferences: store,
+            capsFeature: ThrowingCaps(error: InputEngineError.invalidInputSourceCount(1)),
+            inputFeatures: input,
+            menuBar: RecordingMenu(calls: CallLog()),
+            terminator: RecordingTerminator(calls: CallLog())
+        )
+
+        let result = coordinator.applyLatestSettings()
+
+        XCTAssertEqual(result.outcome, .failed)
+        XCTAssertEqual(result.failedComponent, .capsLock)
+        XCTAssertTrue(calls.values.isEmpty, "Caps validation must fail before any input application")
+        XCTAssertEqual(input.currentConfiguration().mouseWheelStepLines, 3, "fresh adapter remains untouched")
+        XCTAssertEqual(result.effectiveSettings?.mouseWheelStepLines, 7)
+        XCTAssertEqual(result.effectiveSettings?.fixedMouseWheelStepEnabled, false)
+        XCTAssertEqual(store.request.settings, result.effectiveSettings)
+    }
+
+    func testSubsequentSizeChangeFailureRestoresPreviouslyAppliedWheelStep() {
+        var original = TidyTapSettings.defaults
+        original.fixedMouseWheelStepEnabled = true
+        original.mouseWheelStepLines = 7
+        let store = InMemoryPreferences(request: .init(settings: original, applyRequestID: UUID()))
+        let input = FailingInput(calls: CallLog())
+        let coordinator = ApplyCoordinator(
+            preferences: store,
+            capsFeature: RecordingCaps(calls: CallLog()),
+            inputFeatures: input,
+            menuBar: RecordingMenu(calls: CallLog()),
+            terminator: RecordingTerminator(calls: CallLog())
+        )
+        XCTAssertEqual(coordinator.applyLatestSettings().outcome, .applied)
+        XCTAssertEqual(input.currentConfiguration().mouseWheelStepLines, 7)
+        var requested = original
+        requested.mouseWheelStepLines = 9
+        requested.reverseMouseWheelVertically = true // this adapter rejects reversal
+        store.request = .init(settings: requested, applyRequestID: UUID())
+
+        let result = coordinator.applyLatestSettings()
+
+        XCTAssertEqual(result.outcome, .failed)
+        XCTAssertEqual(result.failedComponent, .eventTap)
+        XCTAssertEqual(input.currentConfiguration().mouseWheelStepLines, 7)
+        XCTAssertTrue(input.currentConfiguration().fixedMouseWheelStepEnabled)
+        XCTAssertEqual(result.effectiveSettings, original)
+        XCTAssertEqual(store.request.settings, original)
+    }
+
     func testAllOffApplyTerminatesOnlyAfterSuccess() {
         let requestID = UUID()
         let store = InMemoryPreferences(request: TidyTapSettingsRequest(settings: .defaults, applyRequestID: requestID))

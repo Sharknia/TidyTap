@@ -163,7 +163,13 @@ final class ApplyCoordinator {
     func apply(_ request: TidyTapSettingsRequest) -> TidyTapApplyStatus {
         let previousState: ControllerState
         do {
-            previousState = try captureControllerState()
+            // A fresh adapter has not learned the persisted step yet. Seed the
+            // rollback snapshot from the last confirmed request, or the first
+            // persisted request, rather than its construction default.
+            previousState = try captureControllerState(
+                rememberedMouseWheelStepLines: activeRequest?.settings.mouseWheelStepLines
+                    ?? request.settings.mouseWheelStepLines
+            )
         } catch {
             let captureError = error as? ControllerStateCaptureError
             let result = failure(
@@ -394,16 +400,20 @@ final class ApplyCoordinator {
         let underlying: Error
     }
 
-    private func captureControllerState() throws -> ControllerState {
+    private func captureControllerState(rememberedMouseWheelStepLines: Int? = nil) throws -> ControllerState {
         let capsLockEnabled: Bool
         do {
             capsLockEnabled = try capsFeature.currentCapsLockEnabled()
         } catch {
             throw ControllerStateCaptureError(component: .capsLock, underlying: error)
         }
+        var input = inputFeatures.currentConfiguration()
+        if let rememberedMouseWheelStepLines {
+            input.mouseWheelStepLines = rememberedMouseWheelStepLines
+        }
         return ControllerState(
             capsLockEnabled: capsLockEnabled,
-            input: inputFeatures.currentConfiguration(),
+            input: input,
             menuBarVisible: menuBar.isMenuBarVisible
         )
     }
@@ -419,7 +429,9 @@ final class ApplyCoordinator {
     }
 
     private func currentSettings(fallback: TidyTapSettings) -> TidyTapSettings {
-        guard let state = try? captureControllerState() else { return fallback }
+        guard let state = try? captureControllerState(
+            rememberedMouseWheelStepLines: activeRequest == nil ? fallback.mouseWheelStepLines : nil
+        ) else { return fallback }
         return settings(fallback, applying: state)
     }
 
