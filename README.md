@@ -17,7 +17,7 @@ Each feature has its own toggle. The settings window also offers **Start at logi
 
 The development build is being checked on MacBook Pro `Mac15,6` (Apple M3 Pro) and macOS 26.6.2 (`25G83`). Physical validation so far covers scroll-device classification (VXE versus the built-in and Magic Trackpad) and that the VXE side buttons report as Core Graphics buttons 3/4. Remaining integrated live validation includes Caps Lock/input-source backup and restore, permission grant/revocation behavior, end-to-end wheel and Safari/Finder navigation, helper lifetime/login behavior, and the supported removal sequence; these are not claimed complete. The UI is available in English and Korean. Other Macs or macOS versions may run, but are not compatibility claims for `0.1.1`.
 
-Status: `0.1.1` release candidate. The public tag and release are created only after the release workflow completes.
+Status: `0.1.1` release candidate. The public tag and release are created only after the local TidyTap Release skill completes.
 
 See the [MVP work plan](docs/MVP_PLAN.md) and [Korean README](README.ko.md).
 
@@ -31,7 +31,7 @@ If a required permission is missing or later revoked, the affected feature is no
 
 ## Install and run
 
-The `v0.1.1` release is prepared from a version-matched main tag by GitHub Actions. For development, build the app locally, then open the resulting app:
+The `v0.1.1` release is prepared from a version-matched main tag using the local TidyTap Release skill. For development, build the app locally, then open the resulting app:
 
 ```sh
 xcodebuild -project TidyTap.xcodeproj -scheme TidyTap -configuration Debug \

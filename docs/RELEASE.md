@@ -113,57 +113,18 @@ the acceptance checks in `docs/MVP_PLAN.md`, including first launch through
 Gatekeeper. Only after those checks may a maintainer create the GitHub Release
 and upload the two generated files.
 
-## GitHub Actions release automation
+## TidyTap Release skill
 
-The repository includes a tag-only release workflow in
-`.github/workflows/release-dmg.yml`. It runs on a `vMAJOR.MINOR.PATCH` tag and
-can be retried from Actions with `workflow_dispatch` by entering the existing
-tag in the `tag` field. The workflow checks that the tag commit is an ancestor
-of `origin/main`, that the tag version equals Xcode's `MARKETING_VERSION`, and
-that the arm64 runner exposes a macOS 26 or newer SDK. It then reuses
-`Scripts/package-release-dmg.sh` and verifies the mounted DMG contains the
-versioned app, the executable plain `TidyTapHelper`, and the LaunchAgent plist
-that points at that helper.
+Use the versioned `.agents/skills/tidytap-release/SKILL.md` or the installed
+`tidytap-release` skill for release requests. It reports the current project
+version, latest published release, latest tag, branch state, worktree state,
+and changes since the last release before recommending a semantic version.
+The user selects the exact version before any version edit, tag, push, or public
+release.
 
-The workflow creates or resumes a draft GitHub Release only after all build,
-signing, notarization, staple, Gatekeeper, checksum, and bundle-content checks
-pass. It replaces assets only while that release remains a draft, then
-publishes the draft only after both the DMG and its `.sha256` sidecar upload.
-An already published release with the same tag is never overwritten and causes
-the workflow to fail clearly. A failed upload leaves a draft that a later
-workflow_dispatch run for the same tag can safely resume.
-
-The release workflow uses the `release` GitHub environment. Configure these
-environment secrets before the first real tag run; the workflow does not
-create or upload them:
-
-| Secret | Purpose |
-| --- | --- |
-| `TIDYTAP_DEVELOPMENT_TEAM` | Apple Team ID used by the project signing config |
-| `TIDYTAP_DEVELOPER_ID_APPLICATION` | Exact `Developer ID Application: ... (TEAMID)` identity name |
-| `TIDYTAP_DEVELOPER_ID_CERTIFICATE_P12_BASE64` | Base64 export of the Developer ID certificate and private key |
-| `TIDYTAP_DEVELOPER_ID_CERTIFICATE_PASSWORD` | Password for that P12 export |
-| `TIDYTAP_NOTARY_API_KEY_P8_BASE64` | Base64 App Store Connect API private key for `notarytool` |
-| `TIDYTAP_NOTARY_KEY_ID` | App Store Connect API key ID |
-| `TIDYTAP_NOTARY_ISSUER_ID` | App Store Connect API issuer ID |
-
-Use an environment required reviewer for the first release job and keep the
-secrets scoped to this repository's release environment. The job imports the
-certificate into a temporary keychain, stores a fixed CI-only notary profile
-(`tidytap-ci-notary`) in that keychain, writes the ignored local xcconfig, and
-deletes the keychain, decoded files, config, and notes in an `always()` cleanup
-step. The local `notarytool` profile name is not itself a hosted-runner
-credential.
-
-Pull requests use `.github/workflows/ci.yml`, which runs tests and static
-release-order checks without any signing or notarization secrets. The
-`macos-26` GitHub-hosted arm64 runner is selected to match this project's
-`ARCHS = arm64` and `MACOSX_DEPLOYMENT_TARGET = 26.0`; the workflow checks the
-actual SDK before building. The GitHub-hosted runner label and available Xcode
-images can change, so a runner or SDK failure should be treated as an explicit
-compatibility update rather than silently switching to a self-hosted machine.
-
-The `0.1.1` app and embedded worker marketing versions are recorded in the
-project on this branch. Create `v0.1.1` only from the corresponding main
-commit after the remaining product acceptance checks; this automation branch
-does not create a tag or release.
+After the version is selected, the skill validates the clean final main commit,
+reuses the local signing configuration and Keychain notary profile, invokes
+`Scripts/package-release-dmg.sh`, and checks the exact DMG with
+`Scripts/verify-release-artifact.sh`. Only a verified candidate may be tagged
+and uploaded to a new GitHub Release. Existing tags and published releases are
+never moved or overwritten.

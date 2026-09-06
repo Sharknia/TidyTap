@@ -1,0 +1,4 @@
+interface:
+  display_name: "TidyTap Release"
+  short_description: "Prepare and publish a local signed notarized DMG release"
+  default_prompt: "Use $tidytap-release to prepare a local TidyTap DMG release."
