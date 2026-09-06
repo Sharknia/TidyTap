@@ -21,6 +21,33 @@ final class HelperLauncherTests: XCTestCase {
         XCTAssertNil(TidyTapWorkerLockOwner(encoded: Data("202 30 40\n".utf8)))
     }
 
+    func testLegacyRegistrationAtAnotherPathBlocksWithoutLaunchingOrSignaling() throws {
+        let runtime = SystemTidyTapWorkerRuntime(
+            expectedExecutableURL: builtHelperURL(),
+            lockURL: URL(fileURLWithPath: "/unused-worker-lock"),
+            expectedUID: getuid(),
+            registeredLegacyProcessIdentifiers: { [getpid()] },
+            applicationBundleIsValid: { true }
+        )
+        XCTAssertThrowsError(try runtime.legacyWorkers()) { error in
+            XCTAssertEqual(
+                error as? HelperLauncherError,
+                .workerIdentityCouldNotBeVerified(getpid(), errSecCSReqFailed)
+            )
+        }
+    }
+
+    func testLegacyRegistrationFromAnotherUserIsIgnored() throws {
+        let runtime = SystemTidyTapWorkerRuntime(
+            expectedExecutableURL: builtHelperURL(),
+            lockURL: URL(fileURLWithPath: "/unused-worker-lock"),
+            expectedUID: getuid() &+ 1,
+            registeredLegacyProcessIdentifiers: { [getpid()] },
+            applicationBundleIsValid: { true }
+        )
+        XCTAssertTrue(try runtime.legacyWorkers().isEmpty)
+    }
+
     func testAlreadyReadyCurrentWorkerDoesNotLaunchOrTerminate() throws {
         let runtime = FakeWorkerRuntime(
             lockStates: [.held(owner: current)],

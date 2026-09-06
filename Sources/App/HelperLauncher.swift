@@ -141,6 +141,7 @@ final class SystemTidyTapWorkerRuntime: TidyTapWorkerRuntime {
     private let expectedUID: uid_t
     private let applicationBundleIsValid: () -> Bool
     private let additionalLaunchEnvironment: [String: String]
+    private let registeredLegacyProcessIdentifiers: () -> [pid_t]
 
     convenience init(
         bundle: Bundle = .main,
@@ -166,6 +167,11 @@ final class SystemTidyTapWorkerRuntime: TidyTapWorkerRuntime {
         lockURL: URL,
         expectedUID: uid_t,
         additionalLaunchEnvironment: [String: String] = [:],
+        registeredLegacyProcessIdentifiers: @escaping () -> [pid_t] = {
+            NSRunningApplication.runningApplications(
+                withBundleIdentifier: TidyTapProduct.helperBundleIdentifier
+            ).map(\.processIdentifier)
+        },
         applicationBundleIsValid: @escaping () -> Bool
     ) {
         self.expectedExecutableURL = expectedExecutableURL
@@ -187,6 +193,7 @@ final class SystemTidyTapWorkerRuntime: TidyTapWorkerRuntime {
         self.lockURL = lockURL
         self.expectedUID = expectedUID
         self.additionalLaunchEnvironment = additionalLaunchEnvironment
+        self.registeredLegacyProcessIdentifiers = registeredLegacyProcessIdentifiers
         self.applicationBundleIsValid = applicationBundleIsValid
     }
 
@@ -285,6 +292,24 @@ final class SystemTidyTapWorkerRuntime: TidyTapWorkerRuntime {
     }
 
     func legacyWorkers() throws -> [TidyTapWorkerLockOwner] {
+        // A pre-lock worker in another installation can still intercept input.
+        // Do not terminate outside this app's verified migration path, but do
+        // not start a second worker alongside that other copy either.
+        for processIdentifier in registeredLegacyProcessIdentifiers() {
+            guard processIdentifier > 0,
+                  processUID(processIdentifier) == expectedUID,
+                  let owner = TidyTapWorkerLockOwner.process(processIdentifier: processIdentifier) else {
+                continue
+            }
+            if processPath(processIdentifier) != expectedLegacyExecutableURL.path,
+               TidyTapWorkerLockOwner.process(processIdentifier: processIdentifier)?.processIdentity
+                    == owner.processIdentity {
+                throw HelperLauncherError.workerIdentityCouldNotBeVerified(
+                    processIdentifier,
+                    errSecCSReqFailed
+                )
+            }
+        }
         var validated = [TidyTapWorkerLockOwner]()
         for owner in try processOwners(at: expectedLegacyExecutableURL.path) {
             if try validatedLegacyApplication(owner) != nil {
