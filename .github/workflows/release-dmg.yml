@@ -42,7 +42,7 @@ jobs:
 
       - name: Validate tag, main ancestry, version, and runner
         id: metadata
-        shell: zsh
+        shell: zsh {0}
         env:
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
         run: |
@@ -80,7 +80,7 @@ jobs:
           printf 'Release tag %s resolves to main commit %s; app version %s; macOS SDK %s.\n' "$tag" "$tag_commit" "$tag_version" "$sdk_version"
 
       - name: Prepare temporary signing keychain
-        shell: zsh
+        shell: zsh {0}
         env:
           TIDYTAP_DEVELOPMENT_TEAM: ${{ secrets.TIDYTAP_DEVELOPMENT_TEAM }}
           TIDYTAP_DEVELOPER_ID_APPLICATION: ${{ secrets.TIDYTAP_DEVELOPER_ID_APPLICATION }}
@@ -133,14 +133,14 @@ jobs:
             > Config/LocalSigning.xcconfig
 
       - name: Build, sign, notarize, and staple DMG
-        shell: zsh
+        shell: zsh {0}
         run: |
           set -euo pipefail
           rm -rf build
           Scripts/package-release-dmg.sh
 
       - name: Verify DMG contents and checksum
-        shell: zsh
+        shell: zsh {0}
         env:
           RELEASE_VERSION: ${{ steps.metadata.outputs.version }}
         run: |
@@ -151,7 +151,7 @@ jobs:
             "$RELEASE_VERSION"
 
       - name: Publish draft GitHub Release
-        shell: zsh
+        shell: zsh {0}
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
@@ -196,7 +196,7 @@ jobs:
 
       - name: Clean temporary signing material
         if: ${{ always() }}
-        shell: zsh
+        shell: zsh {0}
         run: |
           set +e
           if [[ -f "$TIDYTAP_KEYCHAIN_PASSWORD_FILE" && -f "$TIDYTAP_KEYCHAIN_PATH" ]]; then
