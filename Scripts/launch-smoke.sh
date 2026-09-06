@@ -177,10 +177,86 @@ kill "$helper_pid"
 wait "$helper_pid" 2>/dev/null || true
 helper_pid=""
 
+# A fixed-step-only snapshot must keep the fake-input worker alive even when
+# reversal, Caps Lock and side buttons are all off. Use no shared notifications:
+# an installed production worker could also observe their application object.
+xcrun swift -e '
+import Foundation
+let defaults = UserDefaults(suiteName: CommandLine.arguments[1])!
+let request: [String: Any] = ["applyRequestID": UUID().uuidString, "settings": [
+    "capsLockInputSourceSwitching": false, "reverseMouseWheelVertically": false,
+    "sideButtonNavigation": false, "launchAtLogin": false,
+    "fixedMouseWheelStepEnabled": true, "mouseWheelStepLines": 7
+]]
+defaults.set(try JSONSerialization.data(withJSONObject: request), forKey: "settings")
+defaults.synchronize()
+' "$helper_suite"
+
+env TIDYTAP_LAUNCH_SMOKE=1 TIDYTAP_LAUNCH_SMOKE_PREFERENCES_SUITE="$helper_suite" \
+  "$helper_path" >"$smoke_root/fixed-step.log" 2>&1 &
+helper_pid=$!
+wait_for_log "$helper_pid" "$smoke_root/fixed-step.log" "TIDYTAP_LAUNCH_SMOKE helper-delegate-started"
+kill -0 "$helper_pid"
+kill "$helper_pid"
+wait "$helper_pid" 2>/dev/null || true
+helper_pid=""
+
+# Verify the effective result and disable just this feature, preserving its
+# remembered size. A fresh worker must apply all-off and terminate normally.
+xcrun swift -e '
+import Foundation
+let defaults = UserDefaults(suiteName: CommandLine.arguments[1])!
+defaults.synchronize()
+guard let statusData = defaults.data(forKey: "applyStatus"),
+      let status = try JSONSerialization.jsonObject(with: statusData) as? [String: Any],
+      status["outcome"] as? String == "applied",
+      let effective = status["effectiveSettings"] as? [String: Any],
+      effective["fixedMouseWheelStepEnabled"] as? Bool == true,
+      effective["mouseWheelStepLines"] as? Int == 7,
+      effective["reverseMouseWheelVertically"] as? Bool == false else {
+    fatalError("Fixed-step-only effective settings were not applied")
+}
+var disabled = effective
+disabled["fixedMouseWheelStepEnabled"] = false
+let request: [String: Any] = ["applyRequestID": UUID().uuidString, "settings": disabled]
+defaults.set(try JSONSerialization.data(withJSONObject: request), forKey: "settings")
+defaults.synchronize()
+' "$helper_suite"
+
+env TIDYTAP_LAUNCH_SMOKE=1 TIDYTAP_LAUNCH_SMOKE_PREFERENCES_SUITE="$helper_suite" \
+  "$helper_path" >"$smoke_root/fixed-step-off.log" 2>&1 &
+helper_pid=$!
+wait_for_log "$helper_pid" "$smoke_root/fixed-step-off.log" "TIDYTAP_LAUNCH_SMOKE helper-delegate-started"
+attempts=0
+while kill -0 "$helper_pid" 2>/dev/null && (( attempts < 100 )); do
+  sleep 0.1
+  (( attempts += 1 ))
+done
+if kill -0 "$helper_pid" 2>/dev/null; then
+  print -u2 -- "Worker did not exit after fixed-step-only was disabled."
+  exit 1
+fi
+wait "$helper_pid"
+helper_pid=""
+
+xcrun swift -e '
+import Foundation
+let defaults = UserDefaults(suiteName: CommandLine.arguments[1])!
+defaults.synchronize()
+guard let data = defaults.data(forKey: "applyStatus"),
+      let status = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+      status["outcome"] as? String == "applied",
+      let effective = status["effectiveSettings"] as? [String: Any],
+      effective["fixedMouseWheelStepEnabled"] as? Bool == false,
+      effective["mouseWheelStepLines"] as? Int == 7 else {
+    fatalError("Disabled fixed-step size was not preserved")
+}
+' "$helper_suite"
+
 live_state_after=$(snapshot_live_state)
 if [[ "$live_state_before" != "$live_state_after" ]]; then
   print -u2 -- "Live HID, symbolic-hotkey, or production preference state changed during smoke."
   exit 1
 fi
 
-print -- "Launch smoke passed: settings window, all-off exit, duplicate-worker exclusion, restart after exit, and no live state mutation."
+print -- "Launch smoke passed: settings window, all-off exit, duplicate-worker exclusion, restart after exit, fixed-step-only lifecycle, and no live state mutation."
