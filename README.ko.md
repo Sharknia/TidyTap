@@ -18,7 +18,7 @@ TidyTap은 macOS 입력 불편을 해결하는 작은 유틸리티입니다.
 
 개발 빌드는 MacBook Pro `Mac15,6`(Apple M3 Pro)와 macOS 26.6.2(`25G83`)에서 확인 중입니다. 현재 물리 검증은 스크롤 장치 분류(VXE와 내장·Magic Trackpad 구분)와 VXE 측면 버튼이 Core Graphics 버튼 3/4로 보고되는지에 한정됩니다. Caps Lock 입력 소스 백업·복원, 권한 허용·회수, 휠 및 Safari/Finder 탐색 통합 동작, helper 수명·로그인 동작, 지원 제거 순서는 아직 통합 라이브 검증이 남아 있으며 완료를 주장하지 않습니다. UI는 한국어와 영어를 지원합니다. 다른 Mac이나 macOS 버전에서 실행될 수는 있지만 `0.1.1` 호환성을 보장하지 않습니다.
 
-상태: `0.1.1` 릴리스. 서명·공증 artifact는 별도로 계획 중이며, 여기서 완료를 주장하지 않습니다. 로컬 TidyTap Release 스킬은 이후 릴리스에 사용할 수 있습니다.
+프로젝트 버전: `0.1.1`. 공개된 버전과 서명된 다운로드 파일은 [GitHub Releases](https://github.com/Sharknia/TidyTap/releases)에서 확인하세요.
 
 [MVP 작업 계획](docs/MVP_PLAN.md)과 [English README](README.md)도 참고하세요.
 
