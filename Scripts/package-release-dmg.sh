@@ -134,9 +134,9 @@ run_step \
     archive
 
 app_path="$archive_path/Products/Applications/TidyTap.app"
-helper_path="$app_path/Contents/Library/LoginItems/TidyTapHelper.app"
-if [[ ! -d "$app_path" || ! -d "$helper_path" ]]; then
-  print -u2 -- "Release archive did not contain TidyTap.app with its embedded TidyTapHelper.app."
+helper_path="$app_path/Contents/MacOS/TidyTapHelper"
+if [[ ! -d "$app_path" || ! -x "$helper_path" ]]; then
+  print -u2 -- "Release archive did not contain TidyTap.app with its embedded TidyTapHelper executable."
   exit 1
 fi
 

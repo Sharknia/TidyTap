@@ -31,10 +31,10 @@
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "Caps Lock 한·영 전환" } }
       }
     },
-    "Accessibility is required. In System Settings > Privacy & Security > Accessibility, enable TidyTapHelper (it may appear as TidyTap). Return here; TidyTap will refresh to confirm access. Then turn your desired feature back on." : {
+    "Accessibility is required. In System Settings > Privacy & Security > Accessibility, enable TidyTap. Return here; TidyTap will refresh to confirm access. Then turn your desired feature back on." : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Accessibility is required. In System Settings > Privacy & Security > Accessibility, enable TidyTapHelper (it may appear as TidyTap). Return here; TidyTap will refresh to confirm access. Then turn your desired feature back on." } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "손쉬운 사용 권한이 필요합니다. 시스템 설정 > 개인정보 보호 및 보안 > 손쉬운 사용에서 TidyTapHelper(목록에는 TidyTap으로 보일 수 있음)를 켜세요. 이 창으로 돌아오면 TidyTap이 권한을 새로 확인합니다. 그 다음 원하는 기능을 다시 켜세요." } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Accessibility is required. In System Settings > Privacy & Security > Accessibility, enable TidyTap. Return here; TidyTap will refresh to confirm access. Then turn your desired feature back on." } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "손쉬운 사용 권한이 필요합니다. 시스템 설정 > 개인정보 보호 및 보안 > 손쉬운 사용에서 TidyTap를 켜세요. 이 창으로 돌아오면 TidyTap이 권한을 새로 확인합니다. 그 다음 원하는 기능을 다시 켜세요." } }
       }
     },
     "Changes applied." : {
@@ -67,10 +67,10 @@
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "TidyTap 열기" } }
       }
     },
-    "Input Monitoring is required. In System Settings > Privacy & Security > Input Monitoring, enable TidyTapHelper (it may appear as TidyTap). Return here; TidyTap will refresh to confirm access. Then turn your desired feature back on." : {
+    "Input Monitoring is required. In System Settings > Privacy & Security > Input Monitoring, enable TidyTap. Return here; TidyTap will refresh to confirm access. Then turn your desired feature back on." : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Input Monitoring is required. In System Settings > Privacy & Security > Input Monitoring, enable TidyTapHelper (it may appear as TidyTap). Return here; TidyTap will refresh to confirm access. Then turn your desired feature back on." } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "입력 모니터링 권한이 필요합니다. 시스템 설정 > 개인정보 보호 및 보안 > 입력 모니터링에서 TidyTapHelper(목록에는 TidyTap으로 보일 수 있음)를 켜세요. 이 창으로 돌아오면 TidyTap이 권한을 새로 확인합니다. 그 다음 원하는 기능을 다시 켜세요." } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Input Monitoring is required. In System Settings > Privacy & Security > Input Monitoring, enable TidyTap. Return here; TidyTap will refresh to confirm access. Then turn your desired feature back on." } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "입력 모니터링 권한이 필요합니다. 시스템 설정 > 개인정보 보호 및 보안 > 입력 모니터링에서 TidyTap를 켜세요. 이 창으로 돌아오면 TidyTap이 권한을 새로 확인합니다. 그 다음 원하는 기능을 다시 켜세요." } }
       }
     },
     "Keep TidyTap ready after you sign in" : {
@@ -191,6 +191,12 @@
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Switch input sources without changing letter case" } },
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "대문자 고정 없이 입력 소스 전환" } }
+      }
+    },
+    "Quit TidyTap" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Quit TidyTap" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "TidyTap 종료" } }
       }
     },
     "TidyTap" : {

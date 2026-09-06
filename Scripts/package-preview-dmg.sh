@@ -69,9 +69,9 @@ run_step \
     build
 
 app_path="$derived_data/Build/Products/$configuration/TidyTap.app"
-helper_path="$app_path/Contents/Library/LoginItems/TidyTapHelper.app"
-if [[ ! -d "$app_path" || ! -d "$helper_path" ]]; then
-  print -u2 -- "Preview build did not produce TidyTap.app with its embedded TidyTapHelper.app."
+helper_path="$app_path/Contents/MacOS/TidyTapHelper"
+if [[ ! -d "$app_path" || ! -x "$helper_path" ]]; then
+  print -u2 -- "Preview build did not produce TidyTap.app with its embedded TidyTapHelper executable."
   exit 1
 fi
 
@@ -148,8 +148,8 @@ run_step \
   "Preview app copy verification" \
   "The app could not be copied from the mounted DMG." \
   /usr/bin/ditto "$mount_dir/TidyTap.app" "$copied_app_path"
-copied_helper_path="$copied_app_path/Contents/Library/LoginItems/TidyTapHelper.app"
-if [[ ! -d "$copied_helper_path" ]]; then
+copied_helper_path="$copied_app_path/Contents/MacOS/TidyTapHelper"
+if [[ ! -x "$copied_helper_path" ]]; then
   print -u2 -- "Mounted preview DMG did not contain TidyTap.app with its embedded helper."
   exit 1
 fi

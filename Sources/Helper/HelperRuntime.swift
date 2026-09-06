@@ -4,11 +4,11 @@ import TidyTapInputEngine
 /// A background-only helper. It owns the process lifetime and applies the
 /// complete persisted snapshot at launch and after each change notification.
 @MainActor
-final class HelperAppDelegate: NSObject, NSApplicationDelegate {
+final class HelperRuntime {
     private var lifecycle: HelperLifecycle?
     private let launchSmoke = TidyTapLaunchSmoke.current()
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
+    func start() {
         let preferences: TidyTapPreferencesStore
         let capsFeature: TidyTapCapsFeatureApplying
         let inputFeatures: TidyTapInputFeaturesApplying
@@ -52,24 +52,26 @@ final class HelperAppDelegate: NSObject, NSApplicationDelegate {
         launchSmoke?.report("helper-delegate-started")
     }
 
-    func applicationWillTerminate(_ notification: Notification) {
+    func stop() {
         lifecycle?.stop()
     }
 }
 
 private final class LaunchSmokeCapsFeature: TidyTapCapsFeatureApplying {
     private let smoke: TidyTapLaunchSmoke
+    private var enabled = false
 
     init(smoke: TidyTapLaunchSmoke) {
         self.smoke = smoke
     }
 
     func apply(capsLockEnabled: Bool) throws {
+        enabled = capsLockEnabled
         smoke.report("helper-caps-\(capsLockEnabled ? "enabled" : "disabled")")
     }
 
     func currentCapsLockEnabled() throws -> Bool {
-        false
+        enabled
     }
 }
 

@@ -28,6 +28,7 @@ cleanup() {
   fi
   /usr/bin/defaults delete "$main_suite" >/dev/null 2>&1 || true
   /usr/bin/defaults delete "$helper_suite" >/dev/null 2>&1 || true
+  rm -rf "$HOME/Library/Application Support/$helper_suite"
   rm -rf "$smoke_root"
 }
 trap cleanup EXIT
@@ -83,8 +84,8 @@ xcodebuild \
   build
 
 app_path="$derived_data/Build/Products/Release/TidyTap.app"
-helper_path="$app_path/Contents/Library/LoginItems/TidyTapHelper.app"
-if [[ ! -d "$app_path" || ! -d "$helper_path" ]]; then
+helper_path="$app_path/Contents/MacOS/TidyTapHelper"
+if [[ ! -d "$app_path" || ! -x "$helper_path" ]]; then
   print -u2 -- "Release build did not contain the app and embedded helper."
   exit 1
 fi
@@ -115,7 +116,7 @@ main_pid=""
 env \
   TIDYTAP_LAUNCH_SMOKE=1 \
   TIDYTAP_LAUNCH_SMOKE_PREFERENCES_SUITE="$helper_suite" \
-  "$helper_path/Contents/MacOS/TidyTapHelper" >"$helper_log" 2>&1 &
+  "$helper_path" >"$helper_log" 2>&1 &
 helper_pid=$!
 
 wait_for_log "$helper_pid" "$helper_log" "TIDYTAP_LAUNCH_SMOKE helper-delegate-started"
@@ -139,10 +140,47 @@ if /usr/bin/grep -Eq "helper-caps-enabled|helper-input-wheel-on|helper-input-.*b
   exit 1
 fi
 
+# Keep a fake Caps feature active: this exercises the real worker lifetime and
+# lock while the smoke adapters guarantee there are no HID or event-tap changes.
+xcrun swift -e '
+import Foundation
+let defaults = UserDefaults(suiteName: CommandLine.arguments[1])!
+let request: [String: Any] = ["applyRequestID": UUID().uuidString, "settings": [
+    "capsLockInputSourceSwitching": true, "reverseMouseWheelVertically": false,
+    "sideButtonNavigation": false, "launchAtLogin": false
+]]
+defaults.set(try JSONSerialization.data(withJSONObject: request), forKey: "settings")
+defaults.synchronize()
+' "$helper_suite"
+
+env TIDYTAP_LAUNCH_SMOKE=1 TIDYTAP_LAUNCH_SMOKE_PREFERENCES_SUITE="$helper_suite" \
+  "$helper_path" >"$smoke_root/active.log" 2>&1 &
+helper_pid=$!
+wait_for_log "$helper_pid" "$smoke_root/active.log" "TIDYTAP_LAUNCH_SMOKE helper-delegate-started"
+env TIDYTAP_LAUNCH_SMOKE=1 TIDYTAP_LAUNCH_SMOKE_PREFERENCES_SUITE="$helper_suite" \
+  "$helper_path" >"$smoke_root/duplicate.log" 2>&1
+if /usr/bin/grep -Fq "helper-delegate-started" "$smoke_root/duplicate.log"; then
+  print -u2 -- "Duplicate worker started a second input lifecycle."
+  exit 1
+fi
+kill -0 "$helper_pid"
+kill "$helper_pid"
+wait "$helper_pid" 2>/dev/null || true
+helper_pid=""
+
+# A stopped/crashed process must release the lock without clearing a PID file.
+env TIDYTAP_LAUNCH_SMOKE=1 TIDYTAP_LAUNCH_SMOKE_PREFERENCES_SUITE="$helper_suite" \
+  "$helper_path" >"$smoke_root/restarted.log" 2>&1 &
+helper_pid=$!
+wait_for_log "$helper_pid" "$smoke_root/restarted.log" "TIDYTAP_LAUNCH_SMOKE helper-delegate-started"
+kill "$helper_pid"
+wait "$helper_pid" 2>/dev/null || true
+helper_pid=""
+
 live_state_after=$(snapshot_live_state)
 if [[ "$live_state_before" != "$live_state_after" ]]; then
   print -u2 -- "Live HID, symbolic-hotkey, or production preference state changed during smoke."
   exit 1
 fi
 
-print -- "Launch smoke passed: one ${settings_content_width}x${settings_content_height}-content settings window, all-off helper startup/exit, and no live state mutation."
+print -- "Launch smoke passed: settings window, all-off exit, duplicate-worker exclusion, restart after exit, and no live state mutation."

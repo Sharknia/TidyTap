@@ -19,6 +19,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // its embedded helper is an agent. Explicitly restore the regular
         // activation policy so launches from a login item/Dock are visible.
         NSApp.setActivationPolicy(.regular)
+        let menuBar = NSMenu()
+        let appItem = NSMenuItem()
+        let appMenu = NSMenu(title: TidyTapStrings.appName)
+        appMenu.addItem(withTitle: TidyTapStrings.quitApp,
+                        action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appItem.submenu = appMenu
+        menuBar.addItem(appItem)
+        NSApp.mainMenu = menuBar
         let settingsCoordinator: SettingsCoordinator
         if let launchSmoke {
             settingsCoordinator = SettingsCoordinator(
@@ -77,9 +85,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
-        if !updatePermissionResultIfAvailable() {
-            _ = try? settingsCoordinator?.refreshPermissionsIfNeeded()
-        }
+        _ = updatePermissionResultIfAvailable()
+        _ = try? settingsCoordinator?.refreshPermissionsIfNeeded()
     }
 
     /// Reopen the settings surface when the Dock icon or a status-item menu
@@ -152,7 +159,7 @@ private final class LaunchSmokeHelperLauncher: TidyTapHelperLaunching {
         self.smoke = smoke
     }
 
-    func launchOrActivateHelper() {
+    func ensureHelperRunning() {
         smoke.report("main-helper-launch-skipped")
     }
 }

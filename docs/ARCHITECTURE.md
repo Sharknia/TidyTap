@@ -12,7 +12,7 @@ TidyTap.app (AppKit, Dock 앱)
   └─ DistributedNotificationCenter 설정 변경 알림
                     │
                     ▼
-TidyTapHelper (LSUIElement, 단일 백그라운드 프로세스)
+TidyTap.app/Contents/MacOS/TidyTapHelper (일반 실행 파일, 별도 백그라운드 프로세스)
   ├─ 설정 재읽기 및 적용 조정
   ├─ Caps Lock → F18 / 입력 소스 설정 적용
   ├─ 단일 CGEventTap (휠·측면 버튼)
@@ -20,6 +20,8 @@ TidyTapHelper (LSUIElement, 단일 백그라운드 프로세스)
 ```
 
 `TidyTap.app`은 Dock에 보이는 일반 AppKit 설정 앱이다. `Command-Q`는 이 프로세스만 종료한다. helper는 Dock에 표시하지 않으며, 앱이 종료된 뒤에도 켜진 입력 기능을 계속 처리한다. 모든 입력 기능이 꺼지면 helper는 event tap을 제거하고 종료한다.
+
+권한 주체는 `com.sharknia.TidyTap` 하나다. 별도 `TidyTapHelper.app` 번들은 만들지 않는다. 일반 실행은 `Process`로 앱 내부 실행 파일을 시작하고, 로그인 실행은 `SMAppService.agent`와 앱에 포함된 LaunchAgent plist의 `BundleProgram` 및 `AssociatedBundleIdentifiers`를 사용한다. root daemon, 추가 권한, 별도 설치 스크립트는 필요하지 않다. 0.0.2의 로그인 항목과 실행 중인 옛 Helper는 전환 시 정리한다.
 
 ## 2. 모듈 및 파일 경계
 
@@ -33,7 +35,7 @@ TidyTapHelper (LSUIElement, 단일 백그라운드 프로세스)
 | `App/SettingsCoordinator.swift` | 사용자 변경 검증, UserDefaults 저장, helper 시작 요청, IPC 알림 | 이벤트 콜백 |
 | `App/PermissionCoordinator.swift` | 접근성·입력 모니터링 상태 확인 및 시스템 설정 열기 | 권한 우회, 권한 자동 승인 |
 | `App/LoginItemCoordinator.swift` | `SMAppService`로 helper 로그인 항목 등록/해제 및 상태 표시 | helper 기능 토글 |
-| `Helper/main.swift`, `Helper/HelperAppDelegate.swift` | 강하게 보유한 delegate로 helper `NSApplication` 실행, 전체 설정 초기 적용, IPC 수신, 종료 조건 | 설정 UI |
+| `Helper/main.swift`, `Helper/HelperRuntime.swift` | 단일 Worker에서 CFRunLoop 실행, 전체 설정 초기 적용, IPC 수신, 종료 조건 | 설정 UI |
 | `Helper/ApplyCoordinator.swift` | 설정 스냅샷을 읽어 Caps/이벤트 탭 적용 순서 조정, 트랜잭션과 롤백, 결과 보고 | 개별 이벤트 판정 |
 | `Helper/CapsLockController.swift` | Caps Lock HID 매핑의 백업·충돌 검사·적용·조건부 복원 | 입력 소스 단축키, 다른 키 매핑, UI |
 | `Helper/InputSourceShortcutController.swift` | 입력 소스 단축키의 현재값 확인, F18 설정 및 조건부 백업 복원 | HID 매핑, 입력 소스 목록 변경 |
@@ -68,17 +70,17 @@ helper는 같은 preferences domain의 별도 status 키에 `applyRequestID`, �
 
 helper의 번들 식별자는 앱이 등록할 수 있는 login item helper로 고정한다. `LoginItemCoordinator`는 `SMAppService.mainApp`이 아닌 helper 번들에 해당하는 ServiceManagement 등록 API를 사용하여 `로그인할 때 시작` 토글을 등록/해제하고, 그 상태를 읽어 UI에 반영한다. 등록은 로그인 시 helper가 실행되도록 하는 것뿐이며 현재 프로세스를 강제로 종료하지 않는다.
 
-- 핵심 기능 토글 중 하나가 켜지면 설정 앱이 helper를 실행/활성화한다.
+- 핵심 기능 토글 중 하나가 켜지면 설정 앱이 앱 내부 실행 파일을 Process로 시작한다.
 - `로그인할 때 시작`이 켜져 있으면 ServiceManagement가 다음 로그인 직후 helper를 시작하고, helper는 저장된 전체 설정을 복원한다.
 - 로그인 실행을 끄면 다음 로그인 자동 시작만 해제한다. 현재 세션의 활성 기능과 helper는 유지한다.
 - 모든 세 기능이 꺼지면 helper는 Caps 상태를 필요한 방식으로 복원하고 event tap을 제거한 뒤 종료한다.
 - 설정 앱 종료나 `Command-Q`는 helper를 종료시키지 않는다. helper가 비정상 종료된 뒤 자동 재시작은 제공하지 않으며, 사용자가 앱을 다시 열어 복구한다.
 
-이미 실행 중인 helper를 설정 앱이 매번 새로 만들지 않도록 단일 인스턴스/활성화 요청을 사용한다. helper가 설정 변경 중 종료되더라도 고정 modifier나 mouse-down 상태를 남기지 않도록 각 callback의 합성 상태를 button-up 또는 종료 경로에서 정리한다.
+Worker가 사용자별 파일에 프로세스 수명 동안 flock을 보유하여 일반 실행과 로그인 실행이 겹쳐도 입력 엔진은 한 번만 시작한다. 종료·충돌 시 커널이 잠금을 해제한다. helper가 설정 변경 중 종료되더라도 고정 modifier나 mouse-down 상태를 남기지 않도록 각 callback의 합성 상태를 button-up 또는 종료 경로에서 정리한다.
 
 ## 6. 권한 경계
 
-Caps Lock 전용 경로와 helper 시작은 권한을 요청하지 않는다. 휠 경로는 접근성 및 입력 모니터링 권한을 모두 검사하고, 측면 버튼 전용 경로는 접근성 권한만 검사한다. 권한이 없거나 회수되면 event tap은 원본 이벤트를 통과시키고, 해당 토글은 켜진 것처럼 저장/표시하지 않는다. 사용자가 권한 버튼을 누른 경우에만 실제 사용 프로세스인 helper가 공개 CGRequest API를 호출한다. 앱이 다시 전면에 오면 UUID로 연결된 읽기 전용 요청/결과를 통해 helper의 현재 상태를 확인하며, 이 확인은 설정·Caps 저널·event tap을 변경하지 않는다.
+Caps Lock 전용 경로와 helper 시작은 권한을 요청하지 않는다. 휠 경로는 접근성 및 입력 모니터링 권한을 모두 검사하고, 측면 버튼 전용 경로는 접근성 권한만 검사한다. 권한이 없거나 회수되면 event tap은 원본 이벤트를 통과시키고, 해당 토글은 켜진 것처럼 저장/표시하지 않는다. 사용자가 권한 버튼을 누른 경우에만 실제 사용 프로세스인 helper가 공개 CGRequest API를 호출한다. 설정 창을 처음 열거나 앱이 다시 전면에 오면 UUID로 연결된 읽기 전용 요청/결과를 통해 helper의 현재 상태를 확인하며, 이 확인은 설정·Caps 저널·event tap을 변경하지 않는다.
 
 콜백은 필요한 이벤트 종류, 버튼, 스크롤 값, 전면 앱 확인만 메모리에서 즉시 처리한다. 키 입력·마우스 좌표·이벤트 원문을 저장하거나 네트워크로 보내지 않는다. 타사 유틸리티를 종료·제거하거나 권한을 우회하지 않는다.
 
