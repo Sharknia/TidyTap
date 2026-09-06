@@ -8,6 +8,7 @@ TidyTap 0.1.1 adds a fixed wheel-step toggle that works independently from verti
 - The selected step is remembered while the toggle is off.
 - The feature applies to single-step, non-continuous mouse-wheel events; larger deltas retain their original magnitude.
 - The existing direction-reversal toggle remains independent.
+- The DMG opens with a compact drag-to-Applications layout, a Korean folder label and Korean installation guidance, without a separate installation text file.
 - The worker update path replaces only an identified stale worker and verifies the effective settings before accepting success. Process-level replacement, restart, all-off exit, and mismatched-success handling were validated in isolated automated checks.
 
 Known limits:
@@ -25,6 +26,7 @@ TidyTap 0.1.1은 세로 방향 반전과 독립적으로 사용할 수 있는 �
 - 토글이 꺼져 있어도 선택한 단계 크기는 기억합니다.
 - 비연속 단일 단계 마우스 휠 입력에 적용하며, 더 큰 delta의 원래 크기는 유지합니다.
 - 기존 휠 방향 반전 토글은 별도로 동작합니다.
+- DMG 설치 창을 간결한 앱 → 응용 프로그램 배치와 한국어 안내로 정리하고, 별도 설치 안내 텍스트 파일을 제거했습니다.
 - Worker 갱신 경로는 식별된 오래된 Worker만 교체하고 실제 적용 설정을 확인한 뒤 성공을 수락합니다. 프로세스 교체, 재시작, 모든 기능 OFF 종료, 불일치 성공 응답 차단은 격리된 자동 검사로 검증했습니다.
 
 알려진 제한:

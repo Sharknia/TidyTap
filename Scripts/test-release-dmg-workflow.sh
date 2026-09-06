@@ -5,6 +5,7 @@ set -euo pipefail
 
 project_root="${0:A:h:h}"
 release_script="$project_root/Scripts/package-release-dmg.sh"
+artifact_verifier="$project_root/Scripts/verify-release-artifact.sh"
 
 require_line() {
   local pattern="$1"
@@ -70,6 +71,20 @@ elif (( $# != 0 )); then
 fi
 
 assert_container_codesign_order
+
+if ! /usr/bin/grep -Fq 'Scripts/create-installer-dmg.sh' "$release_script" || \
+  ! /usr/bin/grep -Fq -- '--source-directory "$project_root"' "$release_script"; then
+  print -u2 -- "Release workflow must use the shared committed-source installer helper."
+  exit 1
+fi
+if /usr/bin/grep -Eq 'Install TidyTap|/usr/bin/hdiutil create' "$release_script"; then
+  print -u2 -- "Release workflow must not create a text installer item or an unstyled hdiutil DMG."
+  exit 1
+fi
+if ! /usr/bin/grep -Fq 'DMG must expose only Applications and TidyTap.app' "$artifact_verifier"; then
+  print -u2 -- "Release artifact verification must enforce the two-item Finder contract."
+  exit 1
+fi
 
 # The DMG must be signed and fully verified before Apple's submission command.
 assert_before 'verify_developer_id_signature "\$candidate_dmg" "Release DMG"' '"Notarization submission"'

@@ -182,6 +182,7 @@ if $developer_id_preview; then
       -derivedDataPath "$derived_data" \
       -xcconfig "$developer_id_config" \
       build
+  source_directory="$sources_dir"
 else
   run_step \
     "Preview build" \
@@ -196,6 +197,7 @@ else
       CODE_SIGNING_REQUIRED=NO \
       CODE_SIGN_IDENTITY= \
       build
+  source_directory="$project_root"
 fi
 
 app_path="$derived_data/Build/Products/$configuration/TidyTap.app"
@@ -298,20 +300,14 @@ else
 fi
 
 candidate_dmg="$candidate_dir/$dmg_name"
-staging_dir="$candidate_dir/staging"
-mkdir "$staging_dir"
-/usr/bin/ditto "$app_path" "$staging_dir/TidyTap.app"
-/bin/ln -s /Applications "$staging_dir/Applications"
-/usr/bin/tee "$staging_dir/Install TidyTap.txt" >/dev/null <<'EOF'
-TidyTap 설치 / Install TidyTap
-
-TidyTap.app을 Applications 폴더로 드래그하세요.
-Drag TidyTap.app to the Applications folder.
-EOF
 run_step \
   "Preview DMG creation" \
-  "Check available disk space and the built app bundle." \
-  /usr/bin/hdiutil create -volname "$volume_name" -srcfolder "$staging_dir" -ov -format UDZO "$candidate_dmg"
+  "Check the build-only Python environment, committed installer background, and built app bundle." \
+  "$project_root/Scripts/create-installer-dmg.sh" \
+    --source-directory "$source_directory" \
+    --app "$app_path" \
+    --volume-name "$volume_name" \
+    --output "$candidate_dmg"
 
 if $developer_id_preview; then
   run_step \
@@ -328,13 +324,14 @@ run_step \
   /usr/bin/hdiutil attach -readonly -nobrowse -mountpoint "$mount_dir" "$candidate_dmg"
 mounted_image=true
 
-applications_target=$(/usr/bin/readlink "$mount_dir/Applications" 2>/dev/null || true)
-if [[ ! -L "$mount_dir/Applications" || "$applications_target" != "/Applications" ]]; then
+applications_target=$(/usr/bin/readlink "$mount_dir/응용 프로그램" 2>/dev/null || true)
+if [[ ! -L "$mount_dir/응용 프로그램" || "$applications_target" != "/Applications" ]]; then
   print -u2 -- "Mounted preview DMG did not contain the /Applications install link."
   exit 1
 fi
-if [[ ! -f "$mount_dir/Install TidyTap.txt" ]]; then
-  print -u2 -- "Mounted preview DMG did not contain the install instructions."
+visible_items=("$mount_dir"/*(N))
+if (( ${#visible_items} != 2 )); then
+  print -u2 -- "Mounted preview DMG must expose only Applications and TidyTap.app."
   exit 1
 fi
 

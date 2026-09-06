@@ -5,6 +5,9 @@ set -euo pipefail
 
 project_root="${0:A:h:h}"
 preview_script="$project_root/Scripts/package-preview-dmg.sh"
+installer_script="$project_root/Scripts/create-installer-dmg.sh"
+installer_settings="$project_root/Scripts/dmgbuild-settings.py"
+installer_requirements="$project_root/Scripts/dmgbuild-requirements.txt"
 
 require_source() {
   local pattern="$1"
@@ -27,6 +30,11 @@ require_source 'if \(\( \$# == 0 \)\); then'
 require_source 'CODE_SIGNING_ALLOWED=NO'
 require_source '/usr/bin/codesign --force --sign - --timestamp=none "\$bundle_path"'
 require_source 'dmg_name="TidyTap-\$version-preview-adhoc\.dmg"'
+require_source 'Scripts/create-installer-dmg\.sh'
+require_source '--source-directory "\$source_directory"'
+require_source 'Mounted preview DMG must expose only Applications and TidyTap\.app'
+forbidden_source 'Install TidyTap\.txt'
+forbidden_source '/usr/bin/hdiutil create'
 
 # Developer ID mode must be explicit, use the passed ignored config during the
 # build, and never replace the build's signatures with an ad-hoc signature.
@@ -64,6 +72,35 @@ forbidden_source '/usr/bin/xcrun stapler'
 forbidden_source '/usr/sbin/spctl'
 forbidden_source 'gh[[:space:]]+release'
 forbidden_source 'git[[:space:]]+tag'
+
+for required_file in "$installer_script" "$installer_settings" "$installer_requirements"; do
+  [[ -f "$required_file" ]] || { print -u2 -- "Missing installer layout file: $required_file"; exit 1; }
+done
+if [[ ! -f "$project_root/Resources/DMGBackground.tiff" ]]; then
+  print -u2 -- "Missing committed installer background."
+  exit 1
+fi
+if ! /usr/bin/grep -Fqx 'dmgbuild==1.6.7' "$installer_requirements" || \
+  ! /usr/bin/grep -Fqx 'ds-store==1.3.3' "$installer_requirements" || \
+  ! /usr/bin/grep -Fqx 'mac-alias==2.2.3' "$installer_requirements"; then
+  print -u2 -- "Installer dependency pins changed unexpectedly."
+  exit 1
+fi
+if ! /usr/bin/grep -Fq 'requires Python 3.10 or newer' "$installer_script" || \
+  ! /usr/bin/grep -Fq 'build/.dmgbuild-venv' "$installer_script" || \
+  ! /usr/bin/grep -Fq -- '--index-url https://pypi.org/simple' "$installer_script"; then
+  print -u2 -- "Installer helper must use a compatible, isolated PyPI venv."
+  exit 1
+fi
+if /usr/bin/grep -Eq 'osascript' "$installer_script"; then
+  print -u2 -- "Installer helper must not automate Finder."
+  exit 1
+fi
+if zsh "$installer_script" >/dev/null 2>&1; then
+  print -u2 -- "Installer helper accepted missing required arguments."
+  exit 1
+fi
+/usr/bin/python3 "$project_root/Scripts/test-installer-dmg-layout.py"
 
 # The argument parser fails before it can build when the explicit value is
 # missing; this is a no-side-effect CLI regression check.
@@ -198,4 +235,4 @@ run_source_case changed-tracked clean tracked failure
 run_source_case changed-untracked clean untracked failure
 run_source_case changed-head clean head failure
 
-print -- "Preview DMG workflow checks passed, including eight snapshot/source/publication fixtures."
+print -- "Preview DMG workflow checks passed, including Finder metadata settings and eight snapshot/source/publication fixtures."
