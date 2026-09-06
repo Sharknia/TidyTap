@@ -77,6 +77,7 @@ private final class LaunchSmokeCapsFeature: TidyTapCapsFeatureApplying {
 
 private final class LaunchSmokeInputFeatures: TidyTapInputFeaturesApplying {
     private let smoke: TidyTapLaunchSmoke
+    private var configuration = TidyTapInputFeatureConfiguration.disabled
 
     init(smoke: TidyTapLaunchSmoke) {
         self.smoke = smoke
@@ -85,19 +86,36 @@ private final class LaunchSmokeInputFeatures: TidyTapInputFeaturesApplying {
     func apply(
         reverseMouseWheel: Bool,
         sideButtonNavigation: Bool,
+        fixedMouseWheelStepEnabled: Bool,
+        mouseWheelStepLines: Int,
         requestID: UUID
     ) throws -> TidyTapInputFeatureApplyResult {
+        configuration = TidyTapInputFeatureConfiguration(
+            reverseMouseWheel: reverseMouseWheel,
+            sideButtonNavigation: sideButtonNavigation,
+            fixedMouseWheelStepEnabled: fixedMouseWheelStepEnabled,
+            mouseWheelStepLines: mouseWheelStepLines
+        )
         smoke.report(
             "helper-input-\(reverseMouseWheel ? "wheel-on" : "wheel-off")-" +
-                "\(sideButtonNavigation ? "buttons-on" : "buttons-off")"
+                "\(sideButtonNavigation ? "buttons-on" : "buttons-off")-" +
+                "\(fixedMouseWheelStepEnabled ? "step-on" : "step-off")-" +
+                "lines-\(mouseWheelStepLines)"
         )
         return .applied
     }
 
-    func forcePassThrough() throws {}
+    func forcePassThrough() throws {
+        configuration = .init(
+            reverseMouseWheel: false,
+            sideButtonNavigation: false,
+            fixedMouseWheelStepEnabled: false,
+            mouseWheelStepLines: configuration.mouseWheelStepLines
+        )
+    }
 
     func currentConfiguration() -> TidyTapInputFeatureConfiguration {
-        .disabled
+        configuration
     }
 }
 
