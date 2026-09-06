@@ -33,3 +33,25 @@
 - Worker: `6c4ad2f31d5e11517572187f5cb712d69be39d0583cefb2146f47bcb5cb8cb67`
 
 Developer ID preview 패키징을 실제 실행한 `8b322a2` 후보의 앱/Worker를 DMG에서 읽기 전용으로 열어 서명과 DR을 검사했다. 두 DR 해시가 위 정식 배포본과 모두 정확히 일치했다. 이것은 서명 신원의 연속성을 검증한 것이며, 사용자 설치 후 TCC의 실제 허용 상태와 물리 휠 동작을 검증한 것은 아니다.
+
+## 구현과 검증 결과
+
+- Sol 구현: 현재 앱 내부 Worker와 실행 중인 Worker의 신원 검사, 확인된 stale 프로세스만 종료, PID 재사용 방지, lock 소유 확인, nonce를 통한 초기 적용 완료 확인. 정상적인 all-off 종료도 성공으로 인식한다. 0.0.2 nested Helper의 확인된 종료 경로도 보존했다.
+- Terra 구현: 구형/불일치 성공 응답 차단. 기능 OFF의 기억된 크기와 기능 ON의 실제 적용 크기를 구분한다.
+- Terra 구현: 기존 Developer ID로 로컬 preview를 만들며 정식 태그/릴리스·설치·공증 업로드는 수행하지 않는다. 빌드 전 HEAD를 고정하고 커밋의 `git archive` 소스에서 빌드해 ignored 소스가 섞이지 않게 한다. 빌드 전후 작업 트리·HEAD 검사 및 원자적 파일 게시를 유지한다.
+- 통합 앱 테스트: 91개 통과 (`0b0de01` 기준). 입력 엔진 테스트는 80개 통과.
+- 실제 격리 프로세스 테스트: 같은 경로 파일 교체, DR 유지/변경 두 경우의 stale 감지와 새 Worker 요청 처리, all-off 정상 종료 확인. 0.0.2 종료 순서 및 신원 불확실 상태의 차단은 회귀 테스트로 검사했다.
+- 최종 Release launch smoke 통과: 창, 중복 Worker 방지, 재시작, 고정 크기 단독 실행·종료, 운영 입력/설정 비변경 검사.
+- 패키징 fixture 8개 및 release workflow 회귀 검사 통과.
+- 구현마다 새 Sol을 사용해 읽기 전용 독립 리뷰를 수행했다. 응답 상태의 실제 값 보존, 커밋·소스 불일치, 기존 0.0.2 종료 경로 회귀를 수정했다. 다른 설치 경로의 동일 사용자 legacy Helper가 발견되면 임의로 종료하지 않고 새 Worker 시작을 차단하도록 `0b0de01`에서 추가 보완했다. 이 마지막 보완의 재리뷰는 진행 중이다.
+
+## 서명 검증 후보
+
+빌드 소스: `46f620b64baa`.
+
+`build/artifacts/TidyTap-0.1.0-preview-developer-id-46f620b64baa/TidyTap-0.1.0-preview-developer-id-46f620b64baa.dmg`
+
+- SHA-256: `a9fb2f99cc82d1e356fae5ed0b3fbc7be89259bf9bab8061bfd37207621e4e58`
+- DMG 무결성, portable checksum sidecar, 앱/Worker 서명·리소스 seal 검증 통과.
+- 최종 DMG에서도 앱/Worker DR이 위 정식 배포본 해시와 정확히 일치함을 확인했다.
+- 공개 배포·공증·설치 없음. 실제 교체 설치 후 권한 인식, 새 토글 상태 및 물리 휠 동작은 사용자 테스트가 남아 있다.
