@@ -665,10 +665,11 @@ private struct SettingsViewCopy {
     let githubShort: String
 
     func wheelStepValue(_ lines: Int) -> String {
-        String(format: wheelStepValueFormat, lines)
+        lines == 1 ? wheelStepSingularValue : String(format: wheelStepValueFormat, lines)
     }
 
     private let wheelStepValueFormat: String
+    private let wheelStepSingularValue: String
 
     init(bundle: Bundle) {
         func text(_ key: String) -> String {
@@ -689,6 +690,7 @@ private struct SettingsViewCopy {
         wheelStepAmountTitle = text("Step size")
         wheelStepAccessibilityHelp = text("Use the arrow keys to choose one to ten lines per wheel step")
         wheelStepValueFormat = text("%d lines")
+        wheelStepSingularValue = text("1 line")
         sideButtonTitle = text("Side-button navigation")
         sideButtonCaption = text("Back and forward in Safari and Finder")
         launchAtLogin = text("Start at login")

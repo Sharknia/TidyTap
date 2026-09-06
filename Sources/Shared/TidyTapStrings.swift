@@ -10,7 +10,8 @@ enum TidyTapStrings {
     static let fixedMouseWheelStepSizeDescription = String(localized: "Scroll a consistent amount for each wheel click", bundle: .main)
     static let mouseWheelStepSize = String(localized: "Step size", bundle: .main)
     static func mouseWheelStepLines(_ lines: Int) -> String {
-        String(format: String(localized: "%d lines", bundle: .main), lines)
+        lines == 1 ? String(localized: "1 line", bundle: .main)
+            : String(format: String(localized: "%d lines", bundle: .main), lines)
     }
     static let sideButtonNavigation = String(localized: "Use side buttons for back/forward in Safari and Finder", bundle: .main)
     static let options = String(localized: "Options", bundle: .main)
