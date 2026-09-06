@@ -6,6 +6,12 @@ enum TidyTapStrings {
     static let quitApp = String(localized: "Quit TidyTap", bundle: .main)
     static let capsLockInputSourceSwitching = String(localized: "Use Caps Lock to switch input source", bundle: .main)
     static let reverseMouseWheelVertically = String(localized: "Reverse vertical mouse wheel direction", bundle: .main)
+    static let fixedMouseWheelStepSize = String(localized: "Fixed wheel step size", bundle: .main)
+    static let fixedMouseWheelStepSizeDescription = String(localized: "Scroll a consistent amount for each wheel click", bundle: .main)
+    static let mouseWheelStepSize = String(localized: "Step size", bundle: .main)
+    static func mouseWheelStepLines(_ lines: Int) -> String {
+        String(format: String(localized: "%d lines", bundle: .main), lines)
+    }
     static let sideButtonNavigation = String(localized: "Use side buttons for back/forward in Safari and Finder", bundle: .main)
     static let options = String(localized: "Options", bundle: .main)
     static let launchAtLogin = String(localized: "Start at login", bundle: .main)

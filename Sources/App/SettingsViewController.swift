@@ -4,7 +4,10 @@ import AppKit
 /// provided by a coordinator through the delegate or closure hooks.
 @MainActor
 final class SettingsViewController: NSViewController {
-    static let contentSize = NSSize(width: 560, height: 650)
+    /// This is tall enough for the complete mouse card at normal display
+    /// sizes. AppDelegate clamps it to the visible frame when necessary; the
+    /// document then remains reachable through this controller's scroll view.
+    static let contentSize = NSSize(width: 560, height: 760)
 
     enum RenderingMode {
         case native
@@ -21,6 +24,9 @@ final class SettingsViewController: NSViewController {
         static let mousePermissions = "settings.mouse.permissions"
         static let capsSwitch = "settings.caps.switch"
         static let wheelSwitch = "settings.wheel.switch"
+        static let wheelStepSwitch = "settings.wheelStep.switch"
+        static let wheelStepSlider = "settings.wheelStep.slider"
+        static let wheelStepValue = "settings.wheelStep.value"
         static let sideSwitch = "settings.side.switch"
         static let loginSwitch = "settings.login.switch"
         static let accessibilityPermission = "settings.permission.accessibility"
@@ -38,14 +44,20 @@ final class SettingsViewController: NSViewController {
     private let renderingMode: RenderingMode
     private let copy: SettingsViewCopy
 
+    private let scrollView = NSScrollView()
+    private let contentDocumentView = SettingsDocumentView()
     private let contentStack = NSStackView()
     private let statusMessage = NSTextField(wrappingLabelWithString: "")
     private let capsSwitch = NSSwitch()
     private let wheelSwitch = NSSwitch()
+    private let wheelStepSwitch = NSSwitch()
+    private let wheelStepSlider = WheelStepSlider()
+    private let wheelStepValue = NSTextField(labelWithString: "")
     private let sideSwitch = NSSwitch()
     private let loginSwitch = NSSwitch()
     private let accessibilityStatus: PermissionStatusView
     private let inputMonitoringStatus: PermissionStatusView
+    private var isApplyingSettings = false
 
     init(
         settings: TidyTapSettings = .defaults,
@@ -90,17 +102,34 @@ final class SettingsViewController: NSViewController {
         root.translatesAutoresizingMaskIntoConstraints = false
         view = root
 
+        scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.verticalScrollElasticity = .allowed
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        root.addSubview(scrollView)
+
+        contentDocumentView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.documentView = contentDocumentView
+
         contentStack.orientation = .vertical
         contentStack.alignment = .leading
         contentStack.spacing = 14
         contentStack.translatesAutoresizingMaskIntoConstraints = false
-        root.addSubview(contentStack)
+        contentDocumentView.addSubview(contentStack)
 
         NSLayoutConstraint.activate([
-            contentStack.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 28),
-            contentStack.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -28),
-            contentStack.topAnchor.constraint(equalTo: root.topAnchor, constant: 44),
-            contentStack.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -18)
+            scrollView.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            scrollView.topAnchor.constraint(equalTo: root.topAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: root.bottomAnchor),
+            contentDocumentView.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
+            contentDocumentView.heightAnchor.constraint(greaterThanOrEqualTo: scrollView.contentView.heightAnchor),
+            contentStack.leadingAnchor.constraint(equalTo: contentDocumentView.leadingAnchor, constant: 28),
+            contentStack.trailingAnchor.constraint(equalTo: contentDocumentView.trailingAnchor, constant: -28),
+            contentStack.topAnchor.constraint(equalTo: contentDocumentView.topAnchor, constant: 44),
+            contentStack.bottomAnchor.constraint(equalTo: contentDocumentView.bottomAnchor, constant: -18)
         ])
 
         addHeader()
@@ -132,6 +161,7 @@ final class SettingsViewController: NSViewController {
                     toggle: wheelSwitch,
                     identifier: ControlIdentifier.wheelSwitch
                 ),
+                wheelStepRow(),
                 featureRow(
                     symbol: "arrow.left.arrow.right",
                     title: copy.sideButtonTitle,
@@ -177,6 +207,8 @@ final class SettingsViewController: NSViewController {
         guard isViewLoaded else { return }
         capsSwitch.state = settings.capsLockInputSourceSwitching ? .on : .off
         wheelSwitch.state = settings.reverseMouseWheelVertically ? .on : .off
+        wheelStepSwitch.state = settings.fixedMouseWheelStepEnabled ? .on : .off
+        updateWheelStepPresentation()
         sideSwitch.state = settings.sideButtonNavigation ? .on : .off
         loginSwitch.state = settings.launchAtLogin ? .on : .off
     }
@@ -192,7 +224,9 @@ final class SettingsViewController: NSViewController {
 
     func showApplyStatus(_ status: TidyTapApplyStatus, permission: TidyTapPermission? = nil) {
         let isPending = status.outcome == .pending
-        [capsSwitch, wheelSwitch, sideSwitch, loginSwitch].forEach { $0.isEnabled = !isPending }
+        isApplyingSettings = isPending
+        [capsSwitch, wheelSwitch, wheelStepSwitch, sideSwitch, loginSwitch].forEach { $0.isEnabled = !isPending }
+        updateWheelStepPresentation()
 
         switch status.outcome {
         case .pending:
@@ -325,6 +359,65 @@ final class SettingsViewController: NSViewController {
         return row
     }
 
+    /// The control remains in the layout while disabled, so switching the
+    /// feature on and off never makes the window jump or loses its last value.
+    private func wheelStepRow() -> NSView {
+        let row = NSView()
+        row.translatesAutoresizingMaskIntoConstraints = false
+
+        let icon = symbolImageView("line.3.horizontal")
+        let labels = rowLabels(title: copy.wheelStepTitle, caption: copy.wheelStepCaption)
+        wheelStepSwitch.identifier = NSUserInterfaceItemIdentifier(ControlIdentifier.wheelStepSwitch)
+        wheelStepSwitch.setAccessibilityLabel(copy.wheelStepTitle)
+        wheelStepSwitch.translatesAutoresizingMaskIntoConstraints = false
+
+        let stepLabel = NSTextField(labelWithString: copy.wheelStepAmountTitle)
+        stepLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        stepLabel.textColor = .secondaryLabelColor
+        stepLabel.setAccessibilityElement(false)
+        stepLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        wheelStepSlider.identifier = NSUserInterfaceItemIdentifier(ControlIdentifier.wheelStepSlider)
+        wheelStepSlider.minValue = 1
+        wheelStepSlider.maxValue = 10
+        wheelStepSlider.numberOfTickMarks = 10
+        wheelStepSlider.allowsTickMarkValuesOnly = true
+        wheelStepSlider.isContinuous = true
+        wheelStepSlider.controlSize = .small
+        wheelStepSlider.setAccessibilityLabel(copy.wheelStepAmountTitle)
+        wheelStepSlider.setAccessibilityHelp(copy.wheelStepAccessibilityHelp)
+        wheelStepSlider.translatesAutoresizingMaskIntoConstraints = false
+
+        wheelStepValue.identifier = NSUserInterfaceItemIdentifier(ControlIdentifier.wheelStepValue)
+        wheelStepValue.font = .monospacedDigitSystemFont(ofSize: 12, weight: .medium)
+        wheelStepValue.alignment = .right
+        wheelStepValue.setAccessibilityElement(false)
+        wheelStepValue.translatesAutoresizingMaskIntoConstraints = false
+
+        [icon, labels, wheelStepSwitch, stepLabel, wheelStepSlider, wheelStepValue].forEach(row.addSubview)
+        NSLayoutConstraint.activate([
+            row.heightAnchor.constraint(equalToConstant: 112),
+            icon.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 18),
+            icon.centerYAnchor.constraint(equalTo: row.topAnchor, constant: 30),
+            icon.widthAnchor.constraint(equalToConstant: 24),
+            icon.heightAnchor.constraint(equalToConstant: 24),
+            labels.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 14),
+            labels.centerYAnchor.constraint(equalTo: icon.centerYAnchor),
+            labels.trailingAnchor.constraint(lessThanOrEqualTo: wheelStepSwitch.leadingAnchor, constant: -16),
+            wheelStepSwitch.trailingAnchor.constraint(equalTo: row.trailingAnchor, constant: -18),
+            wheelStepSwitch.centerYAnchor.constraint(equalTo: icon.centerYAnchor),
+            stepLabel.leadingAnchor.constraint(equalTo: labels.leadingAnchor),
+            stepLabel.centerYAnchor.constraint(equalTo: row.topAnchor, constant: 82),
+            wheelStepSlider.leadingAnchor.constraint(equalTo: stepLabel.trailingAnchor, constant: 16),
+            wheelStepSlider.centerYAnchor.constraint(equalTo: stepLabel.centerYAnchor),
+            wheelStepSlider.trailingAnchor.constraint(equalTo: wheelStepValue.leadingAnchor, constant: -12),
+            wheelStepValue.trailingAnchor.constraint(equalTo: row.trailingAnchor, constant: -18),
+            wheelStepValue.centerYAnchor.constraint(equalTo: stepLabel.centerYAnchor),
+            wheelStepValue.widthAnchor.constraint(greaterThanOrEqualToConstant: 44)
+        ])
+        return row
+    }
+
     private func surface(
         content: NSView,
         cornerRadius: CGFloat,
@@ -375,9 +468,14 @@ final class SettingsViewController: NSViewController {
     }
 
     private func configureActions() {
-        [capsSwitch, wheelSwitch, sideSwitch, loginSwitch].forEach {
+        [capsSwitch, wheelSwitch, wheelStepSwitch, sideSwitch, loginSwitch].forEach {
             $0.target = self
             $0.action = #selector(settingChanged(_:))
+        }
+        wheelStepSlider.target = self
+        wheelStepSlider.action = #selector(wheelStepChanged(_:))
+        wheelStepSlider.onDragCompleted = { [weak self] in
+            self?.sendSettingsChange()
         }
         accessibilityStatus.button.target = self
         accessibilityStatus.button.action = #selector(requestPermission(_:))
@@ -413,11 +511,13 @@ final class SettingsViewController: NSViewController {
 
         let titleLabel = NSTextField(labelWithString: title)
         titleLabel.font = .systemFont(ofSize: 14, weight: .medium)
-        titleLabel.lineBreakMode = .byTruncatingTail
+        titleLabel.lineBreakMode = .byWordWrapping
+        titleLabel.maximumNumberOfLines = 2
         let captionLabel = NSTextField(labelWithString: caption)
         captionLabel.font = .systemFont(ofSize: 12)
         captionLabel.textColor = .secondaryLabelColor
-        captionLabel.lineBreakMode = .byTruncatingTail
+        captionLabel.lineBreakMode = .byWordWrapping
+        captionLabel.maximumNumberOfLines = 2
         stack.addArrangedSubview(titleLabel)
         stack.addArrangedSubview(captionLabel)
         return stack
@@ -445,6 +545,22 @@ final class SettingsViewController: NSViewController {
         statusMessage.isHidden = message?.isEmpty != false
     }
 
+    private func updateWheelStepPresentation() {
+        let value = min(max(settings.mouseWheelStepLines, 1), 10)
+        if wheelStepSlider.integerValue != value {
+            wheelStepSlider.integerValue = value
+        }
+        wheelStepValue.stringValue = copy.wheelStepValue(value)
+        wheelStepSlider.setAccessibilityValue(copy.wheelStepValue(value))
+        wheelStepSlider.isEnabled = settings.fixedMouseWheelStepEnabled && !isApplyingSettings
+    }
+
+    private func sendSettingsChange() {
+        if delegate?.settingsViewController(self, didChange: settings) != true {
+            onSettingsChange?(settings)
+        }
+    }
+
     private func versionText() -> String {
         String(format: copy.versionFormat, displayVersion)
     }
@@ -464,6 +580,9 @@ final class SettingsViewController: NSViewController {
             settings.capsLockInputSourceSwitching = sender.state == .on
         case wheelSwitch:
             settings.reverseMouseWheelVertically = sender.state == .on
+        case wheelStepSwitch:
+            settings.fixedMouseWheelStepEnabled = sender.state == .on
+            updateWheelStepPresentation()
         case sideSwitch:
             settings.sideButtonNavigation = sender.state == .on
         case loginSwitch:
@@ -472,9 +591,22 @@ final class SettingsViewController: NSViewController {
             return
         }
 
-        if delegate?.settingsViewController(self, didChange: settings) != true {
-            onSettingsChange?(settings)
+        sendSettingsChange()
+    }
+
+    @objc private func wheelStepChanged(_ sender: NSSlider) {
+        guard sender.isEnabled else { return }
+        settings.mouseWheelStepLines = min(max(sender.integerValue, 1), 10)
+        updateWheelStepPresentation()
+
+        // Sliders emit continuously while the mouse is dragged. Keep the
+        // number truthful in that interval, but persist/apply only once the
+        // gesture ends. Keyboard arrows and accessibility adjustments arrive
+        // as discrete actions and are committed one at a time.
+        if (sender as? WheelStepSlider)?.isDraggingMouse == true {
+            return
         }
+        sendSettingsChange()
     }
 
     @objc private func requestPermission(_ sender: NSButton) {
@@ -506,6 +638,10 @@ private struct SettingsViewCopy {
     let capsLockCaption: String
     let mouseWheelTitle: String
     let mouseWheelCaption: String
+    let wheelStepTitle: String
+    let wheelStepCaption: String
+    let wheelStepAmountTitle: String
+    let wheelStepAccessibilityHelp: String
     let sideButtonTitle: String
     let sideButtonCaption: String
     let launchAtLogin: String
@@ -528,6 +664,12 @@ private struct SettingsViewCopy {
     let reviewPermissions: String
     let githubShort: String
 
+    func wheelStepValue(_ lines: Int) -> String {
+        String(format: wheelStepValueFormat, lines)
+    }
+
+    private let wheelStepValueFormat: String
+
     init(bundle: Bundle) {
         func text(_ key: String) -> String {
             bundle.localizedString(forKey: key, value: key, table: nil)
@@ -542,6 +684,11 @@ private struct SettingsViewCopy {
         capsLockCaption = text("Switch input sources without changing letter case")
         mouseWheelTitle = text("Reverse wheel direction")
         mouseWheelCaption = text("Keep trackpad scrolling unchanged")
+        wheelStepTitle = text("Fixed wheel step size")
+        wheelStepCaption = text("Scroll a consistent amount for each wheel click")
+        wheelStepAmountTitle = text("Step size")
+        wheelStepAccessibilityHelp = text("Use the arrow keys to choose one to ten lines per wheel step")
+        wheelStepValueFormat = text("%d lines")
         sideButtonTitle = text("Side-button navigation")
         sideButtonCaption = text("Back and forward in Safari and Finder")
         launchAtLogin = text("Start at login")
@@ -549,9 +696,9 @@ private struct SettingsViewCopy {
         versionFormat = text("Version %@")
         mousePermissionsTitle = text("PERMISSIONS FOR MOUSE FEATURES")
         accessibilityPermissionTitle = text("Accessibility")
-        accessibilityPermissionCaption = text("Required for wheel reversal and side buttons")
+        accessibilityPermissionCaption = text("Required for wheel settings and side buttons")
         inputMonitoringPermissionTitle = text("Input Monitoring")
-        inputMonitoringPermissionCaption = text("Required for wheel reversal only")
+        inputMonitoringPermissionCaption = text("Required for wheel settings")
         permissionAllowed = text("Allowed")
         permissionMissing = text("Missing")
         permissionNotChecked = text("Not checked")
@@ -662,6 +809,44 @@ private final class PermissionStatusView: NSView {
         }
         setAccessibilityValue(statusLabel.stringValue)
     }
+}
+
+/// NSSlider sends its action repeatedly while a continuous mouse drag is in
+/// progress. This separates the live visual update from the one persistence
+/// request emitted after the mouse button is released.
+@MainActor
+private final class WheelStepSlider: NSSlider {
+    var onDragCompleted: (() -> Void)?
+    private(set) var isDraggingMouse = false
+
+    override func mouseDown(with event: NSEvent) {
+        guard isEnabled else { return }
+        isDraggingMouse = true
+        super.mouseDown(with: event)
+        isDraggingMouse = false
+        onDragCompleted?()
+    }
+
+    override func keyDown(with event: NSEvent) {
+        guard isEnabled else { return }
+        let delta: Int
+        switch event.keyCode {
+        case 123, 125: delta = -1
+        case 124, 126: delta = 1
+        default:
+            super.keyDown(with: event)
+            return
+        }
+        let next = min(max(integerValue + delta, Int(minValue)), Int(maxValue))
+        guard next != integerValue else { return }
+        integerValue = next
+        _ = sendAction(action, to: target)
+    }
+}
+
+@MainActor
+private final class SettingsDocumentView: NSView {
+    override var isFlipped: Bool { true }
 }
 
 /// A compact, system-rendered glass surface. All card content is assigned via

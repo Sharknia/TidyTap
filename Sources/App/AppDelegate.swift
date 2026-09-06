@@ -62,8 +62,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         let window = NSWindow(contentViewController: controller)
         window.title = TidyTapStrings.appName
-        window.setContentSize(SettingsViewController.contentSize)
         window.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
+        window.setContentSize(contentSizeThatFitsVisibleFrame(for: window))
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.backgroundColor = .clear
@@ -82,6 +82,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 permission: settingsCoordinator.permissionSettingsPane(for: status)
             )
         }
+    }
+
+    /// Keep the complete settings view visible on ordinary displays while
+    /// leaving enough of the screen work area around a smaller display's
+    /// window. The controller supplies vertical scrolling for the remainder.
+    private func contentSizeThatFitsVisibleFrame(for window: NSWindow) -> NSSize {
+        let desired = SettingsViewController.contentSize
+        guard let screen = NSScreen.main ?? NSScreen.screens.first else {
+            return desired
+        }
+
+        let desiredContentRect = NSRect(origin: .zero, size: desired)
+        let desiredFrame = window.frameRect(forContentRect: desiredContentRect)
+        let chromeHeight = desiredFrame.height - desired.height
+        let maximumContentHeight = max(1, screen.visibleFrame.height - chromeHeight - 24)
+        return NSSize(width: desired.width, height: min(desired.height, maximumContentHeight))
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {

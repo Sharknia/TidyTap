@@ -8,48 +8,99 @@ enum SettingsSnapshotRenderer {
         let language: String
         let settings: TidyTapSettings
         let permissions: TidyTapFeaturePermissionState
+        let appearance: NSAppearance.Name
     }
 
     static let fixtures: [Fixture] = {
         var normal = TidyTapSettings.defaults
         normal.capsLockInputSourceSwitching = true
+        normal.fixedMouseWheelStepEnabled = true
+        normal.mouseWheelStepLines = 7
 
         return [
             Fixture(
                 filename: "liquid-glass-normal.png",
                 language: "ko",
                 settings: normal,
-                permissions: .init(accessibility: .authorized, inputMonitoring: .authorized)
+                permissions: .init(accessibility: .authorized, inputMonitoring: .authorized),
+                appearance: .aqua
             ),
             Fixture(
                 filename: "liquid-glass-both-denied.png",
                 language: "ko",
                 settings: .defaults,
-                permissions: .init(accessibility: .denied, inputMonitoring: .denied)
+                permissions: .init(accessibility: .denied, inputMonitoring: .denied),
+                appearance: .aqua
             ),
             Fixture(
                 filename: "liquid-glass-ax-allowed-im-denied.png",
                 language: "ko",
                 settings: .defaults,
-                permissions: .init(accessibility: .authorized, inputMonitoring: .denied)
+                permissions: .init(accessibility: .authorized, inputMonitoring: .denied),
+                appearance: .aqua
             ),
             Fixture(
                 filename: "liquid-glass-normal-en.png",
                 language: "en",
                 settings: normal,
-                permissions: .init(accessibility: .authorized, inputMonitoring: .authorized)
+                permissions: .init(accessibility: .authorized, inputMonitoring: .authorized),
+                appearance: .aqua
             ),
             Fixture(
                 filename: "liquid-glass-both-denied-en.png",
                 language: "en",
                 settings: .defaults,
-                permissions: .init(accessibility: .denied, inputMonitoring: .denied)
+                permissions: .init(accessibility: .denied, inputMonitoring: .denied),
+                appearance: .aqua
             ),
             Fixture(
                 filename: "liquid-glass-ax-allowed-im-denied-en.png",
                 language: "en",
                 settings: .defaults,
-                permissions: .init(accessibility: .authorized, inputMonitoring: .denied)
+                permissions: .init(accessibility: .authorized, inputMonitoring: .denied),
+                appearance: .aqua
+            ),
+            Fixture(
+                filename: "wheel-step-off-ko-light.png",
+                language: "ko",
+                settings: .defaults,
+                permissions: .init(accessibility: .authorized, inputMonitoring: .authorized),
+                appearance: .aqua
+            ),
+            Fixture(
+                filename: "wheel-step-off-en-light.png",
+                language: "en",
+                settings: .defaults,
+                permissions: .init(accessibility: .authorized, inputMonitoring: .authorized),
+                appearance: .aqua
+            ),
+            Fixture(
+                filename: "wheel-step-off-ko-dark.png",
+                language: "ko",
+                settings: .defaults,
+                permissions: .init(accessibility: .authorized, inputMonitoring: .authorized),
+                appearance: .darkAqua
+            ),
+            Fixture(
+                filename: "wheel-step-on-ko-dark.png",
+                language: "ko",
+                settings: normal,
+                permissions: .init(accessibility: .authorized, inputMonitoring: .authorized),
+                appearance: .darkAqua
+            ),
+            Fixture(
+                filename: "wheel-step-off-en-dark.png",
+                language: "en",
+                settings: .defaults,
+                permissions: .init(accessibility: .authorized, inputMonitoring: .authorized),
+                appearance: .darkAqua
+            ),
+            Fixture(
+                filename: "wheel-step-on-en-dark.png",
+                language: "en",
+                settings: normal,
+                permissions: .init(accessibility: .authorized, inputMonitoring: .authorized),
+                appearance: .darkAqua
             )
         ]
     }()
@@ -73,11 +124,11 @@ enum SettingsSnapshotRenderer {
             backing: .buffered,
             defer: false
         )
-        window.appearance = NSAppearance(named: .aqua)
+        window.appearance = NSAppearance(named: fixture.appearance)
         window.backgroundColor = .windowBackgroundColor
         window.isOpaque = true
         let host = NSView(frame: NSRect(origin: .zero, size: size))
-        host.appearance = NSAppearance(named: .aqua)
+        host.appearance = NSAppearance(named: fixture.appearance)
         host.wantsLayer = true
         host.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
         window.contentView = host
