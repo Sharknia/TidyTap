@@ -61,7 +61,7 @@ final class SettingsViewController: NSViewController {
         self.appIcon = appIcon ?? NSImage(named: "TidyTap") ?? NSApplication.shared.applicationIconImage
         self.displayVersion = displayVersion
             ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-            ?? "0.0.2"
+            ?? "0.1.0"
         self.renderingMode = renderingMode
         let copy = SettingsViewCopy(bundle: localizationBundle)
         self.copy = copy

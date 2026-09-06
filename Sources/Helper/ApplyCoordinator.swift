@@ -427,7 +427,7 @@ private extension TidyTapApplyStatus {
 final class ApplicationTerminator: TidyTapTerminating {
     func terminate() {
         DispatchQueue.main.async {
-            NSApplication.shared.terminate(nil)
+            CFRunLoopStop(CFRunLoopGetMain())
         }
     }
 }

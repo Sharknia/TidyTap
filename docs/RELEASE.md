@@ -1,6 +1,6 @@
 # TidyTap direct-distribution release
 
-`0.0.2` is distributed as a Developer ID-signed, Apple-notarized DMG. The
+`0.1.0` is distributed as a Developer ID-signed, Apple-notarized DMG. The
 repository never contains a certificate, private key, Apple ID, app-specific
 password, App Store Connect API key, or a notarytool profile export.
 
@@ -69,7 +69,7 @@ Scripts/package-release-dmg.sh
 ```
 
 It archives the Release scheme, verifies the outer app and embedded
-`TidyTapHelper.app` independently against the configured Developer ID team,
+`Contents/MacOS/TidyTapHelper` independently against the configured Developer ID team,
 creates the DMG, then signs the **DMG container itself** with that identity and
 a secure timestamp. It verifies the DMG's signature, Developer ID authority,
 Team ID, and timestamp before submitting that exact DMG to notarytool. It then
