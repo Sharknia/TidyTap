@@ -5,6 +5,7 @@ from pathlib import Path
 import runpy
 import sys
 import tempfile
+import unicodedata
 
 
 project_root = Path(__file__).resolve().parent.parent
@@ -21,7 +22,8 @@ with tempfile.TemporaryDirectory(prefix="tidytap-dmg-layout-") as directory:
     )
 
 assert layout["files"] == [(str(app.resolve()), "TidyTap.app")]
-assert layout["symlinks"] == {"응용 프로그램": "/Applications"}
+applications_name = unicodedata.normalize("NFD", "응용 프로그램")
+assert layout["symlinks"] == {applications_name: "/Applications"}
 assert "hide" not in layout
 assert layout["hide_extensions"] == ["TidyTap.app"]
 assert layout["format"] == "UDZO"
@@ -30,7 +32,7 @@ assert layout["background"] == str(background.resolve())
 assert layout["window_rect"][1] == (640, 400)
 assert layout["default_view"] == "icon-view"
 assert layout["icon_size"] == 112
-assert layout["icon_locations"] == {"TidyTap.app": (170, 200), "응용 프로그램": (470, 200)}
+assert layout["icon_locations"] == {"TidyTap.app": (170, 200), applications_name: (470, 200)}
 for key in ("show_status_bar", "show_toolbar", "show_sidebar", "show_pathbar", "show_tab_view"):
     assert layout[key] is False
 

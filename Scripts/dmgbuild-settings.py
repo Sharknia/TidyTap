@@ -1,6 +1,7 @@
 """Shared, declarative Finder layout for TidyTap installer disk images."""
 
 from pathlib import Path
+import unicodedata
 
 
 def required_path(name: str) -> str:
@@ -20,7 +21,8 @@ background_path = required_path("background_path")
 # dotfile, which Finder already hides; adding a synthetic .background path would
 # make dmgbuild try to hide a file that does not exist.
 files = [(app_path, "TidyTap.app")]
-symlinks = {"응용 프로그램": "/Applications"}
+applications_name = unicodedata.normalize("NFD", "응용 프로그램")
+symlinks = {applications_name: "/Applications"}
 hide_extensions = ["TidyTap.app"]
 
 format = "UDZO"
@@ -37,5 +39,5 @@ include_icon_view_settings = True
 icon_size = 112
 icon_locations = {
     "TidyTap.app": (170, 200),
-    "응용 프로그램": (470, 200),
+    applications_name: (470, 200),
 }

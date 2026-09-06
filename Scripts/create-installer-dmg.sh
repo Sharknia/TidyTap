@@ -45,6 +45,9 @@ if [[ ! -d "$app_path" || "${app_path:t}" != "TidyTap.app" ]]; then
 fi
 
 python_candidates=()
+if [[ -x "$venv/bin/python" ]]; then
+  python_candidates+=("$venv/bin/python")
+fi
 if [[ -n "${TIDYTAP_DMG_PYTHON:-}" ]]; then
   python_candidates+=("$TIDYTAP_DMG_PYTHON")
 fi
