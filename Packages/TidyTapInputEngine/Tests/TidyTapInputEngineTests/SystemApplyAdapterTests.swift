@@ -22,6 +22,29 @@ private final class FakeProcessRunner: ProcessRunning, @unchecked Sendable {
 }
 
 final class SystemApplyAdapterTests: XCTestCase {
+    func testDecodesTrimmedNullHIDPayloadAsEmptyMappings() throws {
+        let payload = "\n  (null)  \t".data(using: .utf8)!
+
+        XCTAssertEqual(try MacOSSystemApplyAdapter.decodeHIDMappings(payload), [])
+    }
+
+    func testRejectsEmptyAndInvalidHIDPayloads() {
+        let payloads = [
+            Data(),
+            " \n\t ".data(using: .utf8)!,
+            "[]".data(using: .utf8)!,
+            "garbage".data(using: .utf8)!,
+            "(NULL)".data(using: .utf8)!,
+            "(null) trailing".data(using: .utf8)!
+        ]
+
+        for payload in payloads {
+            XCTAssertThrowsError(try MacOSSystemApplyAdapter.decodeHIDMappings(payload)) {
+                XCTAssertEqual($0 as? InputEngineError, .invalidSystemData(.hidMappings))
+            }
+        }
+    }
+
     func testDecodesJSONAndOpenStepHIDPayloads() throws {
         let json = """
         {"UserKeyMapping":[{"HIDKeyboardModifierMappingSrc":30064771129,"HIDKeyboardModifierMappingDst":30064771181}]}

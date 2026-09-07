@@ -1054,7 +1054,7 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(launcher.launchCount, 1)
     }
 
-    func testPermissionPaneRoutingPrioritizesAccessibility() {
+    func testPermissionPaneRoutingExposesOnlyAccessibility() {
         let coordinator = SettingsCoordinator(
             preferences: InMemoryPreferences(request: .init(settings: .defaults, applyRequestID: UUID())),
             helperLauncher: RecordingHelperLauncher(),
@@ -1075,10 +1075,10 @@ final class TidyTapSettingsTests: XCTestCase {
         )
 
         XCTAssertEqual(coordinator.permissionSettingsPane(for: both), .accessibility)
-        XCTAssertEqual(coordinator.permissionSettingsPane(for: inputOnly), .inputMonitoring)
+        XCTAssertNil(coordinator.permissionSettingsPane(for: inputOnly))
     }
 
-    func testConfirmedPermissionRefreshAdvancesFromAccessibilityToInputMonitoring() {
+    func testConfirmedPermissionRefreshNeverMislabelsReceiveFailureAsAccessibilityDenial() {
         let coordinator = SettingsCoordinator(
             preferences: InMemoryPreferences(request: .init(settings: .defaults, applyRequestID: UUID())),
             helperLauncher: RecordingHelperLauncher(),
@@ -1098,13 +1098,10 @@ final class TidyTapSettingsTests: XCTestCase {
             ),
             .accessibility
         )
-        XCTAssertEqual(
-            coordinator.permissionSettingsPane(
-                for: status,
-                confirmed: .init(accessibility: .authorized, inputMonitoring: .denied)
-            ),
-            .inputMonitoring
-        )
+        XCTAssertNil(coordinator.permissionSettingsPane(
+            for: status,
+            confirmed: .init(accessibility: .authorized, inputMonitoring: .denied)
+        ))
         XCTAssertNil(coordinator.permissionSettingsPane(
             for: status,
             confirmed: .init(accessibility: .authorized, inputMonitoring: .authorized)
@@ -1192,6 +1189,7 @@ final class TidyTapSettingsTests: XCTestCase {
 
         XCTAssertEqual(controller.permissionState.accessibility, .authorized)
         XCTAssertEqual(controller.permissionState.inputMonitoring, .denied)
+        XCTAssertNil(coordinator.permissionSettingsPane(for: status))
         XCTAssertEqual(controller.settings, .defaults)
     }
 
@@ -1235,21 +1233,41 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertTrue(provider.requests.isEmpty)
     }
 
-    func testHelperExplicitInputMonitoringRequestUsesInputMonitoringProviderPath() {
-        let store = InMemoryPreferences(request: .init(settings: .defaults, applyRequestID: UUID()))
+    func testHelperStartupAcknowledgesLegacyInputMonitoringRequestWithoutPromptOrSettingsMutation() {
+        let settingsRequest = TidyTapSettingsRequest(settings: .defaults, applyRequestID: UUID())
+        let store = InMemoryPreferences(request: settingsRequest)
+        let permissionID = UUID()
         store.permissionRequest = .init(
-            requestID: UUID(),
+            requestID: permissionID,
             kind: .request,
             permission: .inputMonitoring
         )
         let provider = RecordingPermissionProvider(
             state: .init(accessibility: .authorized, inputMonitoring: .denied)
         )
+        let calls = CallLog()
+        let permissionCoordinator = HelperPermissionCoordinator(preferences: store, provider: provider)
+        let lifecycle = HelperLifecycle(
+            coordinator: ApplyCoordinator(
+                preferences: store,
+                capsFeature: RecordingCaps(calls: calls),
+                inputFeatures: RecordingInput(calls: calls),
+                menuBar: RecordingMenu(calls: calls),
+                terminator: RecordingTerminator(calls: calls)
+            ),
+            permissionCoordinator: permissionCoordinator
+        )
 
-        _ = HelperPermissionCoordinator(preferences: store, provider: provider).handleLatestRequest()
+        lifecycle.start()
+        _ = permissionCoordinator.handleLatestRequest()
+        lifecycle.stop()
 
-        XCTAssertEqual(provider.requests, [.inputMonitoring])
+        XCTAssertEqual(provider.checkCount, 1)
+        XCTAssertTrue(provider.requests.isEmpty)
+        XCTAssertEqual(store.permissionResults.count, 1)
+        XCTAssertEqual(store.permissionResult?.requestID, permissionID)
         XCTAssertEqual(store.permissionResult?.state.inputMonitoring, .denied)
+        XCTAssertEqual(store.request, settingsRequest)
     }
 
     func testReadOnlyRefreshNeverRequestsOrMutatesSanitizedSettings() {
@@ -1326,7 +1344,7 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertTrue(provider.requests.isEmpty)
     }
 
-    func testColdHelperKeepsInputMonitoringNoticeAfterAllOffStartupApply() throws {
+    func testColdHelperKeepsInputMonitoringFailureAfterAllOffStartupApply() throws {
         let applyID = UUID()
         let store = InMemoryPreferences(request: .init(settings: .defaults, applyRequestID: applyID))
         store.status = TidyTapApplyStatus(
@@ -1367,17 +1385,14 @@ final class TidyTapSettingsTests: XCTestCase {
         let applyNotificationResult = app.receiveApplyResult()
         XCTAssertEqual(permissionNotificationResult?.state, provider.state)
         XCTAssertEqual(applyNotificationResult?.errorCode, "eventTap.permissionPartial.inputMonitoring")
-        XCTAssertEqual(
-            app.permissionSettingsPane(
-                for: try XCTUnwrap(applyNotificationResult),
-                confirmed: try XCTUnwrap(permissionNotificationResult).state
-            ),
-            .inputMonitoring
-        )
+        XCTAssertNil(app.permissionSettingsPane(
+            for: try XCTUnwrap(applyNotificationResult),
+            confirmed: try XCTUnwrap(permissionNotificationResult).state
+        ))
         XCTAssertEqual(store.request.settings, .defaults)
     }
 
-    func testColdHelperKeepsInputMonitoringNoticeWhenSideButtonsRemainApplied() throws {
+    func testColdHelperKeepsInputMonitoringFailureWhenSideButtonsRemainApplied() throws {
         let applyID = UUID()
         var sanitized = TidyTapSettings.defaults
         sanitized.sideButtonNavigation = true

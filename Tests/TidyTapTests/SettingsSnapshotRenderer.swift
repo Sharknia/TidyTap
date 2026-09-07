@@ -9,6 +9,7 @@ enum SettingsSnapshotRenderer {
         let settings: TidyTapSettings
         let permissions: TidyTapFeaturePermissionState
         let appearance: NSAppearance.Name
+        var applyStatus: TidyTapApplyStatus? = nil
     }
 
     static let fixtures: [Fixture] = {
@@ -18,6 +19,14 @@ enum SettingsSnapshotRenderer {
         normal.mouseWheelStepLines = 7
 
         return [
+            Fixture(filename: "caps-read-failure-ko.png", language: "ko", settings: .defaults,
+                permissions: .init(accessibility: .authorized, inputMonitoring: .authorized), appearance: .aqua,
+                applyStatus: .init(applyRequestID: UUID(), outcome: .failed, failedComponent: .capsLock,
+                    errorCode: "capsLock.invalidSystemData.hidMappings")),
+            Fixture(filename: "caps-conflict-en.png", language: "en", settings: .defaults,
+                permissions: .init(accessibility: .authorized, inputMonitoring: .authorized), appearance: .aqua,
+                applyStatus: .init(applyRequestID: UUID(), outcome: .failed, failedComponent: .capsLock,
+                    errorCode: "capsLock.conflict.sourceMapping")),
             Fixture(
                 filename: "liquid-glass-normal.png",
                 language: "ko",
@@ -26,7 +35,7 @@ enum SettingsSnapshotRenderer {
                 appearance: .aqua
             ),
             Fixture(
-                filename: "liquid-glass-both-denied.png",
+                filename: "liquid-glass-accessibility-denied.png",
                 language: "ko",
                 settings: .defaults,
                 permissions: .init(accessibility: .denied, inputMonitoring: .denied),
@@ -47,7 +56,7 @@ enum SettingsSnapshotRenderer {
                 appearance: .aqua
             ),
             Fixture(
-                filename: "liquid-glass-both-denied-en.png",
+                filename: "liquid-glass-accessibility-denied-en.png",
                 language: "en",
                 settings: .defaults,
                 permissions: .init(accessibility: .denied, inputMonitoring: .denied),
@@ -113,7 +122,7 @@ enum SettingsSnapshotRenderer {
             settings: fixture.settings,
             permissionState: fixture.permissions,
             appIcon: NSImage(contentsOf: sourceRoot.appendingPathComponent("Resources/TidyTap.icns")),
-            displayVersion: "0.1.0",
+            displayVersion: "0.1.2",
             renderingMode: .offscreenSemanticFallback,
             localizationBundle: localizedBundle(language: fixture.language)
         )
@@ -134,6 +143,9 @@ enum SettingsSnapshotRenderer {
         window.contentView = host
         controller.view.translatesAutoresizingMaskIntoConstraints = false
         host.addSubview(controller.view)
+        if let status = fixture.applyStatus {
+            controller.showApplyStatus(status)
+        }
         NSLayoutConstraint.activate([
             controller.view.leadingAnchor.constraint(equalTo: host.leadingAnchor),
             controller.view.trailingAnchor.constraint(equalTo: host.trailingAnchor),
