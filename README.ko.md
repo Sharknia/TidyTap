@@ -11,17 +11,17 @@ TidyTap은 macOS 입력 불편을 해결하는 작은 유틸리티입니다.
 - 모든 비연속 line-based 마우스 휠 이벤트의 세로 방향을 반전하고 트랙패드 스크롤은 그대로 둡니다. 지원 대상은 VXE Mouse 1K Dongle이며, 기존 물리 검증은 장치 분류와 버튼 보고에 한정됩니다. 새 단계 크기 동작의 물리 검증을 뜻하지 않으며, 구현에 제조사 필터는 없습니다.
 - 휠 단계 크기를 방향 반전과 별도로 켜고 조절합니다(논리적 1–10줄, 기본 3줄). 기본은 꺼짐이며 꺼도 선택한 크기를 기억합니다. 비연속 단일 단계 입력에 적용하고 더 큰 입력의 크기는 보존합니다. 모든 마우스·속도에서 가속을 완전히 제거한다는 의미는 아니며, 물리 검증은 별도로 남아 있습니다.
 - 활성 Safari 또는 Finder 창에서 마우스 버튼 3/4를 뒤로/앞으로 이동키로 사용합니다.
-- Finder 파일 목록에서 `⌘X`로 잘라내고 `⌘V`로 이동합니다. 일반 `⌘C → ⌘V`는 복사입니다. 기본은 꺼짐이며 파일 이름 변경·검색 등 텍스트 입력에서는 원래 단축키를 유지합니다.
+- Finder 파일 목록에서 `⌘X`로 잘라내고 `⌘V`로 이동합니다. 일반 `⌘C → ⌘V`는 복사입니다. 선택 항목 옆에 약 1초 동안 ‘이동 준비됨’ 또는 ‘복사 준비됨’을 표시합니다. 기본은 꺼짐이며 파일 이름 변경·검색 등 텍스트 입력에서는 원래 단축키를 유지합니다.
 
 각 기능은 독립적으로 토글할 수 있습니다. 설정 창에는 **로그인할 때 시작** 옵션도 있습니다. 마우스 기능을 사용하려면 **TidyTap**에 손쉬운 사용 권한을 허용하세요. Worker는 같은 앱 내부 실행 파일이며 별도의 권한 대상이 아닙니다. TidyTap은 Dock에 표시되는 일반 앱이며, `Command-Q`로 설정 앱을 종료해도 켜진 helper는 계속 실행됩니다.
 
-Finder 잘라내기는 개발 브랜치 기능입니다. 이동 명령을 보내면 기억을 지우므로 Finder에서 이동을 취소하거나 실패하면 다시 `⌘X`가 필요합니다. 바탕화면·다른 파일 관리자·우클릭 붙여넣기는 변환하지 않습니다. [설계](docs/FINDER_CUT_PASTE_PLAN.md)와 [검증 범위](docs/FINDER_CUT_PASTE_VALIDATION.md)를 참고하세요.
+Finder 잘라내기는 0.1.3 릴리스에 포함된 기능입니다. 이동 명령을 보내면 기억을 지우므로 Finder에서 이동을 취소하거나 실패하면 다시 `⌘X`가 필요합니다. 바탕화면·다른 파일 관리자·우클릭 붙여넣기는 변환하지 않습니다. [설계](docs/FINDER_CUT_PASTE_PLAN.md)와 [검증 범위](docs/FINDER_CUT_PASTE_VALIDATION.md)를 참고하세요.
 
 ## 지원 범위와 상태
 
-TidyTap은 macOS 15.1(Sequoia) 이상을 실행하는 Apple Silicon Mac을 지원합니다. 이번 15.1 타깃 빌드와 launch smoke는 MacBook Pro `Mac15,6`(Apple M3 Pro)와 macOS 26.5.2(`25F84`)에서 확인했으며, macOS 15.1 실제 실행 검증은 남아 있습니다. 물리 검증은 스크롤 장치 분류(VXE와 내장·Magic Trackpad 구분)와 VXE 측면 버튼이 Core Graphics 버튼 3/4로 보고되는지에 한정됩니다. Caps Lock 입력 소스 백업·복원, 권한 허용·회수, 휠 및 Safari/Finder 탐색 통합 동작, helper 수명·로그인 동작, 지원 제거 순서는 아직 통합 라이브 검증이 남아 있으며 완료를 주장하지 않습니다. UI는 한국어와 영어를 지원합니다.
+TidyTap은 macOS 15.1(Sequoia) 이상을 실행하는 Apple Silicon Mac을 지원합니다. 이번 15.1 타깃 빌드는 MacBook Pro `Mac15,6`(Apple M3 Pro)와 macOS 26.5.2(`25F84`)에서 확인했으며, macOS 15.1 실제 실행 검증은 남아 있습니다. 0.1.3 릴리스 launch-smoke와 마지막 시스템 상태 미변경 검사가 통과했습니다. 물리 검증은 스크롤 장치 분류(VXE와 내장·Magic Trackpad 구분)와 VXE 측면 버튼이 Core Graphics 버튼 3/4로 보고되는지에 한정됩니다. Caps Lock 입력 소스 백업·복원, 권한 허용·회수, 휠 및 Safari/Finder 탐색 통합 동작, helper 수명·로그인 동작, 지원 제거 순서는 아직 통합 라이브 검증이 남아 있으며 완료를 주장하지 않습니다. UI는 한국어와 영어를 지원합니다.
 
-프로젝트 버전: `0.1.2`. 공개된 버전과 서명된 다운로드 파일은 [GitHub Releases](https://github.com/Sharknia/TidyTap/releases)에서 확인하세요.
+프로젝트 버전: `0.1.3`. 공개된 버전과 서명된 다운로드 파일은 [GitHub Releases](https://github.com/Sharknia/TidyTap/releases)에서 확인하세요.
 
 [MVP 작업 계획](docs/MVP_PLAN.md)과 [English README](README.md)도 참고하세요.
 
