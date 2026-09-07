@@ -105,6 +105,44 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertTrue(settings.requiresHelper)
     }
 
+    func testFixedWheelStepAloneKeepsTheHelperAlive() {
+        var settings = TidyTapSettings.defaults
+        settings.fixedMouseWheelStepEnabled = true
+
+        XCTAssertTrue(settings.requiresHelper)
+    }
+
+    func testWheelStepSettingsUseDefaultsAndNormalizeTheSupportedRange() {
+        XCTAssertFalse(TidyTapSettings.defaults.fixedMouseWheelStepEnabled)
+        XCTAssertEqual(TidyTapSettings.defaults.mouseWheelStepLines, 3)
+        XCTAssertEqual(
+            TidyTapSettings(
+                capsLockInputSourceSwitching: false,
+                reverseMouseWheelVertically: false,
+                sideButtonNavigation: false,
+                launchAtLogin: false,
+                mouseWheelStepLines: 0
+            ).mouseWheelStepLines,
+            1
+        )
+        XCTAssertEqual(
+            TidyTapSettings(
+                capsLockInputSourceSwitching: false,
+                reverseMouseWheelVertically: false,
+                sideButtonNavigation: false,
+                launchAtLogin: false,
+                mouseWheelStepLines: 11
+            ).mouseWheelStepLines,
+            10
+        )
+
+        var mutated = TidyTapSettings.defaults
+        mutated.mouseWheelStepLines = -1
+        XCTAssertEqual(mutated.mouseWheelStepLines, 1)
+        mutated.mouseWheelStepLines = 42
+        XCTAssertEqual(mutated.mouseWheelStepLines, 10)
+    }
+
     func testLegacyMenuBarPreferenceIsIgnoredWhenDecoded() throws {
         let data = Data("""
         {"capsLockInputSourceSwitching":false,"reverseMouseWheelVertically":false,"sideButtonNavigation":false,"launchAtLogin":false,"showInMenuBar":true}
@@ -115,6 +153,32 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(settings, .defaults)
         XCTAssertFalse(settings.requiresHelper)
         XCTAssertFalse(String(data: try JSONEncoder().encode(settings), encoding: .utf8)!.contains("showInMenuBar"))
+    }
+
+    func testPreWheelStepSnapshotPreservesExistingSettingsAndUsesNewDefaults() throws {
+        let data = Data("""
+        {"capsLockInputSourceSwitching":true,"reverseMouseWheelVertically":true,"sideButtonNavigation":true,"launchAtLogin":true}
+        """.utf8)
+
+        let settings = try JSONDecoder().decode(TidyTapSettings.self, from: data)
+
+        XCTAssertTrue(settings.capsLockInputSourceSwitching)
+        XCTAssertTrue(settings.reverseMouseWheelVertically)
+        XCTAssertTrue(settings.sideButtonNavigation)
+        XCTAssertTrue(settings.launchAtLogin)
+        XCTAssertFalse(settings.fixedMouseWheelStepEnabled)
+        XCTAssertEqual(settings.mouseWheelStepLines, TidyTapSettings.defaultMouseWheelStepLines)
+    }
+
+    func testWheelStepDecodingNormalizesOutOfRangePersistedValues() throws {
+        let data = Data("""
+        {"capsLockInputSourceSwitching":false,"reverseMouseWheelVertically":false,"sideButtonNavigation":false,"launchAtLogin":false,"fixedMouseWheelStepEnabled":true,"mouseWheelStepLines":99}
+        """.utf8)
+
+        let settings = try JSONDecoder().decode(TidyTapSettings.self, from: data)
+
+        XCTAssertTrue(settings.fixedMouseWheelStepEnabled)
+        XCTAssertEqual(settings.mouseWheelStepLines, 10)
     }
 
     func testMouseWheelNeedsAccessibilityAndInputMonitoring() {
@@ -162,6 +226,63 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(calls.values, ["caps:true", "input:true:false", "input:false:false", "caps:false"])
     }
 
+    func testFirstApplyCapsFailurePreservesPersistedWheelStepBeforeInputIsTouched() {
+        var requested = TidyTapSettings.defaults
+        requested.capsLockInputSourceSwitching = true
+        requested.fixedMouseWheelStepEnabled = true
+        requested.mouseWheelStepLines = 7
+        let store = InMemoryPreferences(request: .init(settings: requested, applyRequestID: UUID()))
+        let calls = CallLog()
+        let input = RecordingInput(calls: calls)
+        let coordinator = ApplyCoordinator(
+            preferences: store,
+            capsFeature: ThrowingCaps(error: InputEngineError.invalidInputSourceCount(1)),
+            inputFeatures: input,
+            menuBar: RecordingMenu(calls: CallLog()),
+            terminator: RecordingTerminator(calls: CallLog())
+        )
+
+        let result = coordinator.applyLatestSettings()
+
+        XCTAssertEqual(result.outcome, .failed)
+        XCTAssertEqual(result.failedComponent, .capsLock)
+        XCTAssertTrue(calls.values.isEmpty, "Caps validation must fail before any input application")
+        XCTAssertEqual(input.currentConfiguration().mouseWheelStepLines, 3, "fresh adapter remains untouched")
+        XCTAssertEqual(result.effectiveSettings?.mouseWheelStepLines, 7)
+        XCTAssertEqual(result.effectiveSettings?.fixedMouseWheelStepEnabled, false)
+        XCTAssertEqual(store.request.settings, result.effectiveSettings)
+    }
+
+    func testSubsequentSizeChangeFailureRestoresPreviouslyAppliedWheelStep() {
+        var original = TidyTapSettings.defaults
+        original.fixedMouseWheelStepEnabled = true
+        original.mouseWheelStepLines = 7
+        let store = InMemoryPreferences(request: .init(settings: original, applyRequestID: UUID()))
+        let input = FailingInput(calls: CallLog())
+        let coordinator = ApplyCoordinator(
+            preferences: store,
+            capsFeature: RecordingCaps(calls: CallLog()),
+            inputFeatures: input,
+            menuBar: RecordingMenu(calls: CallLog()),
+            terminator: RecordingTerminator(calls: CallLog())
+        )
+        XCTAssertEqual(coordinator.applyLatestSettings().outcome, .applied)
+        XCTAssertEqual(input.currentConfiguration().mouseWheelStepLines, 7)
+        var requested = original
+        requested.mouseWheelStepLines = 9
+        requested.reverseMouseWheelVertically = true // this adapter rejects reversal
+        store.request = .init(settings: requested, applyRequestID: UUID())
+
+        let result = coordinator.applyLatestSettings()
+
+        XCTAssertEqual(result.outcome, .failed)
+        XCTAssertEqual(result.failedComponent, .eventTap)
+        XCTAssertEqual(input.currentConfiguration().mouseWheelStepLines, 7)
+        XCTAssertTrue(input.currentConfiguration().fixedMouseWheelStepEnabled)
+        XCTAssertEqual(result.effectiveSettings, original)
+        XCTAssertEqual(store.request.settings, original)
+    }
+
     func testAllOffApplyTerminatesOnlyAfterSuccess() {
         let requestID = UUID()
         let store = InMemoryPreferences(request: TidyTapSettingsRequest(settings: .defaults, applyRequestID: requestID))
@@ -176,6 +297,30 @@ final class TidyTapSettingsTests: XCTestCase {
 
         XCTAssertEqual(coordinator.applyLatestSettings().outcome, .applied)
         XCTAssertEqual(calls.values.last, "terminate")
+    }
+
+    func testDisabledFixedStepApplicationRetainsItsRememberedSizeBeforeHelperExit() {
+        let requestID = UUID()
+        var settings = TidyTapSettings.defaults
+        settings.mouseWheelStepLines = 7
+        let store = InMemoryPreferences(request: .init(settings: settings, applyRequestID: requestID))
+        let input = RecordingInput(calls: CallLog())
+        let terminator = RecordingTerminator(calls: CallLog())
+        let coordinator = ApplyCoordinator(
+            preferences: store,
+            capsFeature: RecordingCaps(calls: CallLog()),
+            inputFeatures: input,
+            menuBar: RecordingMenu(calls: CallLog()),
+            terminator: terminator
+        )
+
+        let result = coordinator.applyLatestSettings()
+
+        XCTAssertEqual(result.outcome, .applied)
+        XCTAssertFalse(input.currentConfiguration().fixedMouseWheelStepEnabled)
+        XCTAssertEqual(input.currentConfiguration().mouseWheelStepLines, 7)
+        XCTAssertEqual(result.effectiveSettings?.mouseWheelStepLines, 7)
+        XCTAssertEqual(store.request.settings.mouseWheelStepLines, 7)
     }
 
     func testRollbackReportsEveryComponentThatCouldNotBeRestored() {
@@ -358,6 +503,36 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(result.errorCode, "eventTap.permissionPartial.inputMonitoring")
     }
 
+    func testPartialWheelStepPermissionDisablesOnlyTheEffectiveToggleAndRemembersSize() {
+        let requestID = UUID()
+        let settings = TidyTapSettings(
+            capsLockInputSourceSwitching: false,
+            reverseMouseWheelVertically: false,
+            sideButtonNavigation: false,
+            launchAtLogin: false,
+            fixedMouseWheelStepEnabled: true,
+            mouseWheelStepLines: 8
+        )
+        let store = InMemoryPreferences(request: .init(settings: settings, applyRequestID: requestID))
+        let input = PartialInput()
+        let coordinator = ApplyCoordinator(
+            preferences: store,
+            capsFeature: RecordingCaps(calls: CallLog()),
+            inputFeatures: input,
+            menuBar: RecordingMenu(calls: CallLog()),
+            terminator: RecordingTerminator(calls: CallLog())
+        )
+
+        let result = coordinator.applyLatestSettings()
+
+        XCTAssertEqual(result.outcome, .partiallyApplied)
+        XCTAssertFalse(input.currentConfiguration().fixedMouseWheelStepEnabled)
+        XCTAssertEqual(input.currentConfiguration().mouseWheelStepLines, 8)
+        XCTAssertFalse(result.effectiveSettings?.fixedMouseWheelStepEnabled ?? true)
+        XCTAssertEqual(result.effectiveSettings?.mouseWheelStepLines, 8)
+        XCTAssertEqual(store.request.settings.mouseWheelStepLines, 8)
+    }
+
     func testInputAdapterRetainsSideButtonsForInputMonitoringPartialState() throws {
         let permissions = FakeInputPermissions(accessibility: true, inputMonitoring: false)
         let backend = FakeEventTapBackend()
@@ -373,12 +548,50 @@ final class TidyTapSettingsTests: XCTestCase {
         let result = try adapter.apply(
             reverseMouseWheel: true,
             sideButtonNavigation: true,
+            fixedMouseWheelStepEnabled: false,
+            mouseWheelStepLines: TidyTapSettings.defaultMouseWheelStepLines,
             requestID: UUID()
         )
 
         XCTAssertEqual(result, .partiallyApplied(unavailablePermissions: [.inputMonitoring]))
         XCTAssertEqual(backend.configurations, [.init(reverseMouseScroll: false, sideButtonNavigation: true)])
         XCTAssertEqual(backend.captureSideButtons, [true])
+    }
+
+    func testInputAdapterKeepsRememberedStepSizeWhenDisabledOrForcedToPassThrough() throws {
+        let backend = FakeEventTapBackend()
+        let adapter = InputFeaturesAdapter(
+            permissionChecker: FakeInputPermissions(accessibility: true, inputMonitoring: true),
+            backend: backend,
+            sideButtons: SideButtonController(
+                applicationProvider: FakeFocusedProvider(),
+                synthesizer: FakeNavigationSynthesizer()
+            )
+        )
+
+        _ = try adapter.apply(
+            reverseMouseWheel: false,
+            sideButtonNavigation: false,
+            fixedMouseWheelStepEnabled: true,
+            mouseWheelStepLines: 7,
+            requestID: UUID()
+        )
+        XCTAssertTrue(adapter.currentConfiguration().fixedMouseWheelStepEnabled)
+        XCTAssertEqual(adapter.currentConfiguration().mouseWheelStepLines, 7)
+
+        _ = try adapter.apply(
+            reverseMouseWheel: false,
+            sideButtonNavigation: false,
+            fixedMouseWheelStepEnabled: false,
+            mouseWheelStepLines: 7,
+            requestID: UUID()
+        )
+        XCTAssertFalse(adapter.currentConfiguration().fixedMouseWheelStepEnabled)
+        XCTAssertEqual(adapter.currentConfiguration().mouseWheelStepLines, 7)
+
+        try adapter.forcePassThrough()
+        XCTAssertFalse(adapter.currentConfiguration().fixedMouseWheelStepEnabled)
+        XCTAssertEqual(adapter.currentConfiguration().mouseWheelStepLines, 7)
     }
 
     func testCapsAdapterPersistsEngineOwnershipThenRestoresOnlyItsOwnedValues() throws {
@@ -502,7 +715,13 @@ final class TidyTapSettingsTests: XCTestCase {
         adapter.runtimeStatusHandler = { id, _, _ in runtimeRequestIDs.append(id) }
 
         XCTAssertEqual(
-            try adapter.apply(reverseMouseWheel: true, sideButtonNavigation: false, requestID: requestID),
+            try adapter.apply(
+                reverseMouseWheel: true,
+                sideButtonNavigation: false,
+                fixedMouseWheelStepEnabled: false,
+                mouseWheelStepLines: TidyTapSettings.defaultMouseWheelStepLines,
+                requestID: requestID
+            ),
             .applied
         )
         XCTAssertTrue(runtimeRequestIDs.isEmpty, "install-time callback must not reenter ApplyCoordinator")
@@ -630,6 +849,137 @@ final class TidyTapSettingsTests: XCTestCase {
 
         XCTAssertEqual(coordinator.latestApplyStatus, store.status)
         XCTAssertEqual(coordinator.settingsForUI(), effective)
+    }
+
+    func testLegacyFourFieldFixedStepAppliedReplyFailsClosedAcrossStartupAndNotification() throws {
+        let requestID = UUID()
+        var requested = TidyTapSettings.defaults
+        requested.fixedMouseWheelStepEnabled = true
+        requested.mouseWheelStepLines = 7
+        let legacyReply = try JSONDecoder().decode(TidyTapApplyStatus.self, from: Data("""
+        {
+          "applyRequestID":"\(requestID.uuidString)",
+          "outcome":"applied",
+          "effectiveSettings":{
+            "capsLockInputSourceSwitching":false,
+            "reverseMouseWheelVertically":false,
+            "sideButtonNavigation":false,
+            "launchAtLogin":false
+          }
+        }
+        """.utf8))
+        let store = InMemoryPreferences(request: .init(settings: requested, applyRequestID: requestID))
+        store.status = legacyReply
+        let coordinator = SettingsCoordinator(
+            preferences: store,
+            helperLauncher: RecordingHelperLauncher(),
+            loginItemManager: StatefulLoginItem(status: .disabled)
+        )
+
+        coordinator.restoreSession()
+
+        let startupStatus = try XCTUnwrap(coordinator.latestApplyStatus)
+        XCTAssertEqual(startupStatus.outcome, .failed)
+        XCTAssertEqual(startupStatus.failedComponent, .eventTap)
+        XCTAssertEqual(startupStatus.errorCode, "eventTap.incompatibleFixedWheelStep")
+        XCTAssertFalse(startupStatus.effectiveSettings?.fixedMouseWheelStepEnabled ?? true)
+        XCTAssertEqual(startupStatus.effectiveSettings?.mouseWheelStepLines, 7)
+        XCTAssertEqual(coordinator.settingsForUI(), try XCTUnwrap(startupStatus.effectiveSettings))
+        XCTAssertEqual(coordinator.receiveApplyResult(), startupStatus)
+        XCTAssertEqual(store.status, legacyReply, "the app must not overwrite a result still owned by the worker")
+
+        store.status = .applied(requestID)
+        let missingEffective = try XCTUnwrap(coordinator.receiveApplyResult())
+        XCTAssertEqual(missingEffective.outcome, .failed)
+        XCTAssertFalse(missingEffective.effectiveSettings?.fixedMouseWheelStepEnabled ?? true)
+        XCTAssertEqual(missingEffective.effectiveSettings?.mouseWheelStepLines, 7)
+    }
+
+    func testMatchingFixedStepAppliedReplyRemainsApplied() {
+        let requestID = UUID()
+        var requested = TidyTapSettings.defaults
+        requested.fixedMouseWheelStepEnabled = true
+        requested.mouseWheelStepLines = 7
+        let store = InMemoryPreferences(request: .init(settings: requested, applyRequestID: requestID))
+        let reply = TidyTapApplyStatus.applied(requestID, effectiveSettings: requested)
+        store.status = reply
+        let coordinator = SettingsCoordinator(
+            preferences: store,
+            helperLauncher: RecordingHelperLauncher(),
+            loginItemManager: StatefulLoginItem(status: .disabled)
+        )
+
+        XCTAssertEqual(coordinator.receiveApplyResult(), reply)
+        XCTAssertEqual(coordinator.settingsForUI(), requested)
+    }
+
+    func testFixedStepAppliedReplyWithMismatchedSizePreservesActualStateAcrossAllPaths() throws {
+        let requestID = UUID()
+        var requested = TidyTapSettings.defaults
+        requested.fixedMouseWheelStepEnabled = true
+        requested.mouseWheelStepLines = 7
+        var actual = requested
+        actual.mouseWheelStepLines = 3
+        let store = InMemoryPreferences(request: .init(settings: requested, applyRequestID: requestID))
+        store.status = .applied(requestID, effectiveSettings: actual)
+        let coordinator = SettingsCoordinator(
+            preferences: store,
+            helperLauncher: RecordingHelperLauncher(),
+            loginItemManager: StatefulLoginItem(status: .disabled)
+        )
+
+        for requestedEnabled in [true, false] {
+            requested.fixedMouseWheelStepEnabled = requestedEnabled
+            store.request = .init(settings: requested, applyRequestID: requestID)
+            coordinator.restoreSession()
+            let startup = try XCTUnwrap(coordinator.latestApplyStatus)
+            XCTAssertEqual(startup.outcome, .failed)
+            XCTAssertEqual(startup.effectiveSettings, actual)
+            let result = try XCTUnwrap(coordinator.receiveApplyResult())
+            XCTAssertEqual(startup, result)
+            XCTAssertEqual(result.applyRequestID, requestID)
+            XCTAssertEqual(result.outcome, .failed)
+            XCTAssertEqual(result.errorCode, "eventTap.incompatibleFixedWheelStep")
+            XCTAssertEqual(result.effectiveSettings, actual)
+            XCTAssertEqual(coordinator.latestApplyStatus, result)
+            XCTAssertEqual(coordinator.settingsForUI(), actual)
+            XCTAssertEqual(coordinator.visibleSettings(for: try XCTUnwrap(store.status)), actual)
+            XCTAssertEqual(coordinator.visibleSettings(for: result), actual)
+            XCTAssertEqual(store.request.settings, requested)
+        }
+    }
+
+    func testDisabledFixedStepLegacyReplyPreservesRememberedSizeAcrossAllPathsAndNextSave() throws {
+        let requestID = UUID()
+        var requested = TidyTapSettings.defaults
+        requested.mouseWheelStepLines = 7
+        let legacy = try JSONDecoder().decode(TidyTapSettings.self, from: Data("""
+        {"capsLockInputSourceSwitching":false,"reverseMouseWheelVertically":false,"sideButtonNavigation":false,"launchAtLogin":false}
+        """.utf8))
+        let reply = TidyTapApplyStatus.applied(requestID, effectiveSettings: legacy)
+        let store = InMemoryPreferences(request: .init(settings: requested, applyRequestID: requestID))
+        store.status = reply
+        let coordinator = SettingsCoordinator(
+            preferences: store,
+            helperLauncher: RecordingHelperLauncher(),
+            loginItemManager: StatefulLoginItem(status: .disabled)
+        )
+
+        coordinator.restoreSession()
+        let startup = try XCTUnwrap(coordinator.latestApplyStatus)
+        XCTAssertEqual(startup.outcome, .applied)
+        XCTAssertEqual(startup.applyRequestID, requestID)
+        XCTAssertEqual(startup.effectiveSettings, requested)
+        XCTAssertEqual(coordinator.settingsForUI(), requested)
+        XCTAssertEqual(coordinator.visibleSettings(for: reply), requested)
+        XCTAssertEqual(coordinator.receiveApplyResult(), startup)
+        XCTAssertEqual(coordinator.visibleSettings(for: startup), requested)
+        XCTAssertEqual(store.status, reply)
+
+        var next = coordinator.settingsForUI()
+        next.sideButtonNavigation = true
+        try coordinator.save(next)
+        XCTAssertEqual(store.request.settings.mouseWheelStepLines, 7)
     }
 
     func testApplyResultAlwaysRenormalizesLoginItemFromLiveServiceTruth() {
@@ -1316,9 +1666,20 @@ private final class RecordingInput: TidyTapInputFeaturesApplying {
     init(calls: CallLog, configuration: TidyTapInputFeatureConfiguration = .disabled) {
         self.calls = calls; self.configuration = configuration
     }
-    func apply(reverseMouseWheel: Bool, sideButtonNavigation: Bool, requestID: UUID) throws -> TidyTapInputFeatureApplyResult {
+    func apply(
+        reverseMouseWheel: Bool,
+        sideButtonNavigation: Bool,
+        fixedMouseWheelStepEnabled: Bool,
+        mouseWheelStepLines: Int,
+        requestID: UUID
+    ) throws -> TidyTapInputFeatureApplyResult {
         calls.values.append("input:\(reverseMouseWheel):\(sideButtonNavigation)")
-        configuration = .init(reverseMouseWheel: reverseMouseWheel, sideButtonNavigation: sideButtonNavigation)
+        configuration = .init(
+            reverseMouseWheel: reverseMouseWheel,
+            sideButtonNavigation: sideButtonNavigation,
+            fixedMouseWheelStepEnabled: fixedMouseWheelStepEnabled,
+            mouseWheelStepLines: mouseWheelStepLines
+        )
         return .applied
     }
     func forcePassThrough() throws { calls.values.append("input:passThrough"); configuration = .disabled }
@@ -1329,12 +1690,23 @@ private final class FailingInput: TidyTapInputFeaturesApplying {
     let calls: CallLog
     init(calls: CallLog) { self.calls = calls }
     var configuration: TidyTapInputFeatureConfiguration = .disabled
-    func apply(reverseMouseWheel: Bool, sideButtonNavigation: Bool, requestID: UUID) throws -> TidyTapInputFeatureApplyResult {
+    func apply(
+        reverseMouseWheel: Bool,
+        sideButtonNavigation: Bool,
+        fixedMouseWheelStepEnabled: Bool,
+        mouseWheelStepLines: Int,
+        requestID: UUID
+    ) throws -> TidyTapInputFeatureApplyResult {
         calls.values.append("input:\(reverseMouseWheel):\(sideButtonNavigation)")
         if reverseMouseWheel {
             throw TestError.failure
         }
-        configuration = .init(reverseMouseWheel: reverseMouseWheel, sideButtonNavigation: sideButtonNavigation)
+        configuration = .init(
+            reverseMouseWheel: reverseMouseWheel,
+            sideButtonNavigation: sideButtonNavigation,
+            fixedMouseWheelStepEnabled: fixedMouseWheelStepEnabled,
+            mouseWheelStepLines: mouseWheelStepLines
+        )
         return .applied
     }
     func forcePassThrough() throws { calls.values.append("input:passThrough"); configuration = .disabled }
@@ -1345,12 +1717,23 @@ private final class FailingRollbackInput: TidyTapInputFeaturesApplying {
     let calls: CallLog
     init(calls: CallLog) { self.calls = calls }
     var configuration: TidyTapInputFeatureConfiguration = .disabled
-    func apply(reverseMouseWheel: Bool, sideButtonNavigation: Bool, requestID: UUID) throws -> TidyTapInputFeatureApplyResult {
+    func apply(
+        reverseMouseWheel: Bool,
+        sideButtonNavigation: Bool,
+        fixedMouseWheelStepEnabled: Bool,
+        mouseWheelStepLines: Int,
+        requestID: UUID
+    ) throws -> TidyTapInputFeatureApplyResult {
         calls.values.append("input:\(reverseMouseWheel):\(sideButtonNavigation)")
         if !reverseMouseWheel {
             throw TestError.failure
         }
-        configuration = .init(reverseMouseWheel: reverseMouseWheel, sideButtonNavigation: sideButtonNavigation)
+        configuration = .init(
+            reverseMouseWheel: reverseMouseWheel,
+            sideButtonNavigation: sideButtonNavigation,
+            fixedMouseWheelStepEnabled: fixedMouseWheelStepEnabled,
+            mouseWheelStepLines: mouseWheelStepLines
+        )
         return .applied
     }
     func forcePassThrough() throws { calls.values.append("input:passThrough"); configuration = .disabled }
@@ -1359,8 +1742,19 @@ private final class FailingRollbackInput: TidyTapInputFeaturesApplying {
 
 private final class PartialInput: TidyTapInputFeaturesApplying {
     var configuration: TidyTapInputFeatureConfiguration = .disabled
-    func apply(reverseMouseWheel: Bool, sideButtonNavigation: Bool, requestID: UUID) throws -> TidyTapInputFeatureApplyResult {
-        configuration = .init(reverseMouseWheel: false, sideButtonNavigation: sideButtonNavigation)
+    func apply(
+        reverseMouseWheel: Bool,
+        sideButtonNavigation: Bool,
+        fixedMouseWheelStepEnabled: Bool,
+        mouseWheelStepLines: Int,
+        requestID: UUID
+    ) throws -> TidyTapInputFeatureApplyResult {
+        configuration = .init(
+            reverseMouseWheel: false,
+            sideButtonNavigation: sideButtonNavigation,
+            fixedMouseWheelStepEnabled: false,
+            mouseWheelStepLines: mouseWheelStepLines
+        )
         return .partiallyApplied(unavailablePermissions: [.inputMonitoring])
     }
     func forcePassThrough() throws {}

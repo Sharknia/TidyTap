@@ -134,19 +134,22 @@ public struct ScrollClassifier: Sendable {
     }
 }
 
+public enum ScrollMutation: Equatable, Sendable {
+    case passThrough
+    case reverseVerticalDeltas(ScrollDeltaFields)
+    case setVerticalScrollStep(lines: Int64)
+}
+
 public struct ScrollProcessingResult: Equatable, Sendable {
     public let classification: InputDeviceClass
-    public let outputDeltas: ScrollDeltaFields
-    public let didInvert: Bool
+    public let mutation: ScrollMutation
 
     public init(
         classification: InputDeviceClass,
-        outputDeltas: ScrollDeltaFields,
-        didInvert: Bool
+        mutation: ScrollMutation
     ) {
         self.classification = classification
-        self.outputDeltas = outputDeltas
-        self.didInvert = didInvert
+        self.mutation = mutation
     }
 }
 
@@ -161,23 +164,47 @@ public struct ScrollController: Sendable {
         classifier.observeGesture(at: timestampNanoseconds)
     }
 
-    public mutating func process(_ observation: ScrollObservation) -> ScrollProcessingResult {
+    public mutating func process(
+        _ observation: ScrollObservation,
+        reverseMouseScroll: Bool = true,
+        fixedMouseWheelStepEnabled: Bool = false,
+        mouseWheelStepLines: Int = 3
+    ) -> ScrollProcessingResult {
         let classification = classifier.classify(observation)
         guard
             classification == .discreteMouse,
-            observation.deltas.verticalLine != 0,
+            observation.deltas.verticalLine != 0
+        else {
+            return ScrollProcessingResult(
+                classification: classification,
+                mutation: .passThrough
+            )
+        }
+
+        let isSingleLineStep = observation.deltas.verticalLine == 1
+            || observation.deltas.verticalLine == -1
+        if fixedMouseWheelStepEnabled, isSingleLineStep {
+            let clampedStep = Int64(min(max(mouseWheelStepLines, 1), 10))
+            let originalDirection: Int64 = observation.deltas.verticalLine > 0 ? 1 : -1
+            let outputDirection: Int64 = reverseMouseScroll ? -originalDirection : originalDirection
+            return ScrollProcessingResult(
+                classification: classification,
+                mutation: .setVerticalScrollStep(lines: outputDirection * clampedStep)
+            )
+        }
+
+        guard
+            reverseMouseScroll,
             let inverted = observation.deltas.invertingVertical()
         else {
             return ScrollProcessingResult(
                 classification: classification,
-                outputDeltas: observation.deltas,
-                didInvert: false
+                mutation: .passThrough
             )
         }
         return ScrollProcessingResult(
             classification: classification,
-            outputDeltas: inverted,
-            didInvert: true
+            mutation: .reverseVerticalDeltas(inverted)
         )
     }
 }

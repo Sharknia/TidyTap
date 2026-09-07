@@ -223,6 +223,11 @@ final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
     private let stateLock = NSLock()
     private var isApplying = false
     private var activeRequestID: UUID?
+    /// The engine's effective configuration correctly turns the feature off
+    /// when permissions disappear. Keep the user's last selected size outside
+    /// that effective state so pass-through and a fresh disabled application do
+    /// not turn it back into the engine default.
+    private var rememberedMouseWheelStepLines = TidyTapSettings.defaultMouseWheelStepLines
     var runtimeStatusHandler: ((UUID, TidyTapInputFeatureApplyResult?, TidyTapInputFeatureAdapterError?) -> Void)?
 
     init(
@@ -247,10 +252,13 @@ final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
     func apply(
         reverseMouseWheel: Bool,
         sideButtonNavigation: Bool,
+        fixedMouseWheelStepEnabled: Bool,
+        mouseWheelStepLines: Int,
         requestID: UUID
     ) throws -> TidyTapInputFeatureApplyResult {
         stateLock.lock()
         isApplying = true
+        rememberedMouseWheelStepLines = mouseWheelStepLines
         stateLock.unlock()
         defer {
             stateLock.lock()
@@ -260,7 +268,9 @@ final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
         }
         let configuration = EventTapConfiguration(
             reverseMouseScroll: reverseMouseWheel,
-            sideButtonNavigation: sideButtonNavigation
+            sideButtonNavigation: sideButtonNavigation,
+            fixedMouseWheelStepEnabled: fixedMouseWheelStepEnabled,
+            mouseWheelStepLines: mouseWheelStepLines
         )
         switch controller.start(configuration: configuration) {
         case .stopped, .drainingButtonPresses, .running:
@@ -286,9 +296,14 @@ final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
 
     func currentConfiguration() -> TidyTapInputFeatureConfiguration {
         let configuration = controller.currentConfiguration
+        stateLock.lock()
+        let rememberedMouseWheelStepLines = rememberedMouseWheelStepLines
+        stateLock.unlock()
         return TidyTapInputFeatureConfiguration(
             reverseMouseWheel: configuration.reverseMouseScroll,
-            sideButtonNavigation: configuration.sideButtonNavigation
+            sideButtonNavigation: configuration.sideButtonNavigation,
+            fixedMouseWheelStepEnabled: configuration.fixedMouseWheelStepEnabled,
+            mouseWheelStepLines: rememberedMouseWheelStepLines
         )
     }
 

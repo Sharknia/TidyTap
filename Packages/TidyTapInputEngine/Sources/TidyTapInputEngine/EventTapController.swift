@@ -13,17 +13,30 @@ public protocol InputPermissionChecking: Sendable {
 public struct EventTapConfiguration: Equatable, Sendable {
     public let reverseMouseScroll: Bool
     public let sideButtonNavigation: Bool
+    public let fixedMouseWheelStepEnabled: Bool
+    public let mouseWheelStepLines: Int
 
-    public init(reverseMouseScroll: Bool, sideButtonNavigation: Bool) {
+    public init(
+        reverseMouseScroll: Bool,
+        sideButtonNavigation: Bool,
+        fixedMouseWheelStepEnabled: Bool = false,
+        mouseWheelStepLines: Int = 3
+    ) {
         self.reverseMouseScroll = reverseMouseScroll
         self.sideButtonNavigation = sideButtonNavigation
+        self.fixedMouseWheelStepEnabled = fixedMouseWheelStepEnabled
+        self.mouseWheelStepLines = min(max(mouseWheelStepLines, 1), 10)
     }
 
-    public var isEnabled: Bool { reverseMouseScroll || sideButtonNavigation }
+    public var needsScrollProcessing: Bool {
+        reverseMouseScroll || fixedMouseWheelStepEnabled
+    }
+
+    public var isEnabled: Bool { needsScrollProcessing || sideButtonNavigation }
 
     public var requiredPermissions: Set<InputPermission> {
         var result: Set<InputPermission> = []
-        if reverseMouseScroll {
+        if needsScrollProcessing {
             result.formUnion([.accessibility, .inputMonitoring])
         }
         if sideButtonNavigation {
@@ -50,6 +63,7 @@ public enum EventTapOutput: Equatable, Sendable {
     case passThrough
     case consume
     case replaceScrollDeltas(ScrollDeltaFields)
+    case setVerticalScrollStep(lines: Int64)
 }
 
 public typealias EventTapHandler = @Sendable (EventTapInput) -> EventTapOutput
@@ -200,7 +214,7 @@ public final class EventTapController: @unchecked Sendable {
         switch input {
         case .gesture(let timestamp):
             lock.lock()
-            let enabled = configuration.reverseMouseScroll
+            let enabled = configuration.needsScrollProcessing
             lock.unlock()
             guard enabled else { return .passThrough }
             let missing = missingPermissions(
@@ -211,7 +225,7 @@ public final class EventTapController: @unchecked Sendable {
                 return .passThrough
             }
             lock.lock()
-            if configuration.reverseMouseScroll {
+            if configuration.needsScrollProcessing {
                 scroll.observeGesture(at: timestamp)
             }
             lock.unlock()
@@ -219,7 +233,7 @@ public final class EventTapController: @unchecked Sendable {
 
         case .scroll(let observation):
             lock.lock()
-            guard configuration.reverseMouseScroll else {
+            guard configuration.needsScrollProcessing else {
                 lock.unlock()
                 return .passThrough
             }
@@ -233,13 +247,25 @@ public final class EventTapController: @unchecked Sendable {
                 return .passThrough
             }
             lock.lock()
-            guard configuration == currentConfiguration, configuration.reverseMouseScroll else {
+            guard configuration == currentConfiguration, configuration.needsScrollProcessing else {
                 lock.unlock()
                 return .passThrough
             }
-            let result = scroll.process(observation)
+            let result = scroll.process(
+                observation,
+                reverseMouseScroll: configuration.reverseMouseScroll,
+                fixedMouseWheelStepEnabled: configuration.fixedMouseWheelStepEnabled,
+                mouseWheelStepLines: configuration.mouseWheelStepLines
+            )
             lock.unlock()
-            return result.didInvert ? .replaceScrollDeltas(result.outputDeltas) : .passThrough
+            switch result.mutation {
+            case .passThrough:
+                return .passThrough
+            case .reverseVerticalDeltas(let deltas):
+                return .replaceScrollDeltas(deltas)
+            case .setVerticalScrollStep(let lines):
+                return .setVerticalScrollStep(lines: lines)
+            }
 
         case .buttonDown(let button):
             lock.lock()
@@ -426,7 +452,7 @@ public final class EventTapController: @unchecked Sendable {
     private func setEffectiveConfiguration(_ configuration: EventTapConfiguration) {
         lock.lock()
         self.configuration = configuration
-        if !configuration.reverseMouseScroll { scroll = ScrollController() }
+        if !configuration.needsScrollProcessing { scroll = ScrollController() }
         lock.unlock()
     }
 
@@ -436,7 +462,9 @@ public final class EventTapController: @unchecked Sendable {
     ) -> EventTapConfiguration {
         EventTapConfiguration(
             reverseMouseScroll: requested.reverseMouseScroll && missing.isDisjoint(with: [.accessibility, .inputMonitoring]),
-            sideButtonNavigation: requested.sideButtonNavigation && !missing.contains(.accessibility)
+            sideButtonNavigation: requested.sideButtonNavigation && !missing.contains(.accessibility),
+            fixedMouseWheelStepEnabled: requested.fixedMouseWheelStepEnabled && missing.isDisjoint(with: [.accessibility, .inputMonitoring]),
+            mouseWheelStepLines: requested.mouseWheelStepLines
         )
     }
 

@@ -11,14 +11,37 @@ protocol TidyTapCapsFeatureApplying: AnyObject {
 struct TidyTapInputFeatureConfiguration: Equatable {
     var reverseMouseWheel: Bool
     var sideButtonNavigation: Bool
+    var fixedMouseWheelStepEnabled: Bool
+    /// This remains the user's remembered value even when the fixed-step
+    /// capability is effectively off (for example after permission loss).
+    var mouseWheelStepLines: Int
 
-    static let disabled = Self(reverseMouseWheel: false, sideButtonNavigation: false)
+    init(
+        reverseMouseWheel: Bool,
+        sideButtonNavigation: Bool,
+        fixedMouseWheelStepEnabled: Bool = false,
+        mouseWheelStepLines: Int = TidyTapSettings.defaultMouseWheelStepLines
+    ) {
+        self.reverseMouseWheel = reverseMouseWheel
+        self.sideButtonNavigation = sideButtonNavigation
+        self.fixedMouseWheelStepEnabled = fixedMouseWheelStepEnabled
+        self.mouseWheelStepLines = mouseWheelStepLines
+    }
+
+    static let disabled = Self(
+        reverseMouseWheel: false,
+        sideButtonNavigation: false,
+        fixedMouseWheelStepEnabled: false,
+        mouseWheelStepLines: TidyTapSettings.defaultMouseWheelStepLines
+    )
 }
 
 protocol TidyTapInputFeaturesApplying: AnyObject {
     func apply(
         reverseMouseWheel: Bool,
         sideButtonNavigation: Bool,
+        fixedMouseWheelStepEnabled: Bool,
+        mouseWheelStepLines: Int,
         requestID: UUID
     ) throws -> TidyTapInputFeatureApplyResult
     func forcePassThrough() throws
@@ -89,6 +112,8 @@ final class ApplyCoordinator {
             _ = try inputFeatures.apply(
                 reverseMouseWheel: inputConfiguration.reverseMouseWheel,
                 sideButtonNavigation: inputConfiguration.sideButtonNavigation,
+                fixedMouseWheelStepEnabled: inputConfiguration.fixedMouseWheelStepEnabled,
+                mouseWheelStepLines: activeRequest.settings.mouseWheelStepLines,
                 requestID: requestID
             )
         } catch let adapterError as TidyTapInputFeatureAdapterError {
@@ -102,6 +127,7 @@ final class ApplyCoordinator {
         var effective = activeRequest.settings
         effective.reverseMouseWheelVertically = normalizedInputConfiguration.reverseMouseWheel
         effective.sideButtonNavigation = normalizedInputConfiguration.sideButtonNavigation
+        effective.fixedMouseWheelStepEnabled = normalizedInputConfiguration.fixedMouseWheelStepEnabled
         let status: TidyTapApplyStatus
         if let runtimeResult {
             switch runtimeResult {
@@ -137,7 +163,13 @@ final class ApplyCoordinator {
     func apply(_ request: TidyTapSettingsRequest) -> TidyTapApplyStatus {
         let previousState: ControllerState
         do {
-            previousState = try captureControllerState()
+            // A fresh adapter has not learned the persisted step yet. Seed the
+            // rollback snapshot from the last confirmed request, or the first
+            // persisted request, rather than its construction default.
+            previousState = try captureControllerState(
+                rememberedMouseWheelStepLines: activeRequest?.settings.mouseWheelStepLines
+                    ?? request.settings.mouseWheelStepLines
+            )
         } catch {
             let captureError = error as? ControllerStateCaptureError
             let result = failure(
@@ -212,6 +244,8 @@ final class ApplyCoordinator {
             inputResult = try inputFeatures.apply(
                 reverseMouseWheel: settings.reverseMouseWheelVertically,
                 sideButtonNavigation: settings.sideButtonNavigation,
+                fixedMouseWheelStepEnabled: settings.fixedMouseWheelStepEnabled,
+                mouseWheelStepLines: settings.mouseWheelStepLines,
                 requestID: requestID
             )
         } catch {
@@ -273,6 +307,8 @@ final class ApplyCoordinator {
                 _ = try inputFeatures.apply(
                     reverseMouseWheel: state.input.reverseMouseWheel,
                     sideButtonNavigation: state.input.sideButtonNavigation,
+                    fixedMouseWheelStepEnabled: state.input.fixedMouseWheelStepEnabled,
+                    mouseWheelStepLines: state.input.mouseWheelStepLines,
                     requestID: requestID
                 )
             } catch {
@@ -349,6 +385,7 @@ final class ApplyCoordinator {
         let input = inputFeatures.currentConfiguration()
         effective.reverseMouseWheelVertically = input.reverseMouseWheel
         effective.sideButtonNavigation = input.sideButtonNavigation
+        effective.fixedMouseWheelStepEnabled = input.fixedMouseWheelStepEnabled
         return effective
     }
 
@@ -363,16 +400,20 @@ final class ApplyCoordinator {
         let underlying: Error
     }
 
-    private func captureControllerState() throws -> ControllerState {
+    private func captureControllerState(rememberedMouseWheelStepLines: Int? = nil) throws -> ControllerState {
         let capsLockEnabled: Bool
         do {
             capsLockEnabled = try capsFeature.currentCapsLockEnabled()
         } catch {
             throw ControllerStateCaptureError(component: .capsLock, underlying: error)
         }
+        var input = inputFeatures.currentConfiguration()
+        if let rememberedMouseWheelStepLines {
+            input.mouseWheelStepLines = rememberedMouseWheelStepLines
+        }
         return ControllerState(
             capsLockEnabled: capsLockEnabled,
-            input: inputFeatures.currentConfiguration(),
+            input: input,
             menuBarVisible: menuBar.isMenuBarVisible
         )
     }
@@ -382,11 +423,15 @@ final class ApplyCoordinator {
         result.capsLockInputSourceSwitching = state.capsLockEnabled
         result.reverseMouseWheelVertically = state.input.reverseMouseWheel
         result.sideButtonNavigation = state.input.sideButtonNavigation
+        result.fixedMouseWheelStepEnabled = state.input.fixedMouseWheelStepEnabled
+        result.mouseWheelStepLines = state.input.mouseWheelStepLines
         return result
     }
 
     private func currentSettings(fallback: TidyTapSettings) -> TidyTapSettings {
-        guard let state = try? captureControllerState() else { return fallback }
+        guard let state = try? captureControllerState(
+            rememberedMouseWheelStepLines: activeRequest == nil ? fallback.mouseWheelStepLines : nil
+        ) else { return fallback }
         return settings(fallback, applying: state)
     }
 

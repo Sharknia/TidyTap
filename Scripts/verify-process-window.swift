@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import Darwin
 import Foundation
@@ -62,7 +63,14 @@ guard normalWindows.count == 1,
 let widthMatches = abs(width - expectedContentWidth) <= 4
 // CGWindow reports the frame including the title bar; the requested AppKit
 // content height is therefore the lower bound rather than the exact frame.
-let heightMatches = height >= expectedContentHeight && height <= expectedContentHeight + 64
+// Settings uses a scrollable document and clamps the window to its screen's
+// visible work area. Accept the corresponding bounded content height on small
+// displays as well as the preferred height on larger displays.
+let candidateContentHeights = NSScreen.screens.map { screen in
+    min(expectedContentHeight, max(1, screen.visibleFrame.height - 24))
+}
+let heightMatches = (candidateContentHeights.isEmpty ? [expectedContentHeight] : candidateContentHeights)
+    .contains { height >= $0 && height <= $0 + 64 }
 guard widthMatches && heightMatches else {
     fputs(
         "Unexpected normal window frame: \(Int(width))x\(Int(height)); " +

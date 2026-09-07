@@ -169,20 +169,14 @@ fi
 
 dmg_name="TidyTap-$version.dmg"
 candidate_dmg="$candidate_dir/$dmg_name"
-staging_dir="$candidate_dir/staging"
-mkdir "$staging_dir"
-/usr/bin/ditto "$app_path" "$staging_dir/TidyTap.app"
-/bin/ln -s /Applications "$staging_dir/Applications"
-/usr/bin/tee "$staging_dir/Install TidyTap.txt" >/dev/null <<'EOF'
-TidyTap 설치 / Install TidyTap
-
-TidyTap.app을 Applications 폴더로 드래그하세요.
-Drag TidyTap.app to the Applications folder.
-EOF
 run_step \
   "Release DMG creation" \
-  "Check available disk space and the archived app bundle." \
-  /usr/bin/hdiutil create -volname "TidyTap" -srcfolder "$staging_dir" -ov -format UDZO "$candidate_dmg"
+  "Check the build-only Python environment, committed installer background, and archived app bundle." \
+  "$project_root/Scripts/create-installer-dmg.sh" \
+    --source-directory "$project_root" \
+    --app "$app_path" \
+    --volume-name "TidyTap" \
+    --output "$candidate_dmg"
 
 # Gatekeeper assesses the disk-image container itself. Sign it before it is
 # submitted so Apple's ticket binds to the Developer ID-signed DMG.

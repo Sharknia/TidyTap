@@ -6,18 +6,50 @@ struct TidyTapSettings: Codable, Equatable {
     var reverseMouseWheelVertically: Bool
     var sideButtonNavigation: Bool
     var launchAtLogin: Bool
+    /// Applies a fixed logical line delta to eligible discrete mouse-wheel
+    /// events. This is intentionally independent from direction reversal.
+    var fixedMouseWheelStepEnabled: Bool
+    /// The remembered fixed-wheel step, even while the feature is disabled or
+    /// unavailable because permissions were revoked.
+    var mouseWheelStepLines: Int {
+        get { normalizedMouseWheelStepLines }
+        set { normalizedMouseWheelStepLines = Self.normalizedMouseWheelStepLines(newValue) }
+    }
+    private var normalizedMouseWheelStepLines: Int
+
+    static let mouseWheelStepLineRange = 1...10
+    static let defaultMouseWheelStepLines = 3
+
+    init(
+        capsLockInputSourceSwitching: Bool,
+        reverseMouseWheelVertically: Bool,
+        sideButtonNavigation: Bool,
+        launchAtLogin: Bool,
+        fixedMouseWheelStepEnabled: Bool = false,
+        mouseWheelStepLines: Int = Self.defaultMouseWheelStepLines
+    ) {
+        self.capsLockInputSourceSwitching = capsLockInputSourceSwitching
+        self.reverseMouseWheelVertically = reverseMouseWheelVertically
+        self.sideButtonNavigation = sideButtonNavigation
+        self.launchAtLogin = launchAtLogin
+        self.fixedMouseWheelStepEnabled = fixedMouseWheelStepEnabled
+        self.normalizedMouseWheelStepLines = Self.normalizedMouseWheelStepLines(mouseWheelStepLines)
+    }
 
     static let defaults = TidyTapSettings(
         capsLockInputSourceSwitching: false,
         reverseMouseWheelVertically: false,
         sideButtonNavigation: false,
-        launchAtLogin: false
+        launchAtLogin: false,
+        fixedMouseWheelStepEnabled: false,
+        mouseWheelStepLines: defaultMouseWheelStepLines
     )
 
     /// The login-item preference alone must not keep a helper process alive.
     var requiresHelper: Bool {
         capsLockInputSourceSwitching ||
             reverseMouseWheelVertically ||
+            fixedMouseWheelStepEnabled ||
             sideButtonNavigation
     }
 
@@ -26,10 +58,39 @@ struct TidyTapSettings: Codable, Equatable {
         case reverseMouseWheelVertically
         case sideButtonNavigation
         case launchAtLogin
+        case fixedMouseWheelStepEnabled
+        case mouseWheelStepLines
     }
 
-    /// Older snapshots can contain `showInMenuBar`. Codable ignores that
-    /// unknown key during decoding, and it is deliberately not re-encoded.
+    /// New wheel-step values must not make a pre-feature snapshot unreadable:
+    /// all existing settings remain required, while only the new values use
+    /// defaults when absent. Unknown retired keys such as `showInMenuBar` are
+    /// deliberately ignored and not re-encoded.
+    init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            capsLockInputSourceSwitching: try values.decode(Bool.self, forKey: .capsLockInputSourceSwitching),
+            reverseMouseWheelVertically: try values.decode(Bool.self, forKey: .reverseMouseWheelVertically),
+            sideButtonNavigation: try values.decode(Bool.self, forKey: .sideButtonNavigation),
+            launchAtLogin: try values.decode(Bool.self, forKey: .launchAtLogin),
+            fixedMouseWheelStepEnabled: try values.decodeIfPresent(Bool.self, forKey: .fixedMouseWheelStepEnabled) ?? false,
+            mouseWheelStepLines: try values.decodeIfPresent(Int.self, forKey: .mouseWheelStepLines) ?? Self.defaultMouseWheelStepLines
+        )
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(capsLockInputSourceSwitching, forKey: .capsLockInputSourceSwitching)
+        try values.encode(reverseMouseWheelVertically, forKey: .reverseMouseWheelVertically)
+        try values.encode(sideButtonNavigation, forKey: .sideButtonNavigation)
+        try values.encode(launchAtLogin, forKey: .launchAtLogin)
+        try values.encode(fixedMouseWheelStepEnabled, forKey: .fixedMouseWheelStepEnabled)
+        try values.encode(mouseWheelStepLines, forKey: .mouseWheelStepLines)
+    }
+
+    private static func normalizedMouseWheelStepLines(_ value: Int) -> Int {
+        min(max(value, mouseWheelStepLineRange.lowerBound), mouseWheelStepLineRange.upperBound)
+    }
 }
 
 enum TidyTapFeature: String, Codable, CaseIterable {

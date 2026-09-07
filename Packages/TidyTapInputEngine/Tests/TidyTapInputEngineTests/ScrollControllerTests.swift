@@ -19,17 +19,16 @@ final class ScrollControllerTests: XCTestCase {
         let result = controller.process(input)
 
         XCTAssertEqual(result.classification, .discreteMouse)
-        XCTAssertTrue(result.didInvert)
         XCTAssertEqual(
-            result.outputDeltas,
-            deltas(
+            result.mutation,
+            .reverseVerticalDeltas(deltas(
                 verticalLine: -3,
                 verticalPoint: -17,
                 verticalFixed: -196_608,
                 horizontalLine: -2,
                 horizontalPoint: -11,
                 horizontalFixed: -131_072
-            )
+            ))
         )
     }
 
@@ -37,11 +36,15 @@ final class ScrollControllerTests: XCTestCase {
         var controller = ScrollController()
         let original = deltas(horizontalLine: 2, horizontalPoint: 10, horizontalFixed: 20)
 
-        let result = controller.process(observation(continuous: false, deltas: original))
+        let result = controller.process(
+            observation(continuous: false, deltas: original),
+            reverseMouseScroll: true,
+            fixedMouseWheelStepEnabled: true,
+            mouseWheelStepLines: 3
+        )
 
         XCTAssertEqual(result.classification, .discreteMouse)
-        XCTAssertFalse(result.didInvert)
-        XCTAssertEqual(result.outputDeltas, original)
+        XCTAssertEqual(result.mutation, .passThrough)
     }
 
     func testUnknownContinuousScrollIsUnchanged() {
@@ -51,8 +54,7 @@ final class ScrollControllerTests: XCTestCase {
         let result = controller.process(observation(continuous: true, deltas: original))
 
         XCTAssertEqual(result.classification, .unknown)
-        XCTAssertFalse(result.didInvert)
-        XCTAssertEqual(result.outputDeltas, original)
+        XCTAssertEqual(result.mutation, .passThrough)
     }
 
     func testDirectTrackpadAndLinkedMomentumRemainUnchanged() {
@@ -74,9 +76,9 @@ final class ScrollControllerTests: XCTestCase {
         XCTAssertEqual(direct.classification, .trackpad)
         XCTAssertEqual(momentumBegin.classification, .trackpad)
         XCTAssertEqual(momentumLate.classification, .trackpad)
-        XCTAssertFalse(direct.didInvert)
-        XCTAssertFalse(momentumBegin.didInvert)
-        XCTAssertFalse(momentumLate.didInvert)
+        XCTAssertEqual(direct.mutation, .passThrough)
+        XCTAssertEqual(momentumBegin.mutation, .passThrough)
+        XCTAssertEqual(momentumLate.mutation, .passThrough)
     }
 
     func testPublicGestureLinksOnlyNearbyContinuousScroll() {
@@ -105,13 +107,151 @@ final class ScrollControllerTests: XCTestCase {
 
     func testOverflowingDeltaPassesThroughInsteadOfTrapping() {
         var controller = ScrollController()
-        let original = deltas(verticalLine: 1, verticalPoint: Int64.min, verticalFixed: 2)
+        let original = deltas(verticalLine: Int64.min, verticalPoint: 1, verticalFixed: 2)
 
-        let result = controller.process(observation(continuous: false, deltas: original))
+        let result = controller.process(
+            observation(continuous: false, deltas: original),
+            reverseMouseScroll: true,
+            fixedMouseWheelStepEnabled: true,
+            mouseWheelStepLines: 3
+        )
 
         XCTAssertEqual(result.classification, .discreteMouse)
-        XCTAssertFalse(result.didInvert)
-        XCTAssertEqual(result.outputDeltas, original)
+        XCTAssertEqual(result.mutation, .passThrough)
+    }
+
+    func testFixedStepUsesOnlyExactSingleLineDiscreteMouseEvents() {
+        var controller = ScrollController()
+
+        for line in [-1, 1] {
+            let result = controller.process(
+                observation(
+                    continuous: false,
+                    deltas: deltas(
+                        verticalLine: Int64(line),
+                        verticalPoint: Int64(line * 17),
+                        verticalFixed: Int64(line * 65_536),
+                        horizontalLine: 2,
+                        horizontalPoint: 11,
+                        horizontalFixed: 131_072
+                    )
+                ),
+                reverseMouseScroll: false,
+                fixedMouseWheelStepEnabled: true,
+                mouseWheelStepLines: 4
+            )
+
+            XCTAssertEqual(result.classification, .discreteMouse)
+            XCTAssertEqual(result.mutation, .setVerticalScrollStep(lines: Int64(line * 4)))
+        }
+    }
+
+    func testFixedStepAndReversalAreIndependent() {
+        var controller = ScrollController()
+        let singleStep = observation(
+            continuous: false,
+            deltas: deltas(verticalLine: 1, verticalPoint: 17, verticalFixed: 65_536)
+        )
+
+        XCTAssertEqual(
+            controller.process(
+                singleStep,
+                reverseMouseScroll: false,
+                fixedMouseWheelStepEnabled: false
+            ).mutation,
+            .passThrough
+        )
+        XCTAssertEqual(
+            controller.process(
+                singleStep,
+                reverseMouseScroll: true,
+                fixedMouseWheelStepEnabled: true,
+                mouseWheelStepLines: 3
+            ).mutation,
+            .setVerticalScrollStep(lines: -3)
+        )
+    }
+
+    func testLargerDeltaIsPreservedUnlessReversalIsEnabled() {
+        var controller = ScrollController()
+        let original = deltas(
+            verticalLine: 4,
+            verticalPoint: 23,
+            verticalFixed: 262_144,
+            horizontalLine: -2,
+            horizontalPoint: -9,
+            horizontalFixed: -131_072
+        )
+        let input = observation(continuous: false, deltas: original)
+
+        XCTAssertEqual(
+            controller.process(
+                input,
+                reverseMouseScroll: false,
+                fixedMouseWheelStepEnabled: true,
+                mouseWheelStepLines: 7
+            ).mutation,
+            .passThrough
+        )
+        XCTAssertEqual(
+            controller.process(
+                input,
+                reverseMouseScroll: true,
+                fixedMouseWheelStepEnabled: true,
+                mouseWheelStepLines: 7
+            ).mutation,
+            .reverseVerticalDeltas(deltas(
+                verticalLine: -4,
+                verticalPoint: -23,
+                verticalFixed: -262_144,
+                horizontalLine: -2,
+                horizontalPoint: -9,
+                horizontalFixed: -131_072
+            ))
+        )
+    }
+
+    func testFixedStepClampsDirectCallToPublicRange() {
+        var controller = ScrollController()
+        let input = observation(
+            continuous: false,
+            deltas: deltas(verticalLine: -1, verticalPoint: -1, verticalFixed: -1)
+        )
+
+        XCTAssertEqual(
+            controller.process(
+                input,
+                reverseMouseScroll: false,
+                fixedMouseWheelStepEnabled: true,
+                mouseWheelStepLines: 0
+            ).mutation,
+            .setVerticalScrollStep(lines: -1)
+        )
+        XCTAssertEqual(
+            controller.process(
+                input,
+                reverseMouseScroll: false,
+                fixedMouseWheelStepEnabled: true,
+                mouseWheelStepLines: 99
+            ).mutation,
+            .setVerticalScrollStep(lines: -10)
+        )
+    }
+
+    func testContinuousSingleLineEventNeverUsesFixedStep() {
+        var controller = ScrollController()
+        let result = controller.process(
+            observation(
+                continuous: true,
+                deltas: deltas(verticalLine: 1, verticalPoint: 17, verticalFixed: 65_536)
+            ),
+            reverseMouseScroll: true,
+            fixedMouseWheelStepEnabled: true,
+            mouseWheelStepLines: 6
+        )
+
+        XCTAssertEqual(result.classification, .unknown)
+        XCTAssertEqual(result.mutation, .passThrough)
     }
 
     private func observation(
