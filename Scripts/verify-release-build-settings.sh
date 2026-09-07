@@ -50,6 +50,7 @@ fi
 
 for target in TidyTap TidyTapHelper; do
   settings=$(xcodebuild -project TidyTap.xcodeproj -target "$target" -configuration Release -showBuildSettings)
+  grep -q 'MACOSX_DEPLOYMENT_TARGET = 15.1' <<<"$settings"
   grep -q 'ENABLE_HARDENED_RUNTIME = YES' <<<"$settings"
   grep -q 'CODE_SIGN_STYLE = Manual' <<<"$settings"
   grep -q 'OTHER_CODE_SIGN_FLAGS = --timestamp' <<<"$settings"

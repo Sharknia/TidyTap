@@ -15,24 +15,29 @@ public struct EventTapConfiguration: Equatable, Sendable {
     public let sideButtonNavigation: Bool
     public let fixedMouseWheelStepEnabled: Bool
     public let mouseWheelStepLines: Int
+    public let finderCutPasteEnabled: Bool
 
     public init(
         reverseMouseScroll: Bool,
         sideButtonNavigation: Bool,
         fixedMouseWheelStepEnabled: Bool = false,
-        mouseWheelStepLines: Int = 3
+        mouseWheelStepLines: Int = 3,
+        finderCutPasteEnabled: Bool = false
     ) {
         self.reverseMouseScroll = reverseMouseScroll
         self.sideButtonNavigation = sideButtonNavigation
         self.fixedMouseWheelStepEnabled = fixedMouseWheelStepEnabled
         self.mouseWheelStepLines = min(max(mouseWheelStepLines, 1), 10)
+        self.finderCutPasteEnabled = finderCutPasteEnabled
     }
 
     public var needsScrollProcessing: Bool {
         reverseMouseScroll || fixedMouseWheelStepEnabled
     }
 
-    public var isEnabled: Bool { needsScrollProcessing || sideButtonNavigation }
+    public var isEnabled: Bool {
+        needsScrollProcessing || sideButtonNavigation || finderCutPasteEnabled
+    }
 
     public var requiredPermissions: Set<InputPermission> {
         var result: Set<InputPermission> = []
@@ -41,6 +46,9 @@ public struct EventTapConfiguration: Equatable, Sendable {
         }
         if sideButtonNavigation {
             result.insert(.accessibility)
+        }
+        if finderCutPasteEnabled {
+            result.formUnion([.accessibility, .inputMonitoring])
         }
         return result
     }
@@ -464,7 +472,8 @@ public final class EventTapController: @unchecked Sendable {
             reverseMouseScroll: requested.reverseMouseScroll && missing.isDisjoint(with: [.accessibility, .inputMonitoring]),
             sideButtonNavigation: requested.sideButtonNavigation && !missing.contains(.accessibility),
             fixedMouseWheelStepEnabled: requested.fixedMouseWheelStepEnabled && missing.isDisjoint(with: [.accessibility, .inputMonitoring]),
-            mouseWheelStepLines: requested.mouseWheelStepLines
+            mouseWheelStepLines: requested.mouseWheelStepLines,
+            finderCutPasteEnabled: requested.finderCutPasteEnabled && missing.isDisjoint(with: [.accessibility, .inputMonitoring])
         )
     }
 

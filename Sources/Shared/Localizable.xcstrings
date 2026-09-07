@@ -31,6 +31,12 @@
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "Caps Lock 한·영 전환" } }
       }
     },
+    "Cut with ⌘X and move with ⌘V" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Cut with ⌘X and move with ⌘V" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "⌘X로 잘라내고 ⌘V로 이동" } }
+      }
+    },
     "Accessibility is required. In System Settings > Privacy & Security > Accessibility, enable TidyTap. Return here; TidyTap will refresh to confirm access. Then turn your desired feature back on." : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Accessibility is required. In System Settings > Privacy & Security > Accessibility, enable TidyTap. Return here; TidyTap will refresh to confirm access. Then turn your desired feature back on." } },
@@ -127,6 +133,12 @@
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "트랙패드는 그대로" } }
       }
     },
+    "Use cut in Finder" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Use cut in Finder" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "Finder에서 잘라내기 사용" } }
+      }
+    },
     "Scroll a consistent amount for each wheel click" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Scroll a consistent amount for each wheel click" } },
@@ -157,10 +169,10 @@
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "마우스" } }
       }
     },
-    "PERMISSIONS FOR MOUSE FEATURES" : {
+    "PERMISSIONS FOR INPUT FEATURES" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "PERMISSIONS FOR MOUSE FEATURES" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "마우스 기능 권한" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "PERMISSIONS FOR INPUT FEATURES" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "입력 기능 권한" } }
       }
     },
     "Options" : {
@@ -181,10 +193,10 @@
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "확인 안 됨" } }
       }
     },
-    "Required for wheel settings and side buttons" : {
+    "Required for mouse features and Finder cut/paste" : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Required for wheel settings and side buttons" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "휠 설정과 측면 버튼에 필요" } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Required for mouse features and Finder cut/paste" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "휠 설정과 측면 버튼, Finder 잘라내기에 필요" } }
       }
     },
     "Required for wheel settings" : {
@@ -265,10 +277,10 @@
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "화살표 키로 휠 한 칸당 1줄부터 10줄까지 선택합니다" } }
       }
     },
-    "Review the mouse permission status below." : {
+    "Review the input feature permission status below." : {
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "Review the mouse permission status below." } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "아래 마우스 권한 상태를 확인하세요." } }
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Review the input feature permission status below." } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "아래 입력 기능 권한 상태를 확인하세요." } }
       }
     },
     "Use Caps Lock to switch input source" : {
@@ -281,6 +293,18 @@
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Use side buttons for back/forward in Safari and Finder" } },
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "Safari와 Finder에서 측면 버튼으로 뒤로/앞으로" } }
+      }
+    },
+    "Move ready" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Move ready" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "이동 준비됨" } }
+      }
+    },
+    "Copy ready" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Copy ready" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "복사 준비됨" } }
       }
     },
     "Version %@" : {

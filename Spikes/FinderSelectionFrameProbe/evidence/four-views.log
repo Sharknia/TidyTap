@@ -1,0 +1,33 @@
+VIEW 19
+focus AXOutline id=ListView x=2405.0 y=346.0 w=733.0 h=386.0
+window x=2217.0 y=295.0 w=920.0 h=464.0
+AXSelectedChildren: unavailable
+AXSelectedRows: 1
+item AXRow id=- x=2406.0 y=380.0 w=731.0 h=20.0
+ child AXCell id=- x=2432.0 y=380.0 w=296.0 h=20.0
+  child AXImage id=- x=2432.0 y=382.0 w=16.0 h=16.0
+  child AXTextField id=- x=2452.0 y=381.0 w=60.0 h=18.0
+ child AXCell id=- x=2728.0 y=380.0 w=181.0 h=20.0
+  child AXStaticText id=- x=2734.0 y=381.0 w=169.0 h=18.0
+VIEW 18
+focus AXList id=IconView x=2406.0 y=347.0 w=731.0 h=384.0
+window x=2217.0 y=295.0 w=920.0 h=464.0
+AXSelectedChildren: 1
+item AXGroup id=Alpha.txt x=2434.0 y=371.0 w=64.0 h=64.0
+ child AXImage id=Alpha.txt x=2434.0 y=371.0 w=64.0 h=64.0
+AXSelectedRows: unavailable
+VIEW 20
+focus AXList id=- x=2671.0 y=346.0 w=230.0 h=386.0
+window x=2217.0 y=295.0 w=920.0 h=464.0
+AXSelectedChildren: 1
+item AXGroup id=- x=2688.0 y=352.0 w=190.5 h=23.0
+ child AXImage id=- x=2688.0 y=355.5 w=16.0 h=16.0
+ child AXTextField id=- x=2708.0 y=354.0 w=60.0 h=18.0
+AXSelectedRows: unavailable
+VIEW 21
+focus AXList id=GalleryView x=2406.0 y=347.0 w=505.0 h=384.0
+window x=2217.0 y=295.0 w=934.0 h=464.0
+AXSelectedChildren: 1
+item AXGroup id=Alpha.txt x=2414.0 y=675.0 w=48.0 h=48.0
+ child AXImage id=Alpha.txt x=2414.0 y=675.0 w=48.0 h=48.0
+AXSelectedRows: unavailable

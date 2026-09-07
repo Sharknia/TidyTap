@@ -4,17 +4,52 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var windowController: NSWindowController?
     private var settingsCoordinator: SettingsCoordinator?
-    private var observesApplyResults = false
     private let launchSmoke = TidyTapLaunchSmoke.current()
     private let permissionSettingsOpener: TidyTapPermissionSettingsOpening
+    private let initialFinderFeedback: TidyTapFinderFeedbackPayload?
+    private var finderFeedbackPanel: FinderFeedbackPanelController?
+    private var feedbackHostTermination: DispatchWorkItem?
     private var pendingPermissionSettingsOpen: TidyTapPendingPermissionSettingsOpen?
 
-    init(permissionSettingsOpener: TidyTapPermissionSettingsOpening = SystemPermissionSettingsOpener()) {
+    init(
+        permissionSettingsOpener: TidyTapPermissionSettingsOpening = SystemPermissionSettingsOpener(),
+        initialFinderFeedback: TidyTapFinderFeedbackPayload? = nil
+    ) {
         self.permissionSettingsOpener = permissionSettingsOpener
+        self.initialFinderFeedback = initialFinderFeedback
         super.init()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(finderFeedbackDidArrive(_:)),
+            name: TidyTapIPC.finderFeedback,
+            object: TidyTapProduct.appBundleIdentifier,
+            suspensionBehavior: .deliverImmediately
+        )
+        TidyTapIPC.postFinderFeedbackReady()
+        if let initialFinderFeedback {
+            NSApp.setActivationPolicy(.accessory)
+            showFinderFeedback(initialFinderFeedback, terminateAfterDisplay: true)
+            if let rawNonce = ProcessInfo.processInfo.environment[
+                TidyTapIPC.finderFeedbackNonceEnvironmentKey
+            ], let nonce = UUID(uuidString: rawNonce) {
+                TidyTapIPC.postFinderFeedbackReady(nonce: nonce)
+            }
+            return
+        }
+        startSettingsSession()
+    }
+
+    private func startSettingsSession() {
+        guard settingsCoordinator == nil else {
+            showSettingsWindow()
+            return
+        }
+        feedbackHostTermination?.cancel()
+        feedbackHostTermination = nil
+        finderFeedbackPanel?.hide()
         // The settings app is a regular, user-facing application even though
         // its embedded helper is an agent. Explicitly restore the regular
         // activation policy so launches from a login item/Dock are visible.
@@ -52,7 +87,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             object: TidyTapProduct.appBundleIdentifier,
             suspensionBehavior: .deliverImmediately
         )
-        observesApplyResults = true
         settingsCoordinator.restoreSession()
 
         let controller = SettingsViewController(
@@ -108,7 +142,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Reopen the settings surface when the Dock icon or a status-item menu
     /// asks the already-running application to open.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        showSettingsWindow()
+        startSettingsSession()
         return true
     }
 
@@ -128,9 +162,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     deinit {
-        if observesApplyResults {
-            DistributedNotificationCenter.default().removeObserver(self)
-        }
+        DistributedNotificationCenter.default().removeObserver(self)
     }
 
     @objc private func applyResultDidArrive(_ notification: Notification) {
@@ -151,6 +183,39 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func permissionResultDidArrive(_ notification: Notification) {
         _ = updatePermissionResultIfAvailable()
+    }
+
+    @objc private func finderFeedbackDidArrive(_ notification: Notification) {
+        guard let payload = TidyTapIPC.finderFeedback(in: notification) else { return }
+        showFinderFeedback(payload, terminateAfterDisplay: settingsCoordinator == nil)
+    }
+
+    private func showFinderFeedback(
+        _ payload: TidyTapFinderFeedbackPayload,
+        terminateAfterDisplay: Bool
+    ) {
+        let isFinderFrontmost = NSWorkspace.shared.frontmostApplication?.bundleIdentifier == "com.apple.finder"
+        let isCurrentClipboard = NSPasteboard.general.changeCount == payload.clipboardChangeCount
+        guard isFinderFrontmost, isCurrentClipboard else {
+            launchSmoke?.report("feedback-suppressed-finder-\(isFinderFrontmost)-clipboard-\(isCurrentClipboard)")
+            if terminateAfterDisplay {
+                NSApp.terminate(nil)
+            }
+            return
+        }
+        let panel = finderFeedbackPanel ?? FinderFeedbackPanelController()
+        finderFeedbackPanel = panel
+        let message = switch payload.kind {
+        case .moveReady: TidyTapStrings.finderMoveReady
+        case .copyReady: TidyTapStrings.finderCopyReady
+        }
+        panel.show(message: message, anchorRect: payload.anchorRect)
+        launchSmoke?.report("feedback-panel-shown")
+        guard terminateAfterDisplay else { return }
+        feedbackHostTermination?.cancel()
+        let termination = DispatchWorkItem { NSApp.terminate(nil) }
+        feedbackHostTermination = termination
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.05, execute: termination)
     }
 
     @discardableResult

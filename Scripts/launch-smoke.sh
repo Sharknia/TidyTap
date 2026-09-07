@@ -90,6 +90,7 @@ if [[ ! -d "$app_path" || ! -x "$helper_path" ]]; then
   print -u2 -- "Release build did not contain the app and embedded helper."
   exit 1
 fi
+"$project_root/Scripts/verify-macos-support.sh" "$app_path"
 
 # Sign nested code first so the parent resource seal contains that signature.
 /usr/bin/codesign --force --sign - --timestamp=none "$helper_path" >/dev/null

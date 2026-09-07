@@ -34,6 +34,29 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(TidyTapProduct.helperBundleIdentifier, "com.sharknia.TidyTap.Helper")
     }
 
+    func testFinderFeedbackEnvironmentRoundTripsInitialTransientHostPayload() throws {
+        let payload = TidyTapFinderFeedbackPayload(
+            kind: .moveReady,
+            anchorRect: CGRect(x: 12.5, y: 30, width: 48, height: 19.25),
+            clipboardChangeCount: 42
+        )
+
+        let decoded = try XCTUnwrap(
+            TidyTapIPC.finderFeedback(in: TidyTapIPC.finderFeedbackEnvironment(payload))
+        )
+
+        XCTAssertEqual(decoded.kind, .moveReady)
+        XCTAssertEqual(decoded.anchorRect, payload.anchorRect)
+        XCTAssertEqual(decoded.clipboardChangeCount, 42)
+    }
+
+    func testFinderFeedbackEnvironmentRejectsIncompletePayload() {
+        XCTAssertNil(TidyTapIPC.finderFeedback(in: [
+            TidyTapIPC.finderFeedbackModeEnvironmentKey: "1",
+            TidyTapIPC.finderFeedbackKindEnvironmentKey: "copyReady"
+        ]))
+    }
+
     func testPermissionSettingsURLsTargetTheirExactPrivacyPanes() {
         XCTAssertEqual(
             SettingsCoordinator.permissionSettingsURL(for: .accessibility).absoluteString,
@@ -110,6 +133,27 @@ final class TidyTapSettingsTests: XCTestCase {
         settings.fixedMouseWheelStepEnabled = true
 
         XCTAssertTrue(settings.requiresHelper)
+    }
+
+    func testFinderCutPasteDefaultsOffAndKeepsTheHelperAliveWhenEnabled() throws {
+        XCTAssertFalse(TidyTapSettings.defaults.finderCutPasteEnabled)
+        XCTAssertFalse(TidyTapSettings.defaults.requiresHelper)
+
+        var settings = TidyTapSettings.defaults
+        settings.finderCutPasteEnabled = true
+        XCTAssertTrue(settings.requiresHelper)
+        XCTAssertEqual(
+            TidyTapFeaturePermissionState(
+                accessibility: .authorized,
+                inputMonitoring: .authorized
+            ).requiredPermissions(for: .finderCutPaste),
+            [.accessibility, .inputMonitoring]
+        )
+
+        let legacy = Data("""
+        {"capsLockInputSourceSwitching":false,"reverseMouseWheelVertically":false,"sideButtonNavigation":false,"launchAtLogin":false,"fixedMouseWheelStepEnabled":true,"mouseWheelStepLines":7}
+        """.utf8)
+        XCTAssertFalse(try JSONDecoder().decode(TidyTapSettings.self, from: legacy).finderCutPasteEnabled)
     }
 
     func testWheelStepSettingsUseDefaultsAndNormalizeTheSupportedRange() {
@@ -256,6 +300,7 @@ final class TidyTapSettingsTests: XCTestCase {
     func testSubsequentSizeChangeFailureRestoresPreviouslyAppliedWheelStep() {
         var original = TidyTapSettings.defaults
         original.fixedMouseWheelStepEnabled = true
+        original.finderCutPasteEnabled = true
         original.mouseWheelStepLines = 7
         let store = InMemoryPreferences(request: .init(settings: original, applyRequestID: UUID()))
         let input = FailingInput(calls: CallLog())
@@ -279,6 +324,7 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(result.failedComponent, .eventTap)
         XCTAssertEqual(input.currentConfiguration().mouseWheelStepLines, 7)
         XCTAssertTrue(input.currentConfiguration().fixedMouseWheelStepEnabled)
+        XCTAssertTrue(input.currentConfiguration().finderCutPasteEnabled)
         XCTAssertEqual(result.effectiveSettings, original)
         XCTAssertEqual(store.request.settings, original)
     }
@@ -555,6 +601,34 @@ final class TidyTapSettingsTests: XCTestCase {
 
         XCTAssertEqual(result, .partiallyApplied(unavailablePermissions: [.inputMonitoring]))
         XCTAssertEqual(backend.configurations, [.init(reverseMouseScroll: false, sideButtonNavigation: true)])
+        XCTAssertEqual(backend.captureSideButtons, [true])
+    }
+
+    func testFinderCutPastePermissionFailureLeavesIndependentSideButtonsActive() throws {
+        let backend = FakeEventTapBackend()
+        let adapter = InputFeaturesAdapter(
+            permissionChecker: FakeInputPermissions(accessibility: true, inputMonitoring: false),
+            backend: backend,
+            sideButtons: SideButtonController(
+                applicationProvider: FakeFocusedProvider(),
+                synthesizer: FakeNavigationSynthesizer()
+            )
+        )
+
+        let result = try adapter.apply(
+            reverseMouseWheel: false,
+            sideButtonNavigation: true,
+            fixedMouseWheelStepEnabled: false,
+            finderCutPasteEnabled: true,
+            mouseWheelStepLines: TidyTapSettings.defaultMouseWheelStepLines,
+            requestID: UUID()
+        )
+
+        XCTAssertEqual(result, .partiallyApplied(unavailablePermissions: [.inputMonitoring]))
+        XCTAssertTrue(adapter.currentConfiguration().sideButtonNavigation)
+        XCTAssertFalse(adapter.currentConfiguration().finderCutPasteEnabled)
+        XCTAssertEqual(backend.configurations.count, 1)
+        XCTAssertFalse(backend.configurations[0].finderCutPasteEnabled)
         XCTAssertEqual(backend.captureSideButtons, [true])
     }
 
@@ -1685,6 +1759,7 @@ private final class RecordingInput: TidyTapInputFeaturesApplying {
         reverseMouseWheel: Bool,
         sideButtonNavigation: Bool,
         fixedMouseWheelStepEnabled: Bool,
+        finderCutPasteEnabled: Bool,
         mouseWheelStepLines: Int,
         requestID: UUID
     ) throws -> TidyTapInputFeatureApplyResult {
@@ -1693,6 +1768,7 @@ private final class RecordingInput: TidyTapInputFeaturesApplying {
             reverseMouseWheel: reverseMouseWheel,
             sideButtonNavigation: sideButtonNavigation,
             fixedMouseWheelStepEnabled: fixedMouseWheelStepEnabled,
+            finderCutPasteEnabled: finderCutPasteEnabled,
             mouseWheelStepLines: mouseWheelStepLines
         )
         return .applied
@@ -1709,6 +1785,7 @@ private final class FailingInput: TidyTapInputFeaturesApplying {
         reverseMouseWheel: Bool,
         sideButtonNavigation: Bool,
         fixedMouseWheelStepEnabled: Bool,
+        finderCutPasteEnabled: Bool,
         mouseWheelStepLines: Int,
         requestID: UUID
     ) throws -> TidyTapInputFeatureApplyResult {
@@ -1720,6 +1797,7 @@ private final class FailingInput: TidyTapInputFeaturesApplying {
             reverseMouseWheel: reverseMouseWheel,
             sideButtonNavigation: sideButtonNavigation,
             fixedMouseWheelStepEnabled: fixedMouseWheelStepEnabled,
+            finderCutPasteEnabled: finderCutPasteEnabled,
             mouseWheelStepLines: mouseWheelStepLines
         )
         return .applied
@@ -1736,6 +1814,7 @@ private final class FailingRollbackInput: TidyTapInputFeaturesApplying {
         reverseMouseWheel: Bool,
         sideButtonNavigation: Bool,
         fixedMouseWheelStepEnabled: Bool,
+        finderCutPasteEnabled: Bool,
         mouseWheelStepLines: Int,
         requestID: UUID
     ) throws -> TidyTapInputFeatureApplyResult {
@@ -1747,6 +1826,7 @@ private final class FailingRollbackInput: TidyTapInputFeaturesApplying {
             reverseMouseWheel: reverseMouseWheel,
             sideButtonNavigation: sideButtonNavigation,
             fixedMouseWheelStepEnabled: fixedMouseWheelStepEnabled,
+            finderCutPasteEnabled: finderCutPasteEnabled,
             mouseWheelStepLines: mouseWheelStepLines
         )
         return .applied
@@ -1761,6 +1841,7 @@ private final class PartialInput: TidyTapInputFeaturesApplying {
         reverseMouseWheel: Bool,
         sideButtonNavigation: Bool,
         fixedMouseWheelStepEnabled: Bool,
+        finderCutPasteEnabled: Bool,
         mouseWheelStepLines: Int,
         requestID: UUID
     ) throws -> TidyTapInputFeatureApplyResult {
@@ -1768,6 +1849,7 @@ private final class PartialInput: TidyTapInputFeaturesApplying {
             reverseMouseWheel: false,
             sideButtonNavigation: sideButtonNavigation,
             fixedMouseWheelStepEnabled: false,
+            finderCutPasteEnabled: finderCutPasteEnabled,
             mouseWheelStepLines: mouseWheelStepLines
         )
         return .partiallyApplied(unavailablePermissions: [.inputMonitoring])
