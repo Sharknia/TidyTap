@@ -25,6 +25,34 @@ enum TidyTapStrings {
     static let applyingChanges = String(localized: "Applying changes…", bundle: .main)
     static let changesApplied = String(localized: "Changes applied.", bundle: .main)
     static let changesCouldNotBeApplied = String(localized: "Changes could not be applied.", bundle: .main)
+    static func capsLockApplyMessage(for status: TidyTapApplyStatus, bundle: Bundle = .main) -> String? {
+        guard status.failedComponent == .capsLock else { return nil }
+        guard status.outcome == .failed || status.outcome == .recoveryRequired else { return nil }
+
+        if status.outcome == .recoveryRequired || status.errorCode?.hasPrefix("capsLock.recoveryRequired.") == true {
+            return String(localized: "Caps Lock changes need to be restored before you continue.", bundle: bundle)
+        }
+
+        guard let errorCode = status.errorCode else { return nil }
+        if errorCode.hasPrefix("capsLock.invalidInputSourceCount.") {
+            return String(localized: "Caps Lock input switching requires exactly two enabled input sources.", bundle: bundle)
+        }
+        switch errorCode {
+        case "capsLock.conflict.sourceMapping":
+            return String(localized: "Caps Lock is already assigned to an input-source shortcut. Remove that assignment and try again.", bundle: bundle)
+        case "capsLock.conflict.hidOwnership", "capsLock.conflict.symbolicHotkey":
+            return String(localized: "TidyTap cannot change the Caps Lock setting because another configuration owns it.", bundle: bundle)
+        default:
+            break
+        }
+        if errorCode.hasPrefix("capsLock.invalidSystemData.") {
+            return String(localized: "TidyTap could not read the current Caps Lock keyboard settings.", bundle: bundle)
+        }
+        if errorCode.hasPrefix("capsLock.verificationFailed.") {
+            return String(localized: "TidyTap could not verify the Caps Lock setting after applying it.", bundle: bundle)
+        }
+        return nil
+    }
     static let email = "zel@kakao.com"
     static let emailURL = URL(string: "mailto:zel@kakao.com")!
     static let github = "github.com/Sharknia/TidyTap"
