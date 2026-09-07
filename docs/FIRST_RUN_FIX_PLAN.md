@@ -111,6 +111,10 @@ InputSourceShortcutController.prepareEnable(): passed
 
 주요 파일: `SettingsCoordinator.swift`, `SettingsViewController.swift`, `TidyTapStrings.swift`, `Localizable.xcstrings`.
 
+### D. 검증 중 발견된 DMG 서명 손상 방지
+
+서명 프리뷰의 실제 마운트·복사 검증에서 기존 `hide_extensions` 옵션이 서명된 앱에 `FinderInfo`를 추가해 검증을 실패시키는 것을 확인했다. 배포 후보 검증을 진행하기 위한 최소 수정으로 해당 옵션만 제거하고 Python 설정 테스트를 갱신한다. 설치 레이아웃 재설계나 검증 우회는 포함하지 않는다.
+
 ## 4. 실행 순서와 검증
 
 1. **구현 기준 확보:** `v0.1.1`을 포함하는 최신 릴리스 계열 기준점을 확인하고 `fix/first-run-permissions-capslock`에서 구현한다. 현재 `dev`를 그대로 배포하면 0.1.1 기능이 빠질 수 있으므로 고정 휠 단계·Worker 교체·DMG 변경을 보존한다.
