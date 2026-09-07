@@ -41,6 +41,7 @@ final class SettingsViewController: NSViewController {
     private let appIcon: NSImage
     private let displayVersion: String
     private let renderingMode: RenderingMode
+    private let localizationBundle: Bundle
     private let copy: SettingsViewCopy
 
     private let scrollView = NSScrollView()
@@ -73,6 +74,7 @@ final class SettingsViewController: NSViewController {
             ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
             ?? "0.1.0"
         self.renderingMode = renderingMode
+        self.localizationBundle = localizationBundle
         let copy = SettingsViewCopy(bundle: localizationBundle)
         self.copy = copy
         accessibilityStatus = PermissionStatusView(copy: copy)
@@ -185,6 +187,7 @@ final class SettingsViewController: NSViewController {
         )
 
         statusMessage.font = .systemFont(ofSize: 12)
+        statusMessage.identifier = NSUserInterfaceItemIdentifier("settings.apply.status")
         statusMessage.textColor = .secondaryLabelColor
         statusMessage.maximumNumberOfLines = 2
         statusMessage.isHidden = true
@@ -224,6 +227,11 @@ final class SettingsViewController: NSViewController {
         isApplyingSettings = isPending
         [capsSwitch, wheelSwitch, wheelStepSwitch, sideSwitch, loginSwitch].forEach { $0.isEnabled = !isPending }
         updateWheelStepPresentation()
+
+        if let message = TidyTapStrings.capsLockApplyMessage(for: status, bundle: localizationBundle) {
+            showStatus(message)
+            return
+        }
 
         switch status.outcome {
         case .pending:

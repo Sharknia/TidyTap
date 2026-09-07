@@ -258,6 +258,49 @@ final class SettingsViewControllerTests: XCTestCase {
         }
     }
 
+    func testCapsLockFailureDisplaysLocalizedReasonAndPreservesEffectiveSettings() throws {
+        for language in ["ko", "en"] {
+            let resources = Bundle(for: Self.self)
+            let path = try XCTUnwrap(resources.path(forResource: language, ofType: "lproj"))
+            let bundle = try XCTUnwrap(Bundle(path: path))
+            let controller = SettingsViewController(localizationBundle: bundle)
+            _ = controller.view
+            var effective = TidyTapSettings.defaults
+            effective.sideButtonNavigation = true
+            controller.apply(effective)
+            let status = TidyTapApplyStatus(
+                applyRequestID: UUID(), outcome: .failed, failedComponent: .capsLock,
+                errorCode: "capsLock.invalidSystemData.hidMappings", effectiveSettings: effective
+            )
+            controller.showApplyStatus(status)
+            let label = try XCTUnwrap(findView(identifier: "settings.apply.status", in: controller.view) as? NSTextField)
+            XCTAssertEqual(label.stringValue, language == "ko"
+                ? "TidyTap이 현재 Caps Lock 키보드 설정을 읽을 수 없습니다."
+                : "TidyTap could not read the current Caps Lock keyboard settings.")
+            XCTAssertFalse(label.isHidden)
+            XCTAssertEqual(controller.settings, effective)
+            let caps = try XCTUnwrap(findView(identifier: SettingsViewController.ControlIdentifier.capsSwitch, in: controller.view) as? NSSwitch)
+            XCTAssertEqual(caps.state, .off)
+            XCTAssertTrue(caps.isEnabled)
+        }
+    }
+
+    func testCapsLockRecoveryAndUnknownErrorKeepDistinctStatusMessages() throws {
+        let controller = makeController()
+        let label = try XCTUnwrap(findView(identifier: "settings.apply.status", in: controller.view) as? NSTextField)
+        let recovery = TidyTapApplyStatus(applyRequestID: UUID(), outcome: .recoveryRequired,
+            failedComponent: .capsLock, errorCode: "capsLock.recoveryRequired.hidMappings")
+        controller.showApplyStatus(recovery)
+        XCTAssertEqual(label.stringValue, TidyTapStrings.capsLockApplyMessage(for: recovery))
+        controller.showApplyStatus(.init(applyRequestID: UUID(), outcome: .failed,
+            failedComponent: .capsLock, errorCode: "capsLock.commandFailed"))
+        XCTAssertEqual(label.stringValue, TidyTapStrings.changesCouldNotBeApplied)
+        controller.showApplyStatus(.init(applyRequestID: UUID(), outcome: .pending, failedComponent: nil, errorCode: nil))
+        XCTAssertEqual(label.stringValue, TidyTapStrings.applyingChanges)
+        let caps = try XCTUnwrap(findView(identifier: SettingsViewController.ControlIdentifier.capsSwitch, in: controller.view) as? NSSwitch)
+        XCTAssertFalse(caps.isEnabled)
+    }
+
     private func makeController(settings: TidyTapSettings = .defaults) -> SettingsViewController {
         let controller = SettingsViewController(settings: settings)
         controller.view.frame = NSRect(origin: .zero, size: SettingsViewController.contentSize)
