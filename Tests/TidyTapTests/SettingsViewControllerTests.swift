@@ -112,6 +112,51 @@ final class SettingsViewControllerTests: XCTestCase {
         XCTAssertEqual(toggle.state, .on)
     }
 
+    func testSwitchKeepsNativeTrackingUntilSynchronousPendingCallbackCompletes() throws {
+        let controller = makeController()
+        let caps = try XCTUnwrap(findView(
+            identifier: SettingsViewController.ControlIdentifier.capsSwitch,
+            in: controller.view
+        ) as? NSSwitch)
+        var submitted = [TidyTapSettings]()
+        controller.onSettingsChange = { settings in
+            submitted.append(settings)
+            controller.showApplyStatus(.pending(UUID()))
+        }
+
+        caps.performClick(nil)
+
+        // The synchronous callback has requested pending state, but the
+        // originating NSSwitch remains enabled through its tracking turn.
+        XCTAssertEqual(submitted.count, 1)
+        XCTAssertEqual(caps.state, .on)
+        XCTAssertTrue(caps.isEnabled)
+
+        drainMainQueue()
+        XCTAssertFalse(caps.isEnabled)
+        XCTAssertEqual(caps.state, .on)
+
+        controller.apply(submitted[0])
+        controller.showApplyStatus(.init(
+            applyRequestID: UUID(), outcome: .applied, failedComponent: nil, errorCode: nil
+        ))
+        XCTAssertTrue(caps.isEnabled)
+        XCTAssertEqual(caps.state, .on)
+
+        caps.performClick(nil)
+        XCTAssertEqual(submitted.count, 2)
+        XCTAssertEqual(caps.state, .off)
+        drainMainQueue()
+        XCTAssertFalse(caps.isEnabled)
+
+        controller.apply(submitted[1])
+        controller.showApplyStatus(.init(
+            applyRequestID: UUID(), outcome: .applied, failedComponent: nil, errorCode: nil
+        ))
+        XCTAssertTrue(caps.isEnabled)
+        XCTAssertEqual(caps.state, .off)
+    }
+
     func testWheelStepSliderIsAlwaysVisibleAndRetainsItsValueWhileDisabled() throws {
         var settings = TidyTapSettings.defaults
         settings.mouseWheelStepLines = 7
@@ -402,5 +447,13 @@ final class SettingsViewControllerTests: XCTestCase {
     private func allTextFields(in root: NSView) -> [NSTextField] {
         let own = (root as? NSTextField).map { [$0] } ?? []
         return own + root.subviews.flatMap { allTextFields(in: $0) }
+    }
+
+    private func drainMainQueue() {
+        let settled = expectation(description: "main queue drained")
+        DispatchQueue.main.async {
+            settled.fulfill()
+        }
+        wait(for: [settled], timeout: 1)
     }
 }

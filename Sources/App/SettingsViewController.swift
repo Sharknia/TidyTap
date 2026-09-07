@@ -59,6 +59,10 @@ final class SettingsViewController: NSViewController {
     private let loginSwitch = NSSwitch()
     private let accessibilityStatus: PermissionStatusView
     private var isApplyingSettings = false
+    /// AppKit sends an NSSwitch action while its tracking animation is still
+    /// active. Disabling that same switch synchronously can leave its thumb
+    /// uncomposited until another redraw occurs.
+    private var isHandlingSwitchAction = false
 
     init(
         settings: TidyTapSettings = .defaults,
@@ -235,7 +239,7 @@ final class SettingsViewController: NSViewController {
     func showApplyStatus(_ status: TidyTapApplyStatus, permission: TidyTapPermission? = nil) {
         let isPending = status.outcome == .pending
         isApplyingSettings = isPending
-        [capsSwitch, finderCutPasteSwitch, wheelSwitch, wheelStepSwitch, sideSwitch, loginSwitch].forEach { $0.isEnabled = !isPending }
+        setFeatureControlsEnabled(!isPending)
         updateWheelStepPresentation()
 
         if let message = TidyTapStrings.capsLockApplyMessage(for: status, bundle: localizationBundle) {
@@ -568,6 +572,27 @@ final class SettingsViewController: NSViewController {
         wheelStepSlider.isEnabled = settings.fixedMouseWheelStepEnabled && !isApplyingSettings
     }
 
+    private func setFeatureControlsEnabled(_ isEnabled: Bool) {
+        let update = { [weak self] in
+            guard let self else { return }
+            [capsSwitch, finderCutPasteSwitch, wheelSwitch, wheelStepSwitch, sideSwitch, loginSwitch].forEach {
+                $0.isEnabled = isEnabled
+            }
+        }
+
+        // A pending status can be delivered synchronously from the action
+        // callback. Finish the native tracking turn before disabling controls;
+        // this is event-loop ordering, not a timed redraw workaround.
+        if isHandlingSwitchAction && !isEnabled {
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.isApplyingSettings else { return }
+                update()
+            }
+        } else {
+            update()
+        }
+    }
+
     private func sendSettingsChange() {
         if delegate?.settingsViewController(self, didChange: settings) != true {
             onSettingsChange?(settings)
@@ -606,7 +631,9 @@ final class SettingsViewController: NSViewController {
             return
         }
 
+        isHandlingSwitchAction = true
         sendSettingsChange()
+        isHandlingSwitchAction = false
     }
 
     @objc private func wheelStepChanged(_ sender: NSSlider) {
