@@ -33,6 +33,9 @@ final class SettingsViewControllerTests: XCTestCase {
     }
 
     func testNativeGlassCardsOwnLaidOutProductionContentViews() throws {
+        guard #available(macOS 26.0, *) else {
+            throw XCTSkip("NSGlassEffectView is available only on macOS 26 or later.")
+        }
         let controller = SettingsViewController(renderingMode: .native)
         controller.view.frame = NSRect(origin: .zero, size: SettingsViewController.contentSize)
         controller.view.layoutSubtreeIfNeeded()

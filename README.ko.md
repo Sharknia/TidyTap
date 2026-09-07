@@ -19,7 +19,7 @@ Finder 잘라내기는 개발 브랜치 기능입니다. 이동 명령을 보내
 
 ## 지원 범위와 상태
 
-개발 빌드는 MacBook Pro `Mac15,6`(Apple M3 Pro)와 macOS 26.6.2(`25G83`)에서 확인 중입니다. 현재 물리 검증은 스크롤 장치 분류(VXE와 내장·Magic Trackpad 구분)와 VXE 측면 버튼이 Core Graphics 버튼 3/4로 보고되는지에 한정됩니다. Caps Lock 입력 소스 백업·복원, 권한 허용·회수, 휠 및 Safari/Finder 탐색 통합 동작, helper 수명·로그인 동작, 지원 제거 순서는 아직 통합 라이브 검증이 남아 있으며 완료를 주장하지 않습니다. UI는 한국어와 영어를 지원합니다. 다른 Mac이나 macOS 버전에서 실행될 수는 있지만 `0.1.2` 호환성을 보장하지 않습니다.
+TidyTap은 macOS 15.1(Sequoia) 이상을 실행하는 Apple Silicon Mac을 지원합니다. 이번 15.1 타깃 빌드와 launch smoke는 MacBook Pro `Mac15,6`(Apple M3 Pro)와 macOS 26.5.2(`25F84`)에서 확인했으며, macOS 15.1 실제 실행 검증은 남아 있습니다. 물리 검증은 스크롤 장치 분류(VXE와 내장·Magic Trackpad 구분)와 VXE 측면 버튼이 Core Graphics 버튼 3/4로 보고되는지에 한정됩니다. Caps Lock 입력 소스 백업·복원, 권한 허용·회수, 휠 및 Safari/Finder 탐색 통합 동작, helper 수명·로그인 동작, 지원 제거 순서는 아직 통합 라이브 검증이 남아 있으며 완료를 주장하지 않습니다. UI는 한국어와 영어를 지원합니다.
 
 프로젝트 버전: `0.1.2`. 공개된 버전과 서명된 다운로드 파일은 [GitHub Releases](https://github.com/Sharknia/TidyTap/releases)에서 확인하세요.
 

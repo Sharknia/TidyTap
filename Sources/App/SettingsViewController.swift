@@ -440,7 +440,10 @@ final class SettingsViewController: NSViewController {
     ) -> NSView {
         switch renderingMode {
         case .native:
-            return GlassCardView(content: content, cornerRadius: cornerRadius, tintColor: tintColor)
+            if #available(macOS 26.0, *) {
+                return GlassCardView(content: content, cornerRadius: cornerRadius, tintColor: tintColor)
+            }
+            return SemanticSurfaceView(content: content, cornerRadius: cornerRadius)
         case .offscreenSemanticFallback:
             return SemanticSurfaceView(content: content, cornerRadius: cornerRadius)
         }
@@ -854,6 +857,7 @@ private final class SettingsDocumentView: NSView {
 /// A compact, system-rendered glass surface. All card content is assigned via
 /// `contentView`; arbitrary subviews are deliberately not layered over the glass.
 @MainActor
+@available(macOS 26.0, *)
 private final class GlassCardView: NSGlassEffectView {
     init(content: NSView, cornerRadius: CGFloat, tintColor: NSColor?) {
         super.init(frame: .zero)

@@ -19,7 +19,7 @@ Finder cut/paste is a development-branch feature. Its move intent is cleared whe
 
 ## Support and status
 
-The development build is being checked on MacBook Pro `Mac15,6` (Apple M3 Pro) and macOS 26.6.2 (`25G83`). Physical validation so far covers scroll-device classification (VXE versus the built-in and Magic Trackpad) and that the VXE side buttons report as Core Graphics buttons 3/4. Remaining integrated live validation includes Caps Lock/input-source backup and restore, permission grant/revocation behavior, end-to-end wheel and Safari/Finder navigation, helper lifetime/login behavior, and the supported removal sequence; these are not claimed complete. The UI is available in English and Korean. Other Macs or macOS versions may run, but are not compatibility claims for `0.1.2`.
+TidyTap supports Apple silicon Macs running macOS 15.1 (Sequoia) or later. This 15.1-targeted build and launch smoke were checked on MacBook Pro `Mac15,6` (Apple M3 Pro) and macOS 26.5.2 (`25F84`); macOS 15.1 runtime validation remains outstanding. Physical validation covers scroll-device classification (VXE versus the built-in and Magic Trackpad) and that the VXE side buttons report as Core Graphics buttons 3/4. Remaining integrated live validation includes Caps Lock/input-source backup and restore, permission grant/revocation behavior, end-to-end wheel and Safari/Finder navigation, helper lifetime/login behavior, and the supported removal sequence; these are not claimed complete. The UI is available in English and Korean.
 
 Project version: `0.1.2`. Published versions and signed downloads are listed on [GitHub Releases](https://github.com/Sharknia/TidyTap/releases).
 
