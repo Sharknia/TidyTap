@@ -26,7 +26,7 @@ enum SettingsSnapshotRenderer {
                 appearance: .aqua
             ),
             Fixture(
-                filename: "liquid-glass-both-denied.png",
+                filename: "liquid-glass-accessibility-denied.png",
                 language: "ko",
                 settings: .defaults,
                 permissions: .init(accessibility: .denied, inputMonitoring: .denied),
@@ -47,7 +47,7 @@ enum SettingsSnapshotRenderer {
                 appearance: .aqua
             ),
             Fixture(
-                filename: "liquid-glass-both-denied-en.png",
+                filename: "liquid-glass-accessibility-denied-en.png",
                 language: "en",
                 settings: .defaults,
                 permissions: .init(accessibility: .denied, inputMonitoring: .denied),

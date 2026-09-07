@@ -11,6 +11,8 @@ final class CGTidyTapPermissionProvider: TidyTapPermissionProviding {
     func currentState() -> TidyTapFeaturePermissionState {
         TidyTapFeaturePermissionState(
             accessibility: CGPreflightPostEventAccess() ? .authorized : .denied,
+            // Kept as Worker capability evidence for IPC/runtime validation.
+            // It is not presented as a separate user-approved permission.
             inputMonitoring: CGPreflightListenEventAccess() ? .authorized : .denied
         )
     }

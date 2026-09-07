@@ -176,12 +176,12 @@ final class SettingsCoordinator {
     }
 
     func permissionSettingsPane(for status: TidyTapApplyStatus) -> TidyTapPermission? {
+        if let latestPermissionState {
+            return permissionSettingsPane(for: status, confirmed: latestPermissionState)
+        }
         let unavailable = unavailablePermissions(in: status)
         if unavailable.contains(.accessibility) {
             return .accessibility
-        }
-        if unavailable.contains(.inputMonitoring) {
-            return .inputMonitoring
         }
         return nil
     }
@@ -229,9 +229,6 @@ final class SettingsCoordinator {
         let unavailable = unavailablePermissions(in: status)
         if unavailable.contains(.accessibility), state.accessibility != .authorized {
             return .accessibility
-        }
-        if unavailable.contains(.inputMonitoring), state.inputMonitoring != .authorized {
-            return .inputMonitoring
         }
         return nil
     }

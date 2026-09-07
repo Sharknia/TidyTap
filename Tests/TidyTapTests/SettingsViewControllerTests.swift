@@ -160,7 +160,7 @@ final class SettingsViewControllerTests: XCTestCase {
         XCTAssertEqual(slider.integerValue, 3)
     }
 
-    func testPermissionActionsRouteTheirExactPermissionAndNeverChangeSettings() throws {
+    func testOnlyAccessibilityPermissionActionIsExposedAndNeverChangesSettings() throws {
         let controller = makeController()
         var permissions = [TidyTapPermission]()
         var settingChanges = [TidyTapSettings]()
@@ -171,14 +171,11 @@ final class SettingsViewControllerTests: XCTestCase {
             identifier: SettingsViewController.ControlIdentifier.accessibilityPermission,
             in: controller.view
         ))
-        let inputMonitoringRow = try XCTUnwrap(findView(
-            identifier: SettingsViewController.ControlIdentifier.inputMonitoringPermission,
-            in: controller.view
-        ))
         try XCTUnwrap(findButton(permission: .accessibility, in: accessibilityRow)).performClick(nil)
-        try XCTUnwrap(findButton(permission: .inputMonitoring, in: inputMonitoringRow)).performClick(nil)
 
-        XCTAssertEqual(permissions, [.accessibility, .inputMonitoring])
+        XCTAssertNil(findView(identifier: "settings.permission.inputMonitoring", in: controller.view))
+        XCTAssertNil(findButton(permission: .inputMonitoring, in: controller.view))
+        XCTAssertEqual(permissions, [.accessibility])
         XCTAssertTrue(settingChanges.isEmpty)
         XCTAssertEqual(controller.settings, .defaults)
     }

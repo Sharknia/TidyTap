@@ -1054,7 +1054,7 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(launcher.launchCount, 1)
     }
 
-    func testPermissionPaneRoutingPrioritizesAccessibility() {
+    func testPermissionPaneRoutingExposesOnlyAccessibility() {
         let coordinator = SettingsCoordinator(
             preferences: InMemoryPreferences(request: .init(settings: .defaults, applyRequestID: UUID())),
             helperLauncher: RecordingHelperLauncher(),
@@ -1075,10 +1075,10 @@ final class TidyTapSettingsTests: XCTestCase {
         )
 
         XCTAssertEqual(coordinator.permissionSettingsPane(for: both), .accessibility)
-        XCTAssertEqual(coordinator.permissionSettingsPane(for: inputOnly), .inputMonitoring)
+        XCTAssertNil(coordinator.permissionSettingsPane(for: inputOnly))
     }
 
-    func testConfirmedPermissionRefreshAdvancesFromAccessibilityToInputMonitoring() {
+    func testConfirmedPermissionRefreshNeverMislabelsReceiveFailureAsAccessibilityDenial() {
         let coordinator = SettingsCoordinator(
             preferences: InMemoryPreferences(request: .init(settings: .defaults, applyRequestID: UUID())),
             helperLauncher: RecordingHelperLauncher(),
@@ -1098,13 +1098,10 @@ final class TidyTapSettingsTests: XCTestCase {
             ),
             .accessibility
         )
-        XCTAssertEqual(
-            coordinator.permissionSettingsPane(
-                for: status,
-                confirmed: .init(accessibility: .authorized, inputMonitoring: .denied)
-            ),
-            .inputMonitoring
-        )
+        XCTAssertNil(coordinator.permissionSettingsPane(
+            for: status,
+            confirmed: .init(accessibility: .authorized, inputMonitoring: .denied)
+        ))
         XCTAssertNil(coordinator.permissionSettingsPane(
             for: status,
             confirmed: .init(accessibility: .authorized, inputMonitoring: .authorized)
@@ -1192,6 +1189,7 @@ final class TidyTapSettingsTests: XCTestCase {
 
         XCTAssertEqual(controller.permissionState.accessibility, .authorized)
         XCTAssertEqual(controller.permissionState.inputMonitoring, .denied)
+        XCTAssertNil(coordinator.permissionSettingsPane(for: status))
         XCTAssertEqual(controller.settings, .defaults)
     }
 
@@ -1326,7 +1324,7 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertTrue(provider.requests.isEmpty)
     }
 
-    func testColdHelperKeepsInputMonitoringNoticeAfterAllOffStartupApply() throws {
+    func testColdHelperKeepsInputMonitoringFailureAfterAllOffStartupApply() throws {
         let applyID = UUID()
         let store = InMemoryPreferences(request: .init(settings: .defaults, applyRequestID: applyID))
         store.status = TidyTapApplyStatus(
@@ -1367,17 +1365,14 @@ final class TidyTapSettingsTests: XCTestCase {
         let applyNotificationResult = app.receiveApplyResult()
         XCTAssertEqual(permissionNotificationResult?.state, provider.state)
         XCTAssertEqual(applyNotificationResult?.errorCode, "eventTap.permissionPartial.inputMonitoring")
-        XCTAssertEqual(
-            app.permissionSettingsPane(
-                for: try XCTUnwrap(applyNotificationResult),
-                confirmed: try XCTUnwrap(permissionNotificationResult).state
-            ),
-            .inputMonitoring
-        )
+        XCTAssertNil(app.permissionSettingsPane(
+            for: try XCTUnwrap(applyNotificationResult),
+            confirmed: try XCTUnwrap(permissionNotificationResult).state
+        ))
         XCTAssertEqual(store.request.settings, .defaults)
     }
 
-    func testColdHelperKeepsInputMonitoringNoticeWhenSideButtonsRemainApplied() throws {
+    func testColdHelperKeepsInputMonitoringFailureWhenSideButtonsRemainApplied() throws {
         let applyID = UUID()
         var sanitized = TidyTapSettings.defaults
         sanitized.sideButtonNavigation = true
