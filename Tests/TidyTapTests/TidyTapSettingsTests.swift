@@ -34,6 +34,29 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(TidyTapProduct.helperBundleIdentifier, "com.sharknia.TidyTap.Helper")
     }
 
+    func testFinderFeedbackEnvironmentRoundTripsInitialTransientHostPayload() throws {
+        let payload = TidyTapFinderFeedbackPayload(
+            kind: .moveReady,
+            anchorRect: CGRect(x: 12.5, y: 30, width: 48, height: 19.25),
+            clipboardChangeCount: 42
+        )
+
+        let decoded = try XCTUnwrap(
+            TidyTapIPC.finderFeedback(in: TidyTapIPC.finderFeedbackEnvironment(payload))
+        )
+
+        XCTAssertEqual(decoded.kind, .moveReady)
+        XCTAssertEqual(decoded.anchorRect, payload.anchorRect)
+        XCTAssertEqual(decoded.clipboardChangeCount, 42)
+    }
+
+    func testFinderFeedbackEnvironmentRejectsIncompletePayload() {
+        XCTAssertNil(TidyTapIPC.finderFeedback(in: [
+            TidyTapIPC.finderFeedbackModeEnvironmentKey: "1",
+            TidyTapIPC.finderFeedbackKindEnvironmentKey: "copyReady"
+        ]))
+    }
+
     func testPermissionSettingsURLsTargetTheirExactPrivacyPanes() {
         XCTAssertEqual(
             SettingsCoordinator.permissionSettingsURL(for: .accessibility).absoluteString,

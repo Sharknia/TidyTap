@@ -16,8 +16,11 @@ public final class CGEventTapBackend: EventTapBackend, @unchecked Sendable {
     private var runLoopSource: CFRunLoopSource?
     private var gestureMonitor: Any?
     private var finderCutPaste: FinderCutPasteController?
+    private let feedbackHandler: @Sendable (FinderFeedback) -> Void
 
-    public init() {}
+    public init(feedbackHandler: @escaping @Sendable (FinderFeedback) -> Void = { _ in }) {
+        self.feedbackHandler = feedbackHandler
+    }
 
     public func install(
         configuration: EventTapConfiguration,
@@ -40,7 +43,10 @@ public final class CGEventTapBackend: EventTapBackend, @unchecked Sendable {
         if configuration.finderCutPasteEnabled {
             eventMask |= Self.mask(for: .keyDown)
             eventMask |= Self.mask(for: .keyUp)
-            finderCutPaste = FinderCutPasteController(environment: FinderSystemEnvironment())
+            finderCutPaste = FinderCutPasteController(
+                environment: FinderSystemEnvironment(),
+                feedbackHandler: feedbackHandler
+            )
             finderCutPaste?.setEnabled(true)
         }
         let callback: CGEventTapCallBack = { _, type, event, userInfo in

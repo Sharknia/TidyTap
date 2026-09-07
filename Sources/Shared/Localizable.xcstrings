@@ -295,6 +295,18 @@
         "ko" : { "stringUnit" : { "state" : "translated", "value" : "Safari와 Finder에서 측면 버튼으로 뒤로/앞으로" } }
       }
     },
+    "Move ready" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Move ready" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "이동 준비됨" } }
+      }
+    },
+    "Copy ready" : {
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Copy ready" } },
+        "ko" : { "stringUnit" : { "state" : "translated", "value" : "복사 준비됨" } }
+      }
+    },
     "Version %@" : {
       "localizations" : {
         "en" : { "stringUnit" : { "state" : "translated", "value" : "Version %@" } },

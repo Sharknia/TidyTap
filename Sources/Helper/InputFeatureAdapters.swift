@@ -234,7 +234,7 @@ final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
 
     init(
         permissionChecker: any InputPermissionChecking = CGInputPermissionChecker(),
-        backend: any EventTapBackend = CGEventTapBackend(),
+        backend: (any EventTapBackend)? = nil,
         sideButtons: SideButtonController = SideButtonController(
             applicationProvider: MacOSFocusedApplicationProvider(),
             synthesizer: CGNavigationSynthesizer()
@@ -244,7 +244,7 @@ final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
         runtimeSink = sink
         controller = EventTapController(
             permissions: permissionChecker,
-            backend: backend,
+            backend: backend ?? CGEventTapBackend(feedbackHandler: FinderFeedbackAppHost.present),
             sideButtons: sideButtons,
             statusObserver: { status in sink.handler?(status) }
         )
