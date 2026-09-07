@@ -122,7 +122,7 @@ enum SettingsSnapshotRenderer {
             settings: fixture.settings,
             permissionState: fixture.permissions,
             appIcon: NSImage(contentsOf: sourceRoot.appendingPathComponent("Resources/TidyTap.icns")),
-            displayVersion: "0.1.1",
+            displayVersion: "0.1.2",
             renderingMode: .offscreenSemanticFallback,
             localizationBundle: localizedBundle(language: fixture.language)
         )

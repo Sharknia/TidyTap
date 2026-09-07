@@ -16,13 +16,15 @@ TidyTap은 macOS 입력 불편을 해결하는 작은 유틸리티입니다.
 
 ## 지원 범위와 상태
 
-개발 빌드는 MacBook Pro `Mac15,6`(Apple M3 Pro)와 macOS 26.6.2(`25G83`)에서 확인 중입니다. 현재 물리 검증은 스크롤 장치 분류(VXE와 내장·Magic Trackpad 구분)와 VXE 측면 버튼이 Core Graphics 버튼 3/4로 보고되는지에 한정됩니다. Caps Lock 입력 소스 백업·복원, 권한 허용·회수, 휠 및 Safari/Finder 탐색 통합 동작, helper 수명·로그인 동작, 지원 제거 순서는 아직 통합 라이브 검증이 남아 있으며 완료를 주장하지 않습니다. UI는 한국어와 영어를 지원합니다. 다른 Mac이나 macOS 버전에서 실행될 수는 있지만 `0.1.1` 호환성을 보장하지 않습니다.
+개발 빌드는 MacBook Pro `Mac15,6`(Apple M3 Pro)와 macOS 26.6.2(`25G83`)에서 확인 중입니다. 현재 물리 검증은 스크롤 장치 분류(VXE와 내장·Magic Trackpad 구분)와 VXE 측면 버튼이 Core Graphics 버튼 3/4로 보고되는지에 한정됩니다. Caps Lock 입력 소스 백업·복원, 권한 허용·회수, 휠 및 Safari/Finder 탐색 통합 동작, helper 수명·로그인 동작, 지원 제거 순서는 아직 통합 라이브 검증이 남아 있으며 완료를 주장하지 않습니다. UI는 한국어와 영어를 지원합니다. 다른 Mac이나 macOS 버전에서 실행될 수는 있지만 `0.1.2` 호환성을 보장하지 않습니다.
 
-프로젝트 버전: `0.1.1`. 공개된 버전과 서명된 다운로드 파일은 [GitHub Releases](https://github.com/Sharknia/TidyTap/releases)에서 확인하세요.
+프로젝트 버전: `0.1.2`. 공개된 버전과 서명된 다운로드 파일은 [GitHub Releases](https://github.com/Sharknia/TidyTap/releases)에서 확인하세요.
 
 [MVP 작업 계획](docs/MVP_PLAN.md)과 [English README](README.md)도 참고하세요.
 
 ## 권한
+
+이미 VIA 등에서 Caps Lock 위치의 키를 F19 같은 다른 키로 바꾸고 한·영 전환 단축키도 맞춰 둔 경우에는 TidyTap의 Caps Lock 기능을 꺼두세요. 이 기능은 실제 Caps Lock을 F18로 매핑하고 macOS 입력 소스 단축키를 F18로 바꿉니다. 기존 사용자 지정 키를 자동 감지하거나 재사용하지 않습니다. 마우스 기능은 독립적으로 사용할 수 있습니다.
 
 - Caps Lock 입력 소스 전환: 손쉬운 사용 및 입력 모니터링 권한이 필요하지 않습니다.
 - 마우스 휠 반전 및 단계 크기 고정: 손쉬운 사용 권한이 필요합니다.

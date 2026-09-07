@@ -16,13 +16,15 @@ Each feature has its own toggle. The settings window also offers **Start at logi
 
 ## Support and status
 
-The development build is being checked on MacBook Pro `Mac15,6` (Apple M3 Pro) and macOS 26.6.2 (`25G83`). Physical validation so far covers scroll-device classification (VXE versus the built-in and Magic Trackpad) and that the VXE side buttons report as Core Graphics buttons 3/4. Remaining integrated live validation includes Caps Lock/input-source backup and restore, permission grant/revocation behavior, end-to-end wheel and Safari/Finder navigation, helper lifetime/login behavior, and the supported removal sequence; these are not claimed complete. The UI is available in English and Korean. Other Macs or macOS versions may run, but are not compatibility claims for `0.1.1`.
+The development build is being checked on MacBook Pro `Mac15,6` (Apple M3 Pro) and macOS 26.6.2 (`25G83`). Physical validation so far covers scroll-device classification (VXE versus the built-in and Magic Trackpad) and that the VXE side buttons report as Core Graphics buttons 3/4. Remaining integrated live validation includes Caps Lock/input-source backup and restore, permission grant/revocation behavior, end-to-end wheel and Safari/Finder navigation, helper lifetime/login behavior, and the supported removal sequence; these are not claimed complete. The UI is available in English and Korean. Other Macs or macOS versions may run, but are not compatibility claims for `0.1.2`.
 
-Project version: `0.1.1`. Published versions and signed downloads are listed on [GitHub Releases](https://github.com/Sharknia/TidyTap/releases).
+Project version: `0.1.2`. Published versions and signed downloads are listed on [GitHub Releases](https://github.com/Sharknia/TidyTap/releases).
 
 See the [MVP work plan](docs/MVP_PLAN.md) and [Korean README](README.ko.md).
 
 ## Permissions
+
+If you already remapped the Caps Lock position to another key such as F19 using VIA and configured your input-source shortcut accordingly, leave TidyTap's Caps Lock feature off. This feature maps actual Caps Lock input to F18 and changes the macOS input-source shortcut to F18. It does not detect or reuse a custom binding. Mouse features remain independent.
 
 - Caps Lock input-source switching: no Accessibility or Input Monitoring permission.
 - Mouse wheel reversal and fixed step size: Accessibility.
