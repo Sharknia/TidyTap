@@ -1,0 +1,1 @@
+PASS: [["AXSubrole": "error:-25205", "AXIdentifier": "PathTextField", "AXRole": "AXTextField"], ["AXSubrole": "error:-25205", "AXRole": "AXSheet", "AXIdentifier": "GoToWindow"], ["AXRole": "AXWindow", "AXIdentifier": "FinderWindow", "AXSubrole": "AXStandardWindow"], ["AXRole": "AXApplication", "AXIdentifier": "error:-25212", "AXSubrole": "error:-25212"]]
