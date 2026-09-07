@@ -5,7 +5,7 @@ final class CapsLockErrorMessageTests: XCTestCase {
     func testCapsLockFailuresMapToSpecificMessages() {
         let cases: [(String, String, String)] = [
             ("capsLock.invalidInputSourceCount.3", "Caps Lock input switching requires exactly two enabled input sources.", "Caps Lock 한·영 전환에는 활성화된 입력 소스가 정확히 두 개 필요합니다."),
-            ("capsLock.conflict.sourceMapping", "Caps Lock is already assigned to an input-source shortcut. Remove that assignment and try again.", "Caps Lock이 이미 입력 소스 단축키에 할당되어 있습니다. 해당 할당을 해제한 뒤 다시 시도하세요."),
+            ("capsLock.conflict.sourceMapping", "Caps Lock already has a key mapping. Check the existing mapping before trying again.", "Caps Lock에 이미 다른 키 매핑이 있습니다. 기존 매핑을 확인한 뒤 다시 시도하세요."),
             ("capsLock.conflict.hidOwnership", "TidyTap cannot change the Caps Lock setting because another configuration owns it.", "다른 설정이 Caps Lock 관련 키보드 설정을 사용 중이어서 TidyTap이 변경할 수 없습니다."),
             ("capsLock.conflict.symbolicHotkey", "TidyTap cannot change the Caps Lock setting because another configuration owns it.", "다른 설정이 Caps Lock 관련 키보드 설정을 사용 중이어서 TidyTap이 변경할 수 없습니다."),
             ("capsLock.invalidSystemData.hidMappings", "TidyTap could not read the current Caps Lock keyboard settings.", "TidyTap이 현재 Caps Lock 키보드 설정을 읽을 수 없습니다."),

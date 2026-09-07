@@ -39,7 +39,7 @@ enum TidyTapStrings {
         }
         switch errorCode {
         case "capsLock.conflict.sourceMapping":
-            return String(localized: "Caps Lock is already assigned to an input-source shortcut. Remove that assignment and try again.", bundle: bundle)
+            return String(localized: "Caps Lock already has a key mapping. Check the existing mapping before trying again.", bundle: bundle)
         case "capsLock.conflict.hidOwnership", "capsLock.conflict.symbolicHotkey":
             return String(localized: "TidyTap cannot change the Caps Lock setting because another configuration owns it.", bundle: bundle)
         default:
