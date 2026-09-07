@@ -51,9 +51,9 @@ final class HelperPermissionCoordinator {
         }
 
         var state = provider.currentState()
-        if request.kind == .request, let permission = request.permission,
-           !state.isAuthorized(permission) {
-            provider.request(permission)
+        if request.kind == .request, request.permission == .accessibility,
+           !state.isAuthorized(.accessibility) {
+            provider.request(.accessibility)
             state = provider.currentState()
         }
 

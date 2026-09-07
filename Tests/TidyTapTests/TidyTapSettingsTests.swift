@@ -1233,21 +1233,41 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertTrue(provider.requests.isEmpty)
     }
 
-    func testHelperExplicitInputMonitoringRequestUsesInputMonitoringProviderPath() {
-        let store = InMemoryPreferences(request: .init(settings: .defaults, applyRequestID: UUID()))
+    func testHelperStartupAcknowledgesLegacyInputMonitoringRequestWithoutPromptOrSettingsMutation() {
+        let settingsRequest = TidyTapSettingsRequest(settings: .defaults, applyRequestID: UUID())
+        let store = InMemoryPreferences(request: settingsRequest)
+        let permissionID = UUID()
         store.permissionRequest = .init(
-            requestID: UUID(),
+            requestID: permissionID,
             kind: .request,
             permission: .inputMonitoring
         )
         let provider = RecordingPermissionProvider(
             state: .init(accessibility: .authorized, inputMonitoring: .denied)
         )
+        let calls = CallLog()
+        let permissionCoordinator = HelperPermissionCoordinator(preferences: store, provider: provider)
+        let lifecycle = HelperLifecycle(
+            coordinator: ApplyCoordinator(
+                preferences: store,
+                capsFeature: RecordingCaps(calls: calls),
+                inputFeatures: RecordingInput(calls: calls),
+                menuBar: RecordingMenu(calls: calls),
+                terminator: RecordingTerminator(calls: calls)
+            ),
+            permissionCoordinator: permissionCoordinator
+        )
 
-        _ = HelperPermissionCoordinator(preferences: store, provider: provider).handleLatestRequest()
+        lifecycle.start()
+        _ = permissionCoordinator.handleLatestRequest()
+        lifecycle.stop()
 
-        XCTAssertEqual(provider.requests, [.inputMonitoring])
+        XCTAssertEqual(provider.checkCount, 1)
+        XCTAssertTrue(provider.requests.isEmpty)
+        XCTAssertEqual(store.permissionResults.count, 1)
+        XCTAssertEqual(store.permissionResult?.requestID, permissionID)
         XCTAssertEqual(store.permissionResult?.state.inputMonitoring, .denied)
+        XCTAssertEqual(store.request, settingsRequest)
     }
 
     func testReadOnlyRefreshNeverRequestsOrMutatesSanitizedSettings() {
