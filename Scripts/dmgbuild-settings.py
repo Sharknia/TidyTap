@@ -23,7 +23,6 @@ background_path = required_path("background_path")
 files = [(app_path, "TidyTap.app")]
 applications_name = unicodedata.normalize("NFD", "응용 프로그램")
 symlinks = {applications_name: "/Applications"}
-hide_extensions = ["TidyTap.app"]
 
 format = "UDZO"
 filesystem = "HFS+"

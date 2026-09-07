@@ -25,7 +25,7 @@ assert layout["files"] == [(str(app.resolve()), "TidyTap.app")]
 applications_name = unicodedata.normalize("NFD", "응용 프로그램")
 assert layout["symlinks"] == {applications_name: "/Applications"}
 assert "hide" not in layout
-assert layout["hide_extensions"] == ["TidyTap.app"]
+assert "hide_extensions" not in layout
 assert layout["format"] == "UDZO"
 assert layout["filesystem"] == "HFS+"
 assert layout["background"] == str(background.resolve())
