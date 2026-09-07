@@ -301,6 +301,29 @@ final class SettingsViewControllerTests: XCTestCase {
         XCTAssertFalse(caps.isEnabled)
     }
 
+    func testEventTapFailureWithCapsLockRollbackDisplaysRestoreMessage() throws {
+        for language in ["ko", "en"] {
+            let resources = Bundle(for: Self.self)
+            let path = try XCTUnwrap(resources.path(forResource: language, ofType: "lproj"))
+            let bundle = try XCTUnwrap(Bundle(path: path))
+            let controller = SettingsViewController(localizationBundle: bundle)
+            _ = controller.view
+            let label = try XCTUnwrap(findView(identifier: "settings.apply.status", in: controller.view) as? NSTextField)
+            let status = TidyTapApplyStatus(
+                applyRequestID: UUID(),
+                outcome: .recoveryRequired,
+                failedComponent: .eventTap,
+                errorCode: "lifecycle.rollbackFailed.capsLock"
+            )
+
+            controller.showApplyStatus(status)
+
+            XCTAssertEqual(label.stringValue, language == "ko"
+                ? "계속하기 전에 Caps Lock 변경 사항을 복원해야 합니다."
+                : "Caps Lock changes need to be restored before you continue.")
+        }
+    }
+
     private func makeController(settings: TidyTapSettings = .defaults) -> SettingsViewController {
         let controller = SettingsViewController(settings: settings)
         controller.view.frame = NSRect(origin: .zero, size: SettingsViewController.contentSize)

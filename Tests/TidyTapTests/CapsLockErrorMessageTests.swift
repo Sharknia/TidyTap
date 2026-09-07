@@ -24,16 +24,18 @@ final class CapsLockErrorMessageTests: XCTestCase {
         }
     }
 
-    func testCapsLockRecoveryOutcomeUsesRecoveryMessage() {
-        let status = TidyTapApplyStatus(
-            applyRequestID: UUID(),
-            outcome: .recoveryRequired,
-            failedComponent: .capsLock,
-            errorCode: "lifecycle.rollbackFailed.capsLock"
-        )
+    func testCapsLockRollbackRecoveryWithOriginalEventTapFailureUsesRecoveryMessage() {
+        for errorCode in ["lifecycle.rollbackFailed.capsLock", "lifecycle.rollbackFailed.eventTap.capsLock"] {
+            let status = TidyTapApplyStatus(
+                applyRequestID: UUID(),
+                outcome: .recoveryRequired,
+                failedComponent: .eventTap,
+                errorCode: errorCode
+            )
 
-        XCTAssertEqual(TidyTapStrings.capsLockApplyMessage(for: status, bundle: localizedBundle(language: "en")), "Caps Lock changes need to be restored before you continue.")
-        XCTAssertEqual(TidyTapStrings.capsLockApplyMessage(for: status, bundle: localizedBundle(language: "ko")), "계속하기 전에 Caps Lock 변경 사항을 복원해야 합니다.")
+            XCTAssertEqual(TidyTapStrings.capsLockApplyMessage(for: status, bundle: localizedBundle(language: "en")), "Caps Lock changes need to be restored before you continue.")
+            XCTAssertEqual(TidyTapStrings.capsLockApplyMessage(for: status, bundle: localizedBundle(language: "ko")), "계속하기 전에 Caps Lock 변경 사항을 복원해야 합니다.")
+        }
     }
 
     func testDoesNotReplaceGeneralErrorsOrNonTerminalCapsLockStatuses() {
@@ -51,6 +53,30 @@ final class CapsLockErrorMessageTests: XCTestCase {
             outcome: .failed,
             failedComponent: .eventTap,
             errorCode: "capsLock.invalidSystemData.hidMappings"
+        )))
+        XCTAssertNil(TidyTapStrings.capsLockApplyMessage(for: TidyTapApplyStatus(
+            applyRequestID: UUID(),
+            outcome: .recoveryRequired,
+            failedComponent: .eventTap,
+            errorCode: "lifecycle.rollbackFailed.eventTap"
+        )))
+        XCTAssertNil(TidyTapStrings.capsLockApplyMessage(for: TidyTapApplyStatus(
+            applyRequestID: UUID(),
+            outcome: .recoveryRequired,
+            failedComponent: .eventTap,
+            errorCode: "lifecycle.rollbackFailed.capsLockSettings"
+        )))
+        XCTAssertNil(TidyTapStrings.capsLockApplyMessage(for: TidyTapApplyStatus(
+            applyRequestID: UUID(),
+            outcome: .recoveryRequired,
+            failedComponent: .capsLock,
+            errorCode: "lifecycle.rollbackFailed.eventTap"
+        )))
+        XCTAssertNil(TidyTapStrings.capsLockApplyMessage(for: TidyTapApplyStatus(
+            applyRequestID: UUID(),
+            outcome: .failed,
+            failedComponent: .eventTap,
+            errorCode: "lifecycle.rollbackFailed.capsLock"
         )))
     }
 

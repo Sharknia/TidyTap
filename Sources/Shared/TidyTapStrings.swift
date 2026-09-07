@@ -26,10 +26,15 @@ enum TidyTapStrings {
     static let changesApplied = String(localized: "Changes applied.", bundle: .main)
     static let changesCouldNotBeApplied = String(localized: "Changes could not be applied.", bundle: .main)
     static func capsLockApplyMessage(for status: TidyTapApplyStatus, bundle: Bundle = .main) -> String? {
-        guard status.failedComponent == .capsLock else { return nil }
         guard status.outcome == .failed || status.outcome == .recoveryRequired else { return nil }
 
-        if status.outcome == .recoveryRequired || status.errorCode?.hasPrefix("capsLock.recoveryRequired.") == true {
+        if status.outcome == .recoveryRequired, hasCapsLockRollbackFailure(status.errorCode) {
+            return String(localized: "Caps Lock changes need to be restored before you continue.", bundle: bundle)
+        }
+
+        guard status.failedComponent == .capsLock else { return nil }
+
+        if status.errorCode?.hasPrefix("capsLock.recoveryRequired.") == true {
             return String(localized: "Caps Lock changes need to be restored before you continue.", bundle: bundle)
         }
 
@@ -52,6 +57,12 @@ enum TidyTapStrings {
             return String(localized: "TidyTap could not verify the Caps Lock setting after applying it.", bundle: bundle)
         }
         return nil
+    }
+
+    private static func hasCapsLockRollbackFailure(_ errorCode: String?) -> Bool {
+        let prefix = "lifecycle.rollbackFailed."
+        guard let errorCode, errorCode.hasPrefix(prefix) else { return false }
+        return errorCode.dropFirst(prefix.count).split(separator: ".").contains("capsLock")
     }
     static let email = "zel@kakao.com"
     static let emailURL = URL(string: "mailto:zel@kakao.com")!
