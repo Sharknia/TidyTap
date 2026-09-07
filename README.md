@@ -11,8 +11,11 @@ TidyTap is a small macOS input utility:
 - Reverse vertical scrolling for any non-continuous, line-based mouse-wheel event while leaving trackpad scrolling unchanged. The supported target remains the VXE Mouse 1K Dongle; prior physical validation covers device classification and button reports, not the new fixed-step behavior. The implementation does not filter by vendor.
 - Independently enable a fixed wheel step size (1–10 logical lines, default 3). It starts off and remembers the chosen size while disabled. Single-step non-continuous events are adjusted; larger deltas retain their original magnitude. This is not a claim of complete acceleration removal for every wheel or scrolling speed. Physical validation of this new feature remains separate.
 - Use mouse buttons 3/4 for back/forward in the active Safari or Finder window.
+- Cut files in Finder with `⌘X` and move them with `⌘V`; ordinary `⌘C → ⌘V` still copies. This feature starts off and preserves normal text editing in rename and search fields.
 
 Each feature has its own toggle. The settings window also offers **Start at login**. Grant Accessibility to **TidyTap** for mouse features; the worker is an executable inside the same app bundle, not a separate permission target. TidyTap remains a normal Dock app, and quitting it with `Command-Q` does not stop an enabled helper.
+
+Finder cut/paste is a development-branch feature. Its move intent is cleared when the move command is sent, so cancelling or failing the Finder operation requires cutting again. Desktop, other file managers, and context-menu paste are not remapped. See the [design](docs/FINDER_CUT_PASTE_PLAN.md) and [validation scope](docs/FINDER_CUT_PASTE_VALIDATION.md).
 
 ## Support and status
 
