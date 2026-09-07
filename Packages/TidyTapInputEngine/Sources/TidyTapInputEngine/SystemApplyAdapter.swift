@@ -163,6 +163,12 @@ public final class MacOSSystemApplyAdapter: HIDMappingApplying, SymbolicHotkeyAp
     }
 
     static func decodeHIDMappings(_ data: Data) throws -> [HIDMapping] {
+        if String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) == "(null)"
+        {
+            return []
+        }
+
         if
             let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
             let mappings = json["UserKeyMapping"] as? [[String: Any]]

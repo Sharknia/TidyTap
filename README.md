@@ -12,23 +12,25 @@ TidyTap is a small macOS input utility:
 - Independently enable a fixed wheel step size (1–10 logical lines, default 3). It starts off and remembers the chosen size while disabled. Single-step non-continuous events are adjusted; larger deltas retain their original magnitude. This is not a claim of complete acceleration removal for every wheel or scrolling speed. Physical validation of this new feature remains separate.
 - Use mouse buttons 3/4 for back/forward in the active Safari or Finder window.
 
-Each feature has its own toggle. The settings window also offers **Start at login**. Accessibility and Input Monitoring are granted to **TidyTap**; the worker is an executable inside the same app bundle, not a separate permission target. TidyTap remains a normal Dock app, and quitting it with `Command-Q` does not stop an enabled helper.
+Each feature has its own toggle. The settings window also offers **Start at login**. Grant Accessibility to **TidyTap** for mouse features; the worker is an executable inside the same app bundle, not a separate permission target. TidyTap remains a normal Dock app, and quitting it with `Command-Q` does not stop an enabled helper.
 
 ## Support and status
 
-The development build is being checked on MacBook Pro `Mac15,6` (Apple M3 Pro) and macOS 26.6.2 (`25G83`). Physical validation so far covers scroll-device classification (VXE versus the built-in and Magic Trackpad) and that the VXE side buttons report as Core Graphics buttons 3/4. Remaining integrated live validation includes Caps Lock/input-source backup and restore, permission grant/revocation behavior, end-to-end wheel and Safari/Finder navigation, helper lifetime/login behavior, and the supported removal sequence; these are not claimed complete. The UI is available in English and Korean. Other Macs or macOS versions may run, but are not compatibility claims for `0.1.1`.
+The development build is being checked on MacBook Pro `Mac15,6` (Apple M3 Pro) and macOS 26.6.2 (`25G83`). Physical validation so far covers scroll-device classification (VXE versus the built-in and Magic Trackpad) and that the VXE side buttons report as Core Graphics buttons 3/4. Remaining integrated live validation includes Caps Lock/input-source backup and restore, permission grant/revocation behavior, end-to-end wheel and Safari/Finder navigation, helper lifetime/login behavior, and the supported removal sequence; these are not claimed complete. The UI is available in English and Korean. Other Macs or macOS versions may run, but are not compatibility claims for `0.1.2`.
 
-Project version: `0.1.1`. Published versions and signed downloads are listed on [GitHub Releases](https://github.com/Sharknia/TidyTap/releases).
+Project version: `0.1.2`. Published versions and signed downloads are listed on [GitHub Releases](https://github.com/Sharknia/TidyTap/releases).
 
 See the [MVP work plan](docs/MVP_PLAN.md) and [Korean README](README.ko.md).
 
 ## Permissions
 
+If you already remapped the Caps Lock position to another key such as F19 using VIA and configured your input-source shortcut accordingly, leave TidyTap's Caps Lock feature off. This feature maps actual Caps Lock input to F18 and changes the macOS input-source shortcut to F18. It does not detect or reuse a custom binding. Mouse features remain independent.
+
 - Caps Lock input-source switching: no Accessibility or Input Monitoring permission.
-- Mouse wheel reversal and fixed step size: Accessibility **and** Input Monitoring.
+- Mouse wheel reversal and fixed step size: Accessibility.
 - Safari/Finder side-button navigation: Accessibility only.
 
-If a required permission is missing or later revoked, the affected feature is not applied and the settings window names Accessibility or Input Monitoring explicitly. Its permission button asks the embedded helper (the process that uses the permission) through the public macOS API; returning to TidyTap refreshes the helper's current status without turning a disabled feature back on. Side-button events pass through in unsupported apps; continuous or otherwise unknown scrolling also passes through.
+Accessibility also permits event listening, so you do not need to add TidyTap separately to Input Monitoring. The worker still checks actual event access and event-tap creation. Missing Accessibility is reported as a permission requirement; failure to start input processing despite access is reported as an apply failure. The permission button asks the embedded helper (the process that uses the permission) through the public macOS API; returning to TidyTap refreshes the helper's current status without turning a disabled feature back on. Side-button events pass through in unsupported apps; continuous or otherwise unknown scrolling also passes through.
 
 ## Install and run
 

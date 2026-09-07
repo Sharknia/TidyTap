@@ -30,7 +30,6 @@ final class SettingsViewController: NSViewController {
         static let sideSwitch = "settings.side.switch"
         static let loginSwitch = "settings.login.switch"
         static let accessibilityPermission = "settings.permission.accessibility"
-        static let inputMonitoringPermission = "settings.permission.inputMonitoring"
     }
 
     weak var delegate: SettingsViewControllerDelegate?
@@ -42,6 +41,7 @@ final class SettingsViewController: NSViewController {
     private let appIcon: NSImage
     private let displayVersion: String
     private let renderingMode: RenderingMode
+    private let localizationBundle: Bundle
     private let copy: SettingsViewCopy
 
     private let scrollView = NSScrollView()
@@ -56,7 +56,6 @@ final class SettingsViewController: NSViewController {
     private let sideSwitch = NSSwitch()
     private let loginSwitch = NSSwitch()
     private let accessibilityStatus: PermissionStatusView
-    private let inputMonitoringStatus: PermissionStatusView
     private var isApplyingSettings = false
 
     init(
@@ -75,10 +74,10 @@ final class SettingsViewController: NSViewController {
             ?? Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
             ?? "0.1.0"
         self.renderingMode = renderingMode
+        self.localizationBundle = localizationBundle
         let copy = SettingsViewCopy(bundle: localizationBundle)
         self.copy = copy
-        accessibilityStatus = PermissionStatusView(permission: .accessibility, copy: copy)
-        inputMonitoringStatus = PermissionStatusView(permission: .inputMonitoring, copy: copy)
+        accessibilityStatus = PermissionStatusView(copy: copy)
         self.delegate = delegate
         super.init(nibName: nil, bundle: nil)
     }
@@ -188,6 +187,7 @@ final class SettingsViewController: NSViewController {
         )
 
         statusMessage.font = .systemFont(ofSize: 12)
+        statusMessage.identifier = NSUserInterfaceItemIdentifier("settings.apply.status")
         statusMessage.textColor = .secondaryLabelColor
         statusMessage.maximumNumberOfLines = 2
         statusMessage.isHidden = true
@@ -213,13 +213,13 @@ final class SettingsViewController: NSViewController {
         loginSwitch.state = settings.launchAtLogin ? .on : .off
     }
 
-    /// Permission rows always remain visible. Unknown means the helper has not
-    /// returned a correlated permission snapshot; it is never presented as allowed.
+    /// The user-facing Accessibility row always remains visible. Unknown means
+    /// the helper has not returned a correlated permission snapshot; it is
+    /// never presented as allowed.
     func applyPermissionState(_ state: TidyTapFeaturePermissionState) {
         permissionState = state
         guard isViewLoaded else { return }
         accessibilityStatus.apply(state.accessibility)
-        inputMonitoringStatus.apply(state.inputMonitoring)
     }
 
     func showApplyStatus(_ status: TidyTapApplyStatus, permission: TidyTapPermission? = nil) {
@@ -227,6 +227,11 @@ final class SettingsViewController: NSViewController {
         isApplyingSettings = isPending
         [capsSwitch, wheelSwitch, wheelStepSwitch, sideSwitch, loginSwitch].forEach { $0.isEnabled = !isPending }
         updateWheelStepPresentation()
+
+        if let message = TidyTapStrings.capsLockApplyMessage(for: status, bundle: localizationBundle) {
+            showStatus(message)
+            return
+        }
 
         switch status.outcome {
         case .pending:
@@ -450,19 +455,16 @@ final class SettingsViewController: NSViewController {
         block.addSubview(heading)
         block.addSubview(stack)
         stack.addArrangedSubview(accessibilityStatus)
-        stack.addArrangedSubview(separator())
-        stack.addArrangedSubview(inputMonitoringStatus)
 
         NSLayoutConstraint.activate([
-            block.heightAnchor.constraint(equalToConstant: 122),
+            block.heightAnchor.constraint(equalToConstant: 76),
             heading.leadingAnchor.constraint(equalTo: block.leadingAnchor, constant: 18),
             heading.topAnchor.constraint(equalTo: block.topAnchor, constant: 10),
             stack.leadingAnchor.constraint(equalTo: block.leadingAnchor),
             stack.trailingAnchor.constraint(equalTo: block.trailingAnchor),
             stack.topAnchor.constraint(equalTo: heading.bottomAnchor, constant: 2),
             stack.bottomAnchor.constraint(equalTo: block.bottomAnchor),
-            accessibilityStatus.widthAnchor.constraint(equalTo: stack.widthAnchor),
-            inputMonitoringStatus.widthAnchor.constraint(equalTo: stack.widthAnchor)
+            accessibilityStatus.widthAnchor.constraint(equalTo: stack.widthAnchor)
         ])
         return block
     }
@@ -479,8 +481,6 @@ final class SettingsViewController: NSViewController {
         }
         accessibilityStatus.button.target = self
         accessibilityStatus.button.action = #selector(requestPermission(_:))
-        inputMonitoringStatus.button.target = self
-        inputMonitoringStatus.button.action = #selector(requestPermission(_:))
     }
 
     private func footer() -> NSView {
@@ -650,14 +650,11 @@ private struct SettingsViewCopy {
     let mousePermissionsTitle: String
     let accessibilityPermissionTitle: String
     let accessibilityPermissionCaption: String
-    let inputMonitoringPermissionTitle: String
-    let inputMonitoringPermissionCaption: String
     let permissionAllowed: String
     let permissionMissing: String
     let permissionNotChecked: String
     let permissionSettingsAction: String
     let openAccessibilitySettings: String
-    let openInputMonitoringSettings: String
     let applyingChanges: String
     let changesApplied: String
     let changesCouldNotBeApplied: String
@@ -699,14 +696,11 @@ private struct SettingsViewCopy {
         mousePermissionsTitle = text("PERMISSIONS FOR MOUSE FEATURES")
         accessibilityPermissionTitle = text("Accessibility")
         accessibilityPermissionCaption = text("Required for wheel settings and side buttons")
-        inputMonitoringPermissionTitle = text("Input Monitoring")
-        inputMonitoringPermissionCaption = text("Required for wheel settings")
         permissionAllowed = text("Allowed")
         permissionMissing = text("Missing")
         permissionNotChecked = text("Not checked")
         permissionSettingsAction = text("Settings")
         openAccessibilitySettings = text("Open Accessibility Settings")
-        openInputMonitoringSettings = text("Open Input Monitoring Settings")
         applyingChanges = text("Applying changes…")
         changesApplied = text("Changes applied.")
         changesCouldNotBeApplied = text("Changes could not be applied.")
@@ -722,29 +716,21 @@ private final class PermissionStatusView: NSView {
     private let statusIcon = NSImageView()
     private let statusLabel = NSTextField(labelWithString: "")
 
-    init(permission: TidyTapPermission, copy: SettingsViewCopy) {
+    init(copy: SettingsViewCopy) {
         self.copy = copy
         button = NSButton(title: copy.permissionSettingsAction, target: nil, action: nil)
         super.init(frame: .zero)
         translatesAutoresizingMaskIntoConstraints = false
-        identifier = NSUserInterfaceItemIdentifier(
-            permission == .accessibility
-                ? SettingsViewController.ControlIdentifier.accessibilityPermission
-                : SettingsViewController.ControlIdentifier.inputMonitoringPermission
-        )
+        identifier = NSUserInterfaceItemIdentifier(SettingsViewController.ControlIdentifier.accessibilityPermission)
 
         let labels = NSStackView()
         labels.orientation = .vertical
         labels.alignment = .leading
         labels.spacing = 1
         labels.translatesAutoresizingMaskIntoConstraints = false
-        let title = NSTextField(labelWithString: permission == .accessibility
-            ? copy.accessibilityPermissionTitle
-            : copy.inputMonitoringPermissionTitle)
+        let title = NSTextField(labelWithString: copy.accessibilityPermissionTitle)
         title.font = .systemFont(ofSize: 13, weight: .medium)
-        let caption = NSTextField(labelWithString: permission == .accessibility
-            ? copy.accessibilityPermissionCaption
-            : copy.inputMonitoringPermissionCaption)
+        let caption = NSTextField(labelWithString: copy.accessibilityPermissionCaption)
         caption.font = .systemFont(ofSize: 11)
         caption.textColor = .secondaryLabelColor
         labels.addArrangedSubview(title)
@@ -761,13 +747,11 @@ private final class PermissionStatusView: NSView {
         status.spacing = 4
         status.translatesAutoresizingMaskIntoConstraints = false
 
-        button.identifier = NSUserInterfaceItemIdentifier(permission.rawValue)
+        button.identifier = NSUserInterfaceItemIdentifier(TidyTapPermission.accessibility.rawValue)
         button.bezelStyle = .rounded
         button.controlSize = .small
         button.font = .systemFont(ofSize: 11)
-        button.setAccessibilityLabel(permission == .accessibility
-            ? copy.openAccessibilitySettings
-            : copy.openInputMonitoringSettings)
+        button.setAccessibilityLabel(copy.openAccessibilitySettings)
         button.translatesAutoresizingMaskIntoConstraints = false
 
         [statusIcon, labels, status, button].forEach(addSubview)

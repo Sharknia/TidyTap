@@ -11,6 +11,8 @@ final class CGTidyTapPermissionProvider: TidyTapPermissionProviding {
     func currentState() -> TidyTapFeaturePermissionState {
         TidyTapFeaturePermissionState(
             accessibility: CGPreflightPostEventAccess() ? .authorized : .denied,
+            // Kept as Worker capability evidence for IPC/runtime validation.
+            // It is not presented as a separate user-approved permission.
             inputMonitoring: CGPreflightListenEventAccess() ? .authorized : .denied
         )
     }
@@ -49,9 +51,9 @@ final class HelperPermissionCoordinator {
         }
 
         var state = provider.currentState()
-        if request.kind == .request, let permission = request.permission,
-           !state.isAuthorized(permission) {
-            provider.request(permission)
+        if request.kind == .request, request.permission == .accessibility,
+           !state.isAuthorized(.accessibility) {
+            provider.request(.accessibility)
             state = provider.currentState()
         }
 

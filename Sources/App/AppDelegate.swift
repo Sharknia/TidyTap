@@ -161,6 +161,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return false
         }
         controller.applyPermissionState(result.state)
+        if let status = coordinator.latestApplyStatus,
+           status.failedComponent == .eventTap {
+            controller.showApplyStatus(
+                status,
+                permission: coordinator.permissionSettingsPane(for: status, confirmed: result.state)
+            )
+        }
         if let requestedPane = pendingPermissionSettingsOpen?.consume(matching: result) {
             permissionSettingsOpener.open(requestedPane)
         }
@@ -214,6 +221,7 @@ extension AppDelegate: SettingsViewControllerDelegate {
     }
 
     func settingsViewControllerRequestsPermissionSettings(_ controller: SettingsViewController, permission: TidyTapPermission) -> Bool {
+        guard permission == .accessibility else { return true }
         guard let coordinator = settingsCoordinator else { return false }
         do {
             let requestID = try coordinator.requestPermission(permission)
