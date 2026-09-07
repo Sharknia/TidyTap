@@ -87,6 +87,7 @@ private final class LaunchSmokeInputFeatures: TidyTapInputFeaturesApplying {
         reverseMouseWheel: Bool,
         sideButtonNavigation: Bool,
         fixedMouseWheelStepEnabled: Bool,
+        finderCutPasteEnabled: Bool,
         mouseWheelStepLines: Int,
         requestID: UUID
     ) throws -> TidyTapInputFeatureApplyResult {
@@ -94,6 +95,7 @@ private final class LaunchSmokeInputFeatures: TidyTapInputFeaturesApplying {
             reverseMouseWheel: reverseMouseWheel,
             sideButtonNavigation: sideButtonNavigation,
             fixedMouseWheelStepEnabled: fixedMouseWheelStepEnabled,
+            finderCutPasteEnabled: finderCutPasteEnabled,
             mouseWheelStepLines: mouseWheelStepLines
         )
         smoke.report(
@@ -110,6 +112,7 @@ private final class LaunchSmokeInputFeatures: TidyTapInputFeaturesApplying {
             reverseMouseWheel: false,
             sideButtonNavigation: false,
             fixedMouseWheelStepEnabled: false,
+            finderCutPasteEnabled: false,
             mouseWheelStepLines: configuration.mouseWheelStepLines
         )
     }

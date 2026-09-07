@@ -9,6 +9,7 @@ struct TidyTapSettings: Codable, Equatable {
     /// Applies a fixed logical line delta to eligible discrete mouse-wheel
     /// events. This is intentionally independent from direction reversal.
     var fixedMouseWheelStepEnabled: Bool
+    var finderCutPasteEnabled: Bool
     /// The remembered fixed-wheel step, even while the feature is disabled or
     /// unavailable because permissions were revoked.
     var mouseWheelStepLines: Int {
@@ -26,6 +27,7 @@ struct TidyTapSettings: Codable, Equatable {
         sideButtonNavigation: Bool,
         launchAtLogin: Bool,
         fixedMouseWheelStepEnabled: Bool = false,
+        finderCutPasteEnabled: Bool = false,
         mouseWheelStepLines: Int = Self.defaultMouseWheelStepLines
     ) {
         self.capsLockInputSourceSwitching = capsLockInputSourceSwitching
@@ -33,6 +35,7 @@ struct TidyTapSettings: Codable, Equatable {
         self.sideButtonNavigation = sideButtonNavigation
         self.launchAtLogin = launchAtLogin
         self.fixedMouseWheelStepEnabled = fixedMouseWheelStepEnabled
+        self.finderCutPasteEnabled = finderCutPasteEnabled
         self.normalizedMouseWheelStepLines = Self.normalizedMouseWheelStepLines(mouseWheelStepLines)
     }
 
@@ -42,6 +45,7 @@ struct TidyTapSettings: Codable, Equatable {
         sideButtonNavigation: false,
         launchAtLogin: false,
         fixedMouseWheelStepEnabled: false,
+        finderCutPasteEnabled: false,
         mouseWheelStepLines: defaultMouseWheelStepLines
     )
 
@@ -50,6 +54,7 @@ struct TidyTapSettings: Codable, Equatable {
         capsLockInputSourceSwitching ||
             reverseMouseWheelVertically ||
             fixedMouseWheelStepEnabled ||
+            finderCutPasteEnabled ||
             sideButtonNavigation
     }
 
@@ -59,6 +64,7 @@ struct TidyTapSettings: Codable, Equatable {
         case sideButtonNavigation
         case launchAtLogin
         case fixedMouseWheelStepEnabled
+        case finderCutPasteEnabled
         case mouseWheelStepLines
     }
 
@@ -74,6 +80,7 @@ struct TidyTapSettings: Codable, Equatable {
             sideButtonNavigation: try values.decode(Bool.self, forKey: .sideButtonNavigation),
             launchAtLogin: try values.decode(Bool.self, forKey: .launchAtLogin),
             fixedMouseWheelStepEnabled: try values.decodeIfPresent(Bool.self, forKey: .fixedMouseWheelStepEnabled) ?? false,
+            finderCutPasteEnabled: try values.decodeIfPresent(Bool.self, forKey: .finderCutPasteEnabled) ?? false,
             mouseWheelStepLines: try values.decodeIfPresent(Int.self, forKey: .mouseWheelStepLines) ?? Self.defaultMouseWheelStepLines
         )
     }
@@ -85,6 +92,7 @@ struct TidyTapSettings: Codable, Equatable {
         try values.encode(sideButtonNavigation, forKey: .sideButtonNavigation)
         try values.encode(launchAtLogin, forKey: .launchAtLogin)
         try values.encode(fixedMouseWheelStepEnabled, forKey: .fixedMouseWheelStepEnabled)
+        try values.encode(finderCutPasteEnabled, forKey: .finderCutPasteEnabled)
         try values.encode(mouseWheelStepLines, forKey: .mouseWheelStepLines)
     }
 
@@ -97,6 +105,7 @@ enum TidyTapFeature: String, Codable, CaseIterable {
     case capsLock
     case mouseWheel
     case sideButtonNavigation
+    case finderCutPaste
 }
 
 enum TidyTapPermission: String, Codable, CaseIterable {
@@ -132,6 +141,8 @@ struct TidyTapFeaturePermissionState: Codable, Equatable {
             [.accessibility, .inputMonitoring]
         case .sideButtonNavigation:
             [.accessibility]
+        case .finderCutPaste:
+            [.accessibility, .inputMonitoring]
         }
     }
 

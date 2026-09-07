@@ -255,6 +255,7 @@ final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
         reverseMouseWheel: Bool,
         sideButtonNavigation: Bool,
         fixedMouseWheelStepEnabled: Bool,
+        finderCutPasteEnabled: Bool = false,
         mouseWheelStepLines: Int,
         requestID: UUID
     ) throws -> TidyTapInputFeatureApplyResult {
@@ -272,7 +273,8 @@ final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
             reverseMouseScroll: reverseMouseWheel,
             sideButtonNavigation: sideButtonNavigation,
             fixedMouseWheelStepEnabled: fixedMouseWheelStepEnabled,
-            mouseWheelStepLines: mouseWheelStepLines
+            mouseWheelStepLines: mouseWheelStepLines,
+            finderCutPasteEnabled: finderCutPasteEnabled
         )
         switch controller.start(configuration: configuration) {
         case .stopped, .drainingButtonPresses, .running:
@@ -305,6 +307,7 @@ final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
             reverseMouseWheel: configuration.reverseMouseScroll,
             sideButtonNavigation: configuration.sideButtonNavigation,
             fixedMouseWheelStepEnabled: configuration.fixedMouseWheelStepEnabled,
+            finderCutPasteEnabled: configuration.finderCutPasteEnabled,
             mouseWheelStepLines: rememberedMouseWheelStepLines
         )
     }

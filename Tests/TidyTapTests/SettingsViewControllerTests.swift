@@ -66,6 +66,7 @@ final class SettingsViewControllerTests: XCTestCase {
 
         let identifiers = [
             SettingsViewController.ControlIdentifier.capsSwitch,
+            SettingsViewController.ControlIdentifier.finderCutPasteSwitch,
             SettingsViewController.ControlIdentifier.wheelSwitch,
             SettingsViewController.ControlIdentifier.wheelStepSwitch,
             SettingsViewController.ControlIdentifier.sideSwitch,
@@ -76,14 +77,36 @@ final class SettingsViewControllerTests: XCTestCase {
             toggle.performClick(nil)
         }
 
-        XCTAssertEqual(received.count, 5)
+        XCTAssertEqual(received.count, 6)
         XCTAssertEqual(received.last, TidyTapSettings(
             capsLockInputSourceSwitching: true,
             reverseMouseWheelVertically: true,
             sideButtonNavigation: true,
             launchAtLogin: true,
-            fixedMouseWheelStepEnabled: true
+            fixedMouseWheelStepEnabled: true,
+            finderCutPasteEnabled: true
         ))
+    }
+
+    func testFinderCutPasteSwitchUsesLocalizedCopyAndPreservesState() throws {
+        var settings = TidyTapSettings.defaults
+        settings.finderCutPasteEnabled = true
+        let controller = makeController(settings: settings)
+        let toggle = try XCTUnwrap(findView(
+            identifier: SettingsViewController.ControlIdentifier.finderCutPasteSwitch,
+            in: controller.view
+        ) as? NSSwitch)
+
+        XCTAssertEqual(toggle.state, .on)
+        XCTAssertEqual(toggle.accessibilityLabel(), "Use cut in Finder")
+
+        let captions = allTextFields(in: controller.view).map(\.stringValue)
+        XCTAssertTrue(captions.contains("Cut with ⌘X and move with ⌘V"))
+
+        controller.showApplyStatus(.pending(UUID()))
+        XCTAssertFalse(toggle.isEnabled)
+        controller.apply(settings)
+        XCTAssertEqual(toggle.state, .on)
     }
 
     func testWheelStepSliderIsAlwaysVisibleAndRetainsItsValueWhileDisabled() throws {
@@ -171,6 +194,11 @@ final class SettingsViewControllerTests: XCTestCase {
             identifier: SettingsViewController.ControlIdentifier.accessibilityPermission,
             in: controller.view
         ))
+        let permissionCopy = allTextFields(in: try XCTUnwrap(
+            findView(identifier: SettingsViewController.ControlIdentifier.mousePermissions, in: controller.view)
+        )).map(\.stringValue)
+        XCTAssertTrue(permissionCopy.contains("PERMISSIONS FOR INPUT FEATURES"))
+        XCTAssertTrue(permissionCopy.contains("Required for mouse features and Finder cut/paste"))
         try XCTUnwrap(findButton(permission: .accessibility, in: accessibilityRow)).performClick(nil)
 
         XCTAssertNil(findView(identifier: "settings.permission.inputMonitoring", in: controller.view))
@@ -178,6 +206,18 @@ final class SettingsViewControllerTests: XCTestCase {
         XCTAssertEqual(permissions, [.accessibility])
         XCTAssertTrue(settingChanges.isEmpty)
         XCTAssertEqual(controller.settings, .defaults)
+    }
+
+    func testPermissionFailureUsesInputFeatureGuidance() throws {
+        let controller = makeController()
+        controller.showApplyStatus(
+            .init(applyRequestID: UUID(), outcome: .failed, failedComponent: .settings,
+                  errorCode: "settings.permissionDenied"),
+            permission: .inputMonitoring
+        )
+
+        let status = try XCTUnwrap(findView(identifier: "settings.apply.status", in: controller.view) as? NSTextField)
+        XCTAssertEqual(status.stringValue, "Review the input feature permission status below.")
     }
 
     func testKeyboardArrowsMoveExactlyOneLineAndPendingIgnoresInput() throws {
@@ -354,5 +394,10 @@ final class SettingsViewControllerTests: XCTestCase {
             }
         }
         return nil
+    }
+
+    private func allTextFields(in root: NSView) -> [NSTextField] {
+        let own = (root as? NSTextField).map { [$0] } ?? []
+        return own + root.subviews.flatMap { allTextFields(in: $0) }
     }
 }

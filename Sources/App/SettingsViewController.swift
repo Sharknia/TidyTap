@@ -23,6 +23,7 @@ final class SettingsViewController: NSViewController {
         static let generalGroup = "settings.general.group"
         static let mousePermissions = "settings.mouse.permissions"
         static let capsSwitch = "settings.caps.switch"
+        static let finderCutPasteSwitch = "settings.finderCutPaste.switch"
         static let wheelSwitch = "settings.wheel.switch"
         static let wheelStepSwitch = "settings.wheelStep.switch"
         static let wheelStepSlider = "settings.wheelStep.slider"
@@ -49,6 +50,7 @@ final class SettingsViewController: NSViewController {
     private let contentStack = NSStackView()
     private let statusMessage = NSTextField(wrappingLabelWithString: "")
     private let capsSwitch = NSSwitch()
+    private let finderCutPasteSwitch = NSSwitch()
     private let wheelSwitch = NSSwitch()
     private let wheelStepSwitch = NSSwitch()
     private let wheelStepSlider = WheelStepSlider()
@@ -144,6 +146,13 @@ final class SettingsViewController: NSViewController {
                     caption: copy.capsLockCaption,
                     toggle: capsSwitch,
                     identifier: ControlIdentifier.capsSwitch
+                ),
+                featureRow(
+                    symbol: "arrow.down.doc",
+                    title: copy.finderCutPasteTitle,
+                    caption: copy.finderCutPasteCaption,
+                    toggle: finderCutPasteSwitch,
+                    identifier: ControlIdentifier.finderCutPasteSwitch
                 )
             ]
         )
@@ -206,6 +215,7 @@ final class SettingsViewController: NSViewController {
         self.settings = settings
         guard isViewLoaded else { return }
         capsSwitch.state = settings.capsLockInputSourceSwitching ? .on : .off
+        finderCutPasteSwitch.state = settings.finderCutPasteEnabled ? .on : .off
         wheelSwitch.state = settings.reverseMouseWheelVertically ? .on : .off
         wheelStepSwitch.state = settings.fixedMouseWheelStepEnabled ? .on : .off
         updateWheelStepPresentation()
@@ -225,7 +235,7 @@ final class SettingsViewController: NSViewController {
     func showApplyStatus(_ status: TidyTapApplyStatus, permission: TidyTapPermission? = nil) {
         let isPending = status.outcome == .pending
         isApplyingSettings = isPending
-        [capsSwitch, wheelSwitch, wheelStepSwitch, sideSwitch, loginSwitch].forEach { $0.isEnabled = !isPending }
+        [capsSwitch, finderCutPasteSwitch, wheelSwitch, wheelStepSwitch, sideSwitch, loginSwitch].forEach { $0.isEnabled = !isPending }
         updateWheelStepPresentation()
 
         if let message = TidyTapStrings.capsLockApplyMessage(for: status, bundle: localizationBundle) {
@@ -470,7 +480,7 @@ final class SettingsViewController: NSViewController {
     }
 
     private func configureActions() {
-        [capsSwitch, wheelSwitch, wheelStepSwitch, sideSwitch, loginSwitch].forEach {
+        [capsSwitch, finderCutPasteSwitch, wheelSwitch, wheelStepSwitch, sideSwitch, loginSwitch].forEach {
             $0.target = self
             $0.action = #selector(settingChanged(_:))
         }
@@ -578,6 +588,8 @@ final class SettingsViewController: NSViewController {
         switch sender {
         case capsSwitch:
             settings.capsLockInputSourceSwitching = sender.state == .on
+        case finderCutPasteSwitch:
+            settings.finderCutPasteEnabled = sender.state == .on
         case wheelSwitch:
             settings.reverseMouseWheelVertically = sender.state == .on
         case wheelStepSwitch:
@@ -636,6 +648,8 @@ private struct SettingsViewCopy {
     let generalSection: String
     let capsLockTitle: String
     let capsLockCaption: String
+    let finderCutPasteTitle: String
+    let finderCutPasteCaption: String
     let mouseWheelTitle: String
     let mouseWheelCaption: String
     let wheelStepTitle: String
@@ -680,6 +694,8 @@ private struct SettingsViewCopy {
         generalSection = text("General")
         capsLockTitle = text("Caps Lock input switching")
         capsLockCaption = text("Switch input sources without changing letter case")
+        finderCutPasteTitle = text("Use cut in Finder")
+        finderCutPasteCaption = text("Cut with ⌘X and move with ⌘V")
         mouseWheelTitle = text("Reverse wheel direction")
         mouseWheelCaption = text("Keep trackpad scrolling unchanged")
         wheelStepTitle = text("Fixed wheel step size")
@@ -693,9 +709,9 @@ private struct SettingsViewCopy {
         launchAtLogin = text("Start at login")
         launchAtLoginCaption = text("Keep TidyTap ready after you sign in")
         versionFormat = text("Version %@")
-        mousePermissionsTitle = text("PERMISSIONS FOR MOUSE FEATURES")
+        mousePermissionsTitle = text("PERMISSIONS FOR INPUT FEATURES")
         accessibilityPermissionTitle = text("Accessibility")
-        accessibilityPermissionCaption = text("Required for wheel settings and side buttons")
+        accessibilityPermissionCaption = text("Required for mouse features and Finder cut/paste")
         permissionAllowed = text("Allowed")
         permissionMissing = text("Missing")
         permissionNotChecked = text("Not checked")
@@ -704,7 +720,7 @@ private struct SettingsViewCopy {
         applyingChanges = text("Applying changes…")
         changesApplied = text("Changes applied.")
         changesCouldNotBeApplied = text("Changes could not be applied.")
-        reviewPermissions = text("Review the mouse permission status below.")
+        reviewPermissions = text("Review the input feature permission status below.")
         githubShort = "GitHub"
     }
 }
