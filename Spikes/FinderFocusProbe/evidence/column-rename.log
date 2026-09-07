@@ -1,0 +1,1 @@
+PASS: [["AXIdentifier": "ShrinkToFit Text Field", "AXRole": "AXTextField", "AXSubrole": "error:-25205"], ["AXRole": "AXApplication", "AXIdentifier": "error:-25212", "AXSubrole": "error:-25212"]]

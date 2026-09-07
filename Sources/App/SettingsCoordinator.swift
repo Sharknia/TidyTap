@@ -253,15 +253,19 @@ final class SettingsCoordinator {
     ) -> TidyTapApplyStatus {
         let requested = request.settings
         let echoed = status.effectiveSettings
-        let incompatible = status.outcome == .applied && (
-            requested.fixedMouseWheelStepEnabled
-                ? echoed?.fixedMouseWheelStepEnabled != true || echoed?.mouseWheelStepLines != requested.mouseWheelStepLines
-                : echoed?.fixedMouseWheelStepEnabled == true
-        )
+        let incompatibleFixedWheelStep = requested.fixedMouseWheelStepEnabled
+            ? echoed?.fixedMouseWheelStepEnabled != true || echoed?.mouseWheelStepLines != requested.mouseWheelStepLines
+            : echoed?.fixedMouseWheelStepEnabled == true
+        let incompatibleFinderCutPaste = requested.finderCutPasteEnabled
+            ? echoed?.finderCutPasteEnabled != true
+            : echoed?.finderCutPasteEnabled == true
+        let incompatible = status.outcome == .applied &&
+            (incompatibleFixedWheelStep || incompatibleFinderCutPaste)
         var effective = echoed
         if incompatible, effective == nil {
             effective = settingsBeforeLatestRequest ?? requested
             effective?.fixedMouseWheelStepEnabled = false
+            effective?.finderCutPasteEnabled = false
         }
         // An inactive size is only a remembered preference. An active size is
         // worker evidence: keep it even when it disagrees with the request.
@@ -273,7 +277,9 @@ final class SettingsCoordinator {
             applyRequestID: status.applyRequestID,
             outcome: incompatible ? .failed : status.outcome,
             failedComponent: incompatible ? .eventTap : status.failedComponent,
-            errorCode: incompatible ? "eventTap.incompatibleFixedWheelStep" : status.errorCode,
+            errorCode: incompatible
+                ? (incompatibleFinderCutPaste ? "eventTap.incompatibleFinderCutPaste" : "eventTap.incompatibleFixedWheelStep")
+                : status.errorCode,
             effectiveSettings: effective
         )
     }

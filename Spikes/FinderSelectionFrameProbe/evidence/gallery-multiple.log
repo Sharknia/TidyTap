@@ -1,0 +1,8 @@
+focus AXList id=GalleryView x=2406.0 y=347.0 w=505.0 h=384.0
+window x=2217.0 y=295.0 w=934.0 h=464.0
+AXSelectedChildren: 2
+item AXGroup id=Alpha.txt x=2414.0 y=675.0 w=48.0 h=48.0
+ child AXImage id=Alpha.txt x=2414.0 y=675.0 w=48.0 h=48.0
+item AXGroup id=Beta.txt x=2473.0 y=675.0 w=48.0 h=48.0
+ child AXImage id=Beta.txt x=2473.0 y=675.0 w=48.0 h=48.0
+AXSelectedRows: unavailable

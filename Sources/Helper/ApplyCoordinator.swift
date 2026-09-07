@@ -12,6 +12,7 @@ struct TidyTapInputFeatureConfiguration: Equatable {
     var reverseMouseWheel: Bool
     var sideButtonNavigation: Bool
     var fixedMouseWheelStepEnabled: Bool
+    var finderCutPasteEnabled: Bool
     /// This remains the user's remembered value even when the fixed-step
     /// capability is effectively off (for example after permission loss).
     var mouseWheelStepLines: Int
@@ -20,11 +21,13 @@ struct TidyTapInputFeatureConfiguration: Equatable {
         reverseMouseWheel: Bool,
         sideButtonNavigation: Bool,
         fixedMouseWheelStepEnabled: Bool = false,
+        finderCutPasteEnabled: Bool = false,
         mouseWheelStepLines: Int = TidyTapSettings.defaultMouseWheelStepLines
     ) {
         self.reverseMouseWheel = reverseMouseWheel
         self.sideButtonNavigation = sideButtonNavigation
         self.fixedMouseWheelStepEnabled = fixedMouseWheelStepEnabled
+        self.finderCutPasteEnabled = finderCutPasteEnabled
         self.mouseWheelStepLines = mouseWheelStepLines
     }
 
@@ -32,6 +35,7 @@ struct TidyTapInputFeatureConfiguration: Equatable {
         reverseMouseWheel: false,
         sideButtonNavigation: false,
         fixedMouseWheelStepEnabled: false,
+        finderCutPasteEnabled: false,
         mouseWheelStepLines: TidyTapSettings.defaultMouseWheelStepLines
     )
 }
@@ -41,6 +45,7 @@ protocol TidyTapInputFeaturesApplying: AnyObject {
         reverseMouseWheel: Bool,
         sideButtonNavigation: Bool,
         fixedMouseWheelStepEnabled: Bool,
+        finderCutPasteEnabled: Bool,
         mouseWheelStepLines: Int,
         requestID: UUID
     ) throws -> TidyTapInputFeatureApplyResult
@@ -113,6 +118,7 @@ final class ApplyCoordinator {
                 reverseMouseWheel: inputConfiguration.reverseMouseWheel,
                 sideButtonNavigation: inputConfiguration.sideButtonNavigation,
                 fixedMouseWheelStepEnabled: inputConfiguration.fixedMouseWheelStepEnabled,
+                finderCutPasteEnabled: inputConfiguration.finderCutPasteEnabled,
                 mouseWheelStepLines: activeRequest.settings.mouseWheelStepLines,
                 requestID: requestID
             )
@@ -128,6 +134,7 @@ final class ApplyCoordinator {
         effective.reverseMouseWheelVertically = normalizedInputConfiguration.reverseMouseWheel
         effective.sideButtonNavigation = normalizedInputConfiguration.sideButtonNavigation
         effective.fixedMouseWheelStepEnabled = normalizedInputConfiguration.fixedMouseWheelStepEnabled
+        effective.finderCutPasteEnabled = normalizedInputConfiguration.finderCutPasteEnabled
         let status: TidyTapApplyStatus
         if let runtimeResult {
             switch runtimeResult {
@@ -245,6 +252,7 @@ final class ApplyCoordinator {
                 reverseMouseWheel: settings.reverseMouseWheelVertically,
                 sideButtonNavigation: settings.sideButtonNavigation,
                 fixedMouseWheelStepEnabled: settings.fixedMouseWheelStepEnabled,
+                finderCutPasteEnabled: settings.finderCutPasteEnabled,
                 mouseWheelStepLines: settings.mouseWheelStepLines,
                 requestID: requestID
             )
@@ -308,6 +316,7 @@ final class ApplyCoordinator {
                     reverseMouseWheel: state.input.reverseMouseWheel,
                     sideButtonNavigation: state.input.sideButtonNavigation,
                     fixedMouseWheelStepEnabled: state.input.fixedMouseWheelStepEnabled,
+                    finderCutPasteEnabled: state.input.finderCutPasteEnabled,
                     mouseWheelStepLines: state.input.mouseWheelStepLines,
                     requestID: requestID
                 )
@@ -386,6 +395,7 @@ final class ApplyCoordinator {
         effective.reverseMouseWheelVertically = input.reverseMouseWheel
         effective.sideButtonNavigation = input.sideButtonNavigation
         effective.fixedMouseWheelStepEnabled = input.fixedMouseWheelStepEnabled
+        effective.finderCutPasteEnabled = input.finderCutPasteEnabled
         return effective
     }
 
@@ -424,6 +434,7 @@ final class ApplyCoordinator {
         result.reverseMouseWheelVertically = state.input.reverseMouseWheel
         result.sideButtonNavigation = state.input.sideButtonNavigation
         result.fixedMouseWheelStepEnabled = state.input.fixedMouseWheelStepEnabled
+        result.finderCutPasteEnabled = state.input.finderCutPasteEnabled
         result.mouseWheelStepLines = state.input.mouseWheelStepLines
         return result
     }

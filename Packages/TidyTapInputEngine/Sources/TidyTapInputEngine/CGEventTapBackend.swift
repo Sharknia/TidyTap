@@ -15,8 +15,12 @@ public final class CGEventTapBackend: EventTapBackend, @unchecked Sendable {
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var gestureMonitor: Any?
+    private var finderCutPaste: FinderCutPasteController?
+    private let feedbackHandler: @Sendable (FinderFeedback) -> Void
 
-    public init() {}
+    public init(feedbackHandler: @escaping @Sendable (FinderFeedback) -> Void = { _ in }) {
+        self.feedbackHandler = feedbackHandler
+    }
 
     public func install(
         configuration: EventTapConfiguration,
@@ -35,6 +39,15 @@ public final class CGEventTapBackend: EventTapBackend, @unchecked Sendable {
         if captureSideButtons {
             eventMask |= Self.mask(for: .otherMouseDown)
             eventMask |= Self.mask(for: .otherMouseUp)
+        }
+        if configuration.finderCutPasteEnabled {
+            eventMask |= Self.mask(for: .keyDown)
+            eventMask |= Self.mask(for: .keyUp)
+            finderCutPaste = FinderCutPasteController(
+                environment: FinderSystemEnvironment(),
+                feedbackHandler: feedbackHandler
+            )
+            finderCutPaste?.setEnabled(true)
         }
         let callback: CGEventTapCallBack = { _, type, event, userInfo in
             guard let userInfo else { return Unmanaged.passUnretained(event) }
@@ -88,6 +101,8 @@ public final class CGEventTapBackend: EventTapBackend, @unchecked Sendable {
             CGEvent.tapEnable(tap: tap, enable: false)
         }
         tap = nil
+        finderCutPaste?.setEnabled(false)
+        finderCutPaste = nil
         clearHandler()
     }
 
@@ -112,11 +127,16 @@ public final class CGEventTapBackend: EventTapBackend, @unchecked Sendable {
     }
 
     private func process(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+        if type == .keyDown || type == .keyUp {
+            return processKeyboard(type: type, event: event)
+        }
         let input: EventTapInput
         switch type {
         case .tapDisabledByTimeout:
+            finderCutPaste?.resetAfterTapDisable()
             input = .disabled(.timeout)
         case .tapDisabledByUserInput:
+            finderCutPaste?.resetAfterTapDisable()
             input = .disabled(.userInput)
         case .scrollWheel:
             input = .scroll(Self.scrollObservation(from: event))
@@ -134,6 +154,42 @@ public final class CGEventTapBackend: EventTapBackend, @unchecked Sendable {
         case .consume:
             return nil
         }
+    }
+
+    private func processKeyboard(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
+        guard !FinderSystemEnvironment.isSynthetic(event), let finderCutPaste else {
+            return Unmanaged.passUnretained(event)
+        }
+        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+        let isDown = type == .keyDown
+        let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+        if isDown && !Self.isUnmodifiedCommand(event.flags) {
+            return Unmanaged.passUnretained(event)
+        }
+        let disposition = finderCutPaste.handle(
+            keyCode: keyCode,
+            isDown: isDown,
+            isRepeat: isRepeat
+        )
+        switch disposition {
+        case .passThrough:
+            return Unmanaged.passUnretained(event)
+        case .consume:
+            return nil
+        case .replaceWithCopy:
+            event.setIntegerValueField(.keyboardEventKeycode, value: 8)
+            return Unmanaged.passUnretained(event)
+        case .replaceWithMove:
+            event.flags.insert(.maskAlternate)
+            return Unmanaged.passUnretained(event)
+        }
+    }
+
+    private static func isUnmodifiedCommand(_ flags: CGEventFlags) -> Bool {
+        let modifiers = flags.intersection([
+            .maskCommand, .maskAlternate, .maskControl, .maskShift
+        ])
+        return modifiers == .maskCommand
     }
 
     enum EventDisposition {

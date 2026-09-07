@@ -234,7 +234,7 @@ final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
 
     init(
         permissionChecker: any InputPermissionChecking = CGInputPermissionChecker(),
-        backend: any EventTapBackend = CGEventTapBackend(),
+        backend: (any EventTapBackend)? = nil,
         sideButtons: SideButtonController = SideButtonController(
             applicationProvider: MacOSFocusedApplicationProvider(),
             synthesizer: CGNavigationSynthesizer()
@@ -244,7 +244,7 @@ final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
         runtimeSink = sink
         controller = EventTapController(
             permissions: permissionChecker,
-            backend: backend,
+            backend: backend ?? CGEventTapBackend(feedbackHandler: FinderFeedbackAppHost.present),
             sideButtons: sideButtons,
             statusObserver: { status in sink.handler?(status) }
         )
@@ -255,6 +255,7 @@ final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
         reverseMouseWheel: Bool,
         sideButtonNavigation: Bool,
         fixedMouseWheelStepEnabled: Bool,
+        finderCutPasteEnabled: Bool = false,
         mouseWheelStepLines: Int,
         requestID: UUID
     ) throws -> TidyTapInputFeatureApplyResult {
@@ -272,7 +273,8 @@ final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
             reverseMouseScroll: reverseMouseWheel,
             sideButtonNavigation: sideButtonNavigation,
             fixedMouseWheelStepEnabled: fixedMouseWheelStepEnabled,
-            mouseWheelStepLines: mouseWheelStepLines
+            mouseWheelStepLines: mouseWheelStepLines,
+            finderCutPasteEnabled: finderCutPasteEnabled
         )
         switch controller.start(configuration: configuration) {
         case .stopped, .drainingButtonPresses, .running:
@@ -305,6 +307,7 @@ final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
             reverseMouseWheel: configuration.reverseMouseScroll,
             sideButtonNavigation: configuration.sideButtonNavigation,
             fixedMouseWheelStepEnabled: configuration.fixedMouseWheelStepEnabled,
+            finderCutPasteEnabled: configuration.finderCutPasteEnabled,
             mouseWheelStepLines: rememberedMouseWheelStepLines
         )
     }

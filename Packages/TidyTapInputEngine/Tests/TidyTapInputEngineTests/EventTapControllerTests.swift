@@ -75,6 +75,7 @@ final class EventTapControllerTests: XCTestCase {
         XCTAssertFalse(legacy.fixedMouseWheelStepEnabled)
         XCTAssertEqual(legacy.mouseWheelStepLines, 3)
         XCTAssertFalse(legacy.needsScrollProcessing)
+        XCTAssertFalse(legacy.finderCutPasteEnabled)
     }
 
     func testNoFeaturesStopsWithoutPermissionCheckOrInstall() {
