@@ -8,7 +8,7 @@ final class HelperRuntime {
     private var lifecycle: HelperLifecycle?
     private let launchSmoke = TidyTapLaunchSmoke.current()
 
-    func start() {
+    func start(setReadiness: @escaping (TidyTapWorkerLockOwner.Readiness) -> Bool = { _ in true }) {
         let preferences: TidyTapPreferencesStore
         let capsFeature: TidyTapCapsFeatureApplying
         let inputFeatures: TidyTapInputFeaturesApplying
@@ -34,7 +34,7 @@ final class HelperRuntime {
             capsFeature: capsFeature,
             inputFeatures: inputFeatures,
             menuBar: menuBar,
-            terminator: ApplicationTerminator()
+            terminator: ApplicationTerminator(setReadiness: setReadiness)
         )
         if let productionInputFeatures = inputFeatures as? InputFeaturesAdapter {
             productionInputFeatures.runtimeStatusHandler = { [weak coordinator] requestID, result, error in

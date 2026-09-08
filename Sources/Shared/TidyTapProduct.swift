@@ -32,6 +32,8 @@ struct TidyTapWorkerLockOwner: Equatable, Hashable {
     enum Readiness: String {
         case starting
         case acknowledged
+        case stopping
+        case finished
     }
 
     let processIdentifier: pid_t
