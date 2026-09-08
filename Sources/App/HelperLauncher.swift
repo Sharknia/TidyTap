@@ -72,7 +72,7 @@ final class HelperLauncher: TidyTapHelperLaunching {
 
             switch try runtime.inspectLock() {
             case .free(let lastOwner):
-                if lastOwner?.readiness == .acknowledged,
+                if (lastOwner?.readiness == .acknowledged || lastOwner?.readiness == .finished),
                    lastOwner?.launchNonce == launchNonce {
                     return
                 }

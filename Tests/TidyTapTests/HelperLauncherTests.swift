@@ -60,6 +60,19 @@ final class HelperLauncherTests: XCTestCase {
         XCTAssertEqual(runtime.terminated, [])
     }
 
+    func testStoppingWorkerIsNotReusedAndNextWorkerIsLaunched() throws {
+        let stopping = current.recording(readiness: .stopping, launchNonce: nil)
+        XCTAssertEqual(TidyTapWorkerLockOwner(encoded: stopping.encoded), stopping)
+        let runtime = FakeWorkerRuntime(
+            lockStates: [.held(owner: stopping), .free(lastOwner: stopping), .held(owner: current)],
+            processStates: [stopping: .current, current: .current]
+        )
+        try makeLauncher(runtime).ensureHelperRunning()
+        XCTAssertEqual(runtime.launchCount, 1)
+        XCTAssertEqual(runtime.pauseCount, 2)
+        XCTAssertTrue(runtime.terminated.isEmpty)
+    }
+
     func testLaunchWaitsForLockOwnerReadiness() throws {
         let runtime = FakeWorkerRuntime(
             lockStates: [
@@ -248,7 +261,7 @@ final class HelperLauncherTests: XCTestCase {
         XCTAssertEqual(status?.applyRequestID, requestID)
         XCTAssertEqual(status?.outcome, .applied)
         let lastOwner = try waitForFreeAcknowledgement(runtime: runtime)
-        XCTAssertEqual(lastOwner.readiness, .acknowledged)
+        XCTAssertEqual(lastOwner.readiness, .finished)
         XCTAssertNotNil(lastOwner.launchNonce)
         XCTAssertEqual(runtime.inspectProcess(lastOwner), .gone)
     }
@@ -480,7 +493,7 @@ final class HelperLauncherTests: XCTestCase {
     ) throws -> TidyTapWorkerLockOwner {
         for _ in 0..<200 {
             if case .free(let owner?) = try runtime.inspectLock(),
-               owner.readiness == .acknowledged {
+               owner.readiness == .finished {
                 return owner
             }
             usleep(10_000)

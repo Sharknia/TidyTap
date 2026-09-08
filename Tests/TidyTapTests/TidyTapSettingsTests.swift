@@ -1,5 +1,6 @@
 import XCTest
 import TidyTapInputEngine
+import ServiceManagement
 
 @MainActor
 final class TidyTapSettingsTests: XCTestCase {
@@ -18,6 +19,43 @@ final class TidyTapSettingsTests: XCTestCase {
             ])?.preferencesSuite,
             suite
         )
+    }
+
+    func testFreshInstallUnknownLoginServiceDoesNotBlockFeatureSave() throws {
+        let service = RecordingLoginService(status: .notFound)
+        service.unregisterError = TestError.failure
+        let legacy = RecordingLoginService(status: .notFound)
+        let store = InMemoryPreferences(request: .init(settings: .defaults, applyRequestID: UUID()))
+        let launcher = RecordingHelperLauncher()
+        let coordinator = SettingsCoordinator(
+            preferences: store, helperLauncher: launcher,
+            loginItemManager: LoginItemCoordinator(service: service, legacy: legacy)
+        )
+        var requested = TidyTapSettings.defaults
+        requested.reverseMouseWheelVertically = true
+        let id = try coordinator.save(requested)
+        XCTAssertEqual(store.request.applyRequestID, id)
+        XCTAssertTrue(store.request.settings.reverseMouseWheelVertically)
+        XCTAssertEqual(launcher.launchCount, 1)
+        XCTAssertEqual(service.unregisterCount, 0)
+        XCTAssertEqual(legacy.unregisterCount, 0)
+    }
+
+    func testDisablingRegisteredLoginServiceStillUnregistersAndPropagatesFailure() {
+        for state in [SMAppService.Status.enabled, .requiresApproval] {
+            let service = RecordingLoginService(status: state)
+            service.unregisterError = TestError.failure
+            let manager = LoginItemCoordinator(service: service, legacy: RecordingLoginService(status: .notFound))
+            XCTAssertThrowsError(try manager.setEnabled(false))
+            XCTAssertEqual(service.unregisterCount, 1)
+        }
+    }
+
+    func testEnablingUnknownLoginServiceStillRegisters() throws {
+        let service = RecordingLoginService(status: .notFound)
+        let manager = LoginItemCoordinator(service: service, legacy: RecordingLoginService(status: .notFound))
+        try manager.setEnabled(true)
+        XCTAssertEqual(service.registerCount, 1)
     }
 
     func testDefaultSettingsKeepEveryCapabilityDisabled() {
@@ -327,6 +365,154 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertTrue(input.currentConfiguration().finderCutPasteEnabled)
         XCTAssertEqual(result.effectiveSettings, original)
         XCTAssertEqual(store.request.settings, original)
+    }
+
+    func testFreshInstallRequestIsStableAcrossReadsAndStores() throws {
+        let suite = TidyTapLaunchSmoke.suitePrefix + UUID().uuidString
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { UserDefaults.standard.removePersistentDomain(forName: suite) }
+        let first = TidyTapPreferencesStore(defaults: defaults)
+        let second = TidyTapPreferencesStore(defaults: defaults)
+        XCTAssertEqual(first.readRequest(), first.readRequest())
+        XCTAssertEqual(first.readRequest(), second.readRequest())
+        XCTAssertEqual(first.readRequest().settings, .defaults)
+        let id = UUID()
+        try first.write(settings: .defaults, applyRequestID: id)
+        XCTAssertEqual(second.readRequest().applyRequestID, id)
+    }
+
+    func testCreationFailureRollsBackAndExitsWithoutDuplicateSuccess() {
+        var settings = TidyTapSettings.defaults
+        settings.reverseMouseWheelVertically = true
+        let store = InMemoryPreferences(request: .init(settings: settings, applyRequestID: UUID()))
+        let backend = FakeEventTapBackend()
+        backend.installError = InputEngineError.eventTapCreationFailed
+        let input = InputFeaturesAdapter(
+            permissionChecker: MutableInputPermissions(accessibility: true, inputMonitoring: true),
+            backend: backend
+        )
+        let calls = CallLog()
+        let coordinator = ApplyCoordinator(
+            preferences: store, capsFeature: RecordingCaps(calls: CallLog()),
+            inputFeatures: input, menuBar: RecordingMenu(calls: CallLog()),
+            terminator: RecordingTerminator(calls: calls)
+        )
+        let result = coordinator.applyLatestSettings()
+        XCTAssertEqual(result.errorCode, "eventTap.creationFailed")
+        XCTAssertEqual(result.outcome, .failed)
+        XCTAssertFalse(store.request.settings.requiresHelper)
+        XCTAssertEqual(calls.values, ["terminate"])
+        XCTAssertEqual(coordinator.applyLatestSettings().errorCode, "eventTap.creationFailed")
+        XCTAssertEqual(store.applyStatuses.count, 1)
+    }
+
+    func testCreationFailureKeepsPreviouslyActiveCapsFeature() {
+        var original = TidyTapSettings.defaults
+        original.capsLockInputSourceSwitching = true
+        var requested = original
+        requested.reverseMouseWheelVertically = true
+        let store = InMemoryPreferences(request: .init(settings: requested, applyRequestID: UUID()))
+        let backend = FakeEventTapBackend()
+        backend.installError = InputEngineError.eventTapCreationFailed
+        let calls = CallLog()
+        let coordinator = ApplyCoordinator(
+            preferences: store, capsFeature: RecordingCaps(calls: CallLog(), enabled: true),
+            inputFeatures: InputFeaturesAdapter(
+                permissionChecker: MutableInputPermissions(accessibility: true, inputMonitoring: true),
+                backend: backend
+            ), menuBar: RecordingMenu(calls: CallLog()),
+            terminator: RecordingTerminator(calls: calls)
+        )
+        XCTAssertEqual(coordinator.applyLatestSettings().errorCode, "eventTap.creationFailed")
+        XCTAssertEqual(store.request.settings, original)
+        XCTAssertTrue(calls.values.isEmpty)
+    }
+
+    func testNewRequestBeforeScheduledExitIsAppliedAndCancelsExit() {
+        var requested = TidyTapSettings.defaults
+        requested.reverseMouseWheelVertically = true
+        let store = InMemoryPreferences(request: .init(settings: requested, applyRequestID: UUID()))
+        let backend = FakeEventTapBackend()
+        backend.installError = InputEngineError.eventTapCreationFailed
+        var scheduled: (@MainActor () -> Void)?
+        var readiness = [TidyTapWorkerLockOwner.Readiness]()
+        var stopped = false
+        let terminator = ApplicationTerminator(
+            setReadiness: { readiness.append($0); return true },
+            enqueue: { scheduled = $0 }, stop: { stopped = true }
+        )
+        let coordinator = ApplyCoordinator(
+            preferences: store, capsFeature: RecordingCaps(calls: CallLog()),
+            inputFeatures: InputFeaturesAdapter(
+                permissionChecker: MutableInputPermissions(accessibility: true, inputMonitoring: true),
+                backend: backend
+            ), menuBar: RecordingMenu(calls: CallLog()), terminator: terminator
+        )
+        XCTAssertEqual(coordinator.applyLatestSettings().outcome, .failed)
+        backend.installError = nil
+        let newID = UUID()
+        store.request = .init(settings: requested, applyRequestID: newID)
+        scheduled?()
+        XCTAssertFalse(stopped)
+        XCTAssertEqual(readiness, [.stopping, .acknowledged])
+        XCTAssertEqual(store.status?.applyRequestID, newID)
+        XCTAssertEqual(store.status?.outcome, .applied)
+        XCTAssertTrue(store.request.settings.reverseMouseWheelVertically)
+    }
+
+    func testCreationFailureWithRollbackFailureDoesNotExit() {
+        var requested = TidyTapSettings.defaults
+        requested.reverseMouseWheelVertically = true
+        let store = InMemoryPreferences(request: .init(settings: requested, applyRequestID: UUID()))
+        let calls = CallLog()
+        let input = AlwaysFailingCreationInput()
+        let coordinator = ApplyCoordinator(
+            preferences: store, capsFeature: RecordingCaps(calls: CallLog()),
+            inputFeatures: input, menuBar: RecordingMenu(calls: CallLog()),
+            terminator: RecordingTerminator(calls: calls)
+        )
+        XCTAssertEqual(coordinator.applyLatestSettings().outcome, .recoveryRequired)
+        XCTAssertTrue(calls.values.isEmpty)
+    }
+
+    func testColdRefreshPreservesCreationFailureUntilNewSettingsRequest() {
+        let id = UUID()
+        let store = InMemoryPreferences(request: .init(settings: .defaults, applyRequestID: id))
+        store.status = .init(
+            applyRequestID: id, outcome: .failed, failedComponent: .eventTap,
+            errorCode: "eventTap.creationFailed", effectiveSettings: .defaults
+        )
+        let coordinator = ApplyCoordinator(
+            preferences: store, capsFeature: RecordingCaps(calls: CallLog()),
+            inputFeatures: RecordingInput(calls: CallLog()), menuBar: RecordingMenu(calls: CallLog()),
+            terminator: RecordingTerminator(calls: CallLog())
+        )
+        let lifecycle = HelperLifecycle(
+            coordinator: coordinator,
+            permissionCoordinator: HelperPermissionCoordinator(
+                preferences: store,
+                provider: RecordingPermissionProvider(state: .init(accessibility: .authorized, inputMonitoring: .authorized))
+            )
+        )
+        lifecycle.start()
+        lifecycle.stop()
+        XCTAssertEqual(store.status?.errorCode, "eventTap.creationFailed")
+        store.request = .init(settings: .defaults, applyRequestID: UUID())
+        XCTAssertEqual(coordinator.applyLatestSettings().outcome, .applied)
+        XCTAssertNil(store.status?.errorCode)
+    }
+
+    func testTerminationPublishesStoppingBeforeFinalRequestCheck() {
+        var scheduled: (@MainActor () -> Void)?
+        var events = [String]()
+        let terminator = ApplicationTerminator(
+            setReadiness: { events.append($0.rawValue); return true },
+            enqueue: { scheduled = $0 }, stop: { events.append("exit") }
+        )
+        terminator.terminate(ifCurrent: { events.append("check"); return true })
+        XCTAssertTrue(events.isEmpty)
+        scheduled?()
+        XCTAssertEqual(events, ["stopping", "check", "exit"])
     }
 
     func testAllOffApplyTerminatesOnlyAfterSuccess() {
@@ -1911,7 +2097,9 @@ private final class FakeEventTapBackend: EventTapBackend, @unchecked Sendable {
     var handler: EventTapHandler?
     var synchronousInputOnInstall: EventTapInput?
     var enableError: Error?
+    var installError: Error?
     func install(configuration: EventTapConfiguration, captureSideButtons: Bool, handler: @escaping EventTapHandler) throws {
+        if let installError { throw installError }
         configurations.append(configuration)
         self.captureSideButtons.append(captureSideButtons)
         self.handler = handler
@@ -2078,4 +2266,27 @@ private enum TestError: Error, Equatable {
     case failure
     case persistence
     case recovery
+}
+
+private final class AlwaysFailingCreationInput: TidyTapInputFeaturesApplying {
+    func apply(reverseMouseWheel: Bool, sideButtonNavigation: Bool,
+               fixedMouseWheelStepEnabled: Bool, finderCutPasteEnabled: Bool,
+               mouseWheelStepLines: Int, requestID: UUID) throws -> TidyTapInputFeatureApplyResult {
+        throw TidyTapInputFeatureAdapterError.engine(.eventTapCreationFailed)
+    }
+    func forcePassThrough() throws {}
+    func currentConfiguration() -> TidyTapInputFeatureConfiguration { .disabled }
+}
+
+private final class RecordingLoginService: TidyTapLoginService {
+    var status: SMAppService.Status
+    var unregisterError: Error?
+    var unregisterCount = 0
+    var registerCount = 0
+    init(status: SMAppService.Status) { self.status = status }
+    func register() throws { registerCount += 1 }
+    func unregister() throws {
+        unregisterCount += 1
+        if let unregisterError { throw unregisterError }
+    }
 }

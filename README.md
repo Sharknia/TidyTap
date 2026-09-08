@@ -7,10 +7,8 @@ Switch languages with Caps Lock, adjust your mouse wheel, use side buttons in Sa
 Apple silicon · macOS 15.1+ · English & Korean · [MIT license](LICENSE)
 
 <p align="center">
-  <img src="docs/images/settings-ko.png" alt="TidyTap settings in Korean, with separate switches for Caps Lock, Finder cut and paste, scrolling, and side buttons" width="420">
+  <img src="docs/images/settings-en.png" alt="TidyTap settings in English, with separate switches for Caps Lock, Finder cut and paste, scrolling, and side buttons" width="420">
 </p>
-
-<p align="center"><em>Shown in Korean. English is also available.</em></p>
 
 ## What can it do?
 

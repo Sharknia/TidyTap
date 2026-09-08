@@ -31,7 +31,12 @@ guard let processOwner = TidyTapWorkerLockOwner.current(),
 // LaunchServices route subsequent settings launches to this invisible worker.
 let runtime = HelperRuntime()
 withExtendedLifetime(runtime) {
-    runtime.start()
+    runtime.start { readiness in
+        writeLockOwner(
+            processOwner.recording(readiness: readiness, launchNonce: launchNonce),
+            to: lockDescriptor
+        )
+    }
     guard writeLockOwner(
         processOwner.recording(readiness: .acknowledged, launchNonce: launchNonce),
         to: lockDescriptor
@@ -41,4 +46,8 @@ withExtendedLifetime(runtime) {
     }
     CFRunLoopRun()
     runtime.stop()
+    _ = writeLockOwner(
+        processOwner.recording(readiness: .finished, launchNonce: launchNonce),
+        to: lockDescriptor
+    )
 }

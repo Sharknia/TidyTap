@@ -72,6 +72,18 @@ final class HelperPermissionCoordinator {
         startupApply: TidyTapApplyStatus
     ) -> TidyTapApplyStatus? {
         defer { applyStatusBeforeRequest = nil }
+        // A refresh-only launch cleans up an already rolled-back request; it
+        // cannot prove that the previously requested input feature now works.
+        if let prior = applyStatusBeforeRequest,
+           prior.outcome == .failed, prior.errorCode == "eventTap.creationFailed",
+           prior.failedComponent == .eventTap,
+           startupApply.outcome == .applied,
+           startupApply.applyRequestID == prior.applyRequestID,
+           startupApply.effectiveSettings == prior.effectiveSettings {
+            guard (try? preferences.writeApplyStatus(prior)) != nil else { return nil }
+            TidyTapIPC.postApplyResult(prior)
+            return prior
+        }
         guard let prior = applyStatusBeforeRequest,
               startupApply.outcome == .applied,
               startupApply.applyRequestID == prior.applyRequestID,
@@ -120,6 +132,7 @@ private extension TidyTapFeaturePermissionState {
 enum TidyTapInputFeatureAdapterError: Error {
     case permissionDenied(Set<TidyTapPermission>)
     case eventTapFailed
+    case engine(InputEngineError)
 }
 
 enum CapsJournalPhase: String, Codable { case prepared, applied }
@@ -283,8 +296,8 @@ final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
             return .partiallyApplied(unavailablePermissions: Set(unavailablePermissions.map(Self.permission)))
         case .permissionDenied(let missing):
             return .partiallyApplied(unavailablePermissions: Set(missing.map(Self.permission)))
-        case .failed:
-            throw TidyTapInputFeatureAdapterError.eventTapFailed
+        case .failed(let error):
+            throw TidyTapInputFeatureAdapterError.engine(error)
         }
     }
 
@@ -333,8 +346,8 @@ final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
             runtimeStatusHandler?(requestID, .partiallyApplied(unavailablePermissions: Set(missing.map(Self.permission))), nil)
         case .permissionDenied(let missing):
             runtimeStatusHandler?(requestID, .partiallyApplied(unavailablePermissions: Set(missing.map(Self.permission))), nil)
-        case .failed:
-            runtimeStatusHandler?(requestID, nil, .eventTapFailed)
+        case .failed(let error):
+            runtimeStatusHandler?(requestID, nil, .engine(error))
         }
     }
 }

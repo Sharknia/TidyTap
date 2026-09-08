@@ -302,7 +302,10 @@ final class TidyTapPreferencesStore: TidyTapPreferencesStoring, TidyTapCapsOwner
             return request
         }
 
-        let requestID = UUID(uuidString: defaults.string(forKey: TidyTapPreferences.applyRequestIDKey) ?? "") ?? UUID()
+        // An absent request is one stable default generation, not a new user
+        // action on every read (including the worker's final exit check).
+        let requestID = UUID(uuidString: defaults.string(forKey: TidyTapPreferences.applyRequestIDKey) ?? "")
+            ?? UUID(uuid: (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0))
         return TidyTapSettingsRequest(settings: .defaults, applyRequestID: requestID)
     }
 
