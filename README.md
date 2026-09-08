@@ -1,5 +1,10 @@
 # TidyTap
 
+[![Release](https://img.shields.io/github/v/release/Sharknia/TidyTap?include_prereleases&label=release)](https://github.com/Sharknia/TidyTap/releases)
+[![Asset downloads](https://img.shields.io/github/downloads/Sharknia/TidyTap/total?label=asset%20downloads)](https://github.com/Sharknia/TidyTap/releases)
+[![Languages](https://img.shields.io/badge/languages-%ED%95%9C%EA%B5%AD%EC%96%B4%20%2F%20English-2ea44f)](README.ko.md)
+[![License: MIT](https://img.shields.io/badge/license-MIT-2ea44f.svg)](LICENSE)
+
 Switch languages with Caps Lock, adjust your mouse wheel, use side buttons in Safari and Finder, and cut files with `⌘X`. TidyTap is a free, open-source Mac app. Turn on the features you want and leave the rest off.
 
 **[Download for Mac](https://github.com/Sharknia/TidyTap/releases/latest)** · [한국어](README.ko.md)
