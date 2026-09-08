@@ -64,8 +64,16 @@ protocol TidyTapMenuBarApplying: AnyObject {
     var isMenuBarVisible: Bool { get }
 }
 
+@MainActor
 protocol TidyTapTerminating: AnyObject {
     func terminate()
+    func terminate(ifCurrent: @escaping @MainActor () -> Bool)
+}
+
+extension TidyTapTerminating {
+    func terminate(ifCurrent: @escaping @MainActor () -> Bool) {
+        if ifCurrent() { terminate() }
+    }
 }
 
 /// Runs the whole settings snapshot as one serial transaction. On any failure,
@@ -78,6 +86,7 @@ final class ApplyCoordinator {
     private let menuBar: TidyTapMenuBarApplying
     private let terminator: TidyTapTerminating
     private var activeRequest: TidyTapSettingsRequest?
+    private var lastReportedStatus: TidyTapApplyStatus?
 
     init(
         preferences: TidyTapPreferencesStoring,
@@ -168,6 +177,14 @@ final class ApplyCoordinator {
 
     @discardableResult
     func apply(_ request: TidyTapSettingsRequest) -> TidyTapApplyStatus {
+        // Launch-time application and its subsequent notification are the same
+        // transaction. Do not turn a failed, sanitized request into a success.
+        if let activeRequest, activeRequest.applyRequestID == request.applyRequestID,
+           activeRequest.settings == request.settings, let lastReportedStatus,
+           lastReportedStatus.outcome == .failed,
+           lastReportedStatus.errorCode == "eventTap.creationFailed" {
+            return lastReportedStatus
+        }
         let previousState: ControllerState
         do {
             // A fresh adapter has not learned the persisted step yet. Seed the
@@ -227,10 +244,24 @@ final class ApplyCoordinator {
 
         report(result)
         let effective = result.effectiveSettings ?? request.settings
-        if (result.outcome == .applied || result.outcome == .partiallyApplied), !effective.requiresHelper {
-            terminator.terminate()
+        let recoveredCreationFailure = result.outcome == .failed &&
+            result.failedComponent == .eventTap && result.errorCode == "eventTap.creationFailed"
+        if (result.outcome == .applied || result.outcome == .partiallyApplied || recoveredCreationFailure), !effective.requiresHelper {
+            terminateIfCurrent(request.applyRequestID)
         }
         return result
+    }
+
+    private func terminateIfCurrent(_ requestID: UUID) {
+        terminator.terminate { [weak self] in
+            guard let self, self.activeRequest?.applyRequestID == requestID else { return false }
+            let latest = self.preferences.readRequest()
+            guard latest.applyRequestID == requestID else {
+                _ = self.apply(latest)
+                return false
+            }
+            return true
+        }
     }
 
     private func apply(_ settings: TidyTapSettings, requestID: UUID) -> ApplyAttempt {
@@ -362,6 +393,9 @@ final class ApplyCoordinator {
         } else if case TidyTapInputFeatureAdapterError.eventTapFailed = error {
             code = "\(component.rawValue).recoveryFailed"
             outcome = .failed
+        } else if case TidyTapInputFeatureAdapterError.engine(let engineError) = error {
+            code = capsErrorCode(engineError, component: component)
+            outcome = .failed
         } else if let engineError = error as? InputEngineError {
             code = capsErrorCode(engineError, component: component)
             outcome = .failed
@@ -385,6 +419,7 @@ final class ApplyCoordinator {
     }
 
     private func report(_ status: TidyTapApplyStatus) {
+        lastReportedStatus = status
         try? preferences.writeApplyStatus(status)
         TidyTapIPC.postApplyResult(status)
     }
@@ -480,10 +515,36 @@ private extension TidyTapApplyStatus {
     }
 }
 
+@MainActor
 final class ApplicationTerminator: TidyTapTerminating {
-    func terminate() {
-        DispatchQueue.main.async {
-            CFRunLoopStop(CFRunLoopGetMain())
+    private let setReadiness: (TidyTapWorkerLockOwner.Readiness) -> Bool
+    private let enqueue: (@escaping @MainActor () -> Void) -> Void
+    private let stop: () -> Void
+
+    init(
+        setReadiness: @escaping (TidyTapWorkerLockOwner.Readiness) -> Bool = { _ in true },
+        enqueue: @escaping (@escaping @MainActor () -> Void) -> Void = { work in
+            DispatchQueue.main.async { work() }
+        },
+        stop: @escaping () -> Void = { CFRunLoopStop(CFRunLoopGetMain()) }
+    ) {
+        self.setReadiness = setReadiness
+        self.enqueue = enqueue
+        self.stop = stop
+    }
+
+    func terminate() { terminate(ifCurrent: { true }) }
+
+    func terminate(ifCurrent: @escaping @MainActor () -> Bool) {
+        enqueue { [self] in
+            // Publish before the final request read: a launcher must either
+            // have already persisted its request or wait for this worker's exit.
+            guard setReadiness(.stopping) else { return }
+            guard ifCurrent() else {
+                _ = setReadiness(.acknowledged)
+                return
+            }
+            stop()
         }
     }
 }

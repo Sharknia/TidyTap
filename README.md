@@ -1,110 +1,84 @@
 # TidyTap
 
-[![Release](https://img.shields.io/github/v/release/Sharknia/TidyTap?include_prereleases&label=release)](https://github.com/Sharknia/TidyTap/releases)
-[![Asset downloads](https://img.shields.io/github/downloads/Sharknia/TidyTap/total?label=asset%20downloads)](https://github.com/Sharknia/TidyTap/releases)
-[![Languages](https://img.shields.io/badge/languages-%ED%95%9C%EA%B5%AD%EC%96%B4%20%2F%20English-2ea44f)](README.ko.md)
-[![License: MIT](https://img.shields.io/badge/license-MIT-2ea44f.svg)](LICENSE)
+Switch languages with Caps Lock, adjust your mouse wheel, use side buttons in Safari and Finder, and cut files with `⌘X`. TidyTap is a free, open-source Mac app. Turn on the features you want and leave the rest off.
 
-TidyTap is a small macOS input utility:
+**[Download for Mac](https://github.com/Sharknia/TidyTap/releases/latest)** · [한국어](README.ko.md)
 
-- Use Caps Lock as a two-input-source switch (mapped to F18), without toggling Caps Lock.
-- Reverse vertical scrolling for any non-continuous, line-based mouse-wheel event while leaving trackpad scrolling unchanged. The supported target remains the VXE Mouse 1K Dongle; prior physical validation covers device classification and button reports, not the new fixed-step behavior. The implementation does not filter by vendor.
-- Independently enable a fixed wheel step size (1–10 logical lines, default 3). It starts off and remembers the chosen size while disabled. Single-step non-continuous events are adjusted; larger deltas retain their original magnitude. This is not a claim of complete acceleration removal for every wheel or scrolling speed. Physical validation of this new feature remains separate.
-- Use mouse buttons 3/4 for back/forward in the active Safari or Finder window.
-- Cut files in Finder with `⌘X` and move them with `⌘V`; ordinary `⌘C → ⌘V` still copies. TidyTap briefly shows “Move ready” or “Copy ready” beside the selected item for about one second. This feature starts off and preserves normal text editing in rename and search fields.
+Apple silicon · macOS 15.1+ · English & Korean · [MIT license](LICENSE)
 
-Each feature has its own toggle. The settings window also offers **Start at login**. Grant Accessibility to **TidyTap** for mouse features; the worker is an executable inside the same app bundle, not a separate permission target. TidyTap remains a normal Dock app, and quitting it with `Command-Q` does not stop an enabled helper.
+<p align="center">
+  <img src="docs/images/settings-en.png" alt="TidyTap settings in English, with separate switches for Caps Lock, Finder cut and paste, scrolling, and side buttons" width="420">
+</p>
 
-Finder cut/paste is included in the 0.1.3 release. Its move intent is cleared when the move command is sent, so cancelling or failing the Finder operation requires cutting again. Desktop, other file managers, and context-menu paste are not remapped. See the [design](docs/FINDER_CUT_PASTE_PLAN.md) and [validation scope](docs/FINDER_CUT_PASTE_VALIDATION.md).
+## What can it do?
 
-## Support and status
+| Feature | How it works |
+| --- | --- |
+| Caps Lock language switch | Switch between two input sources, such as English and Korean, instead of enabling Caps Lock. |
+| Reverse mouse scrolling | Reverse vertical mouse scrolling. Your trackpad stays the same. |
+| Wheel scroll amount | Adjust ordinary single wheel steps to scroll 1 to 10 lines. |
+| Side buttons | Go back and forward in Safari and Finder. |
+| Finder cut & paste | Press `⌘X`, open the destination folder, then press `⌘V` to move files. `⌘C` still copies. |
 
-TidyTap supports Apple silicon Macs running macOS 15.1 (Sequoia) or later. This 15.1-targeted build was checked on MacBook Pro `Mac15,6` (Apple M3 Pro) and macOS 26.5.2 (`25F84`); macOS 15.1 runtime validation remains outstanding. The 0.1.3 release launch-smoke, including its final system-state preservation check, passed. Physical validation covers scroll-device classification (VXE versus the built-in and Magic Trackpad) and that the VXE side buttons report as Core Graphics buttons 3/4. Remaining integrated live validation includes Caps Lock/input-source backup and restore, permission grant/revocation behavior, end-to-end wheel and Safari/Finder navigation, helper lifetime/login behavior, and the supported removal sequence; these are not claimed complete. The UI is available in English and Korean.
+> **Closing the window or quitting with `⌘Q` keeps enabled features running.** To stop them, turn off all features in the app. [How to stop or uninstall](#stopping-or-uninstalling)
 
-Project version: `0.1.3`. Published versions and signed downloads are listed on [GitHub Releases](https://github.com/Sharknia/TidyTap/releases).
+## Install
 
-See the [MVP work plan](docs/MVP_PLAN.md) and [Korean README](README.ko.md).
+1. Under **Assets**, download the `.dmg` file from the [latest release](https://github.com/Sharknia/TidyTap/releases/latest).
+2. Open the DMG, drag TidyTap into Applications, then open it from there.
+3. Turn on the features you want. If the app asks for permission, use its permission button to allow Accessibility access for TidyTap.
 
-## Permissions
+Enable "Start at login" to use your settings after signing in. There is no Intel Mac build. TidyTap targets macOS 15.1 or later; testing has been on macOS 26.5.2.
 
-If you already remapped the Caps Lock position to another key such as F19 using VIA and configured your input-source shortcut accordingly, leave TidyTap's Caps Lock feature off. This feature maps actual Caps Lock input to F18 and changes the macOS input-source shortcut to F18. It does not detect or reuse a custom binding. Mouse features remain independent.
+## A few things to know
 
-- Caps Lock input-source switching: no Accessibility or Input Monitoring permission.
-- Mouse wheel reversal and fixed step size: Accessibility.
-- Safari/Finder side-button navigation: Accessibility only.
+- Side buttons work only in the Safari or Finder window you are using.
+- Finder cut & paste does not work on the desktop, in other file managers, or through context-menu paste. If you cancel a move, press `⌘X` again.
+- If you also use an app like Scroll Reverser, turn off overlapping features in one of the apps.
+- If VIA or another tool already remaps Caps Lock, leave TidyTap's Caps Lock feature off.
+- There is no menu-bar icon. Open TidyTap from Applications to change your settings.
 
-Accessibility also permits event listening, so you do not need to add TidyTap separately to Input Monitoring. The worker still checks actual event access and event-tap creation. Missing Accessibility is reported as a permission requirement; failure to start input processing despite access is reported as an apply failure. The permission button asks the embedded helper (the process that uses the permission) through the public macOS API; returning to TidyTap refreshes the helper's current status without turning a disabled feature back on. Side-button events pass through in unsupported apps; continuous or otherwise unknown scrolling also passes through.
+## Questions
 
-## Install and run
+<details>
+<summary>Why does it need Accessibility access? Does it collect my input?</summary>
 
-Download release DMGs from [GitHub Releases](https://github.com/Sharknia/TidyTap/releases). For development, build the app locally, then open the resulting app:
+macOS requires Accessibility access to handle scrolling, side buttons, and Finder shortcuts. Caps Lock switching alone needs no permission. You do not need to add TidyTap separately to Input Monitoring.
 
-```sh
-xcodebuild -project TidyTap.xcodeproj -scheme TidyTap -configuration Debug \
-  -derivedDataPath build \
-  CODE_SIGNING_ALLOWED=NO build
-open build/Build/Products/Debug/TidyTap.app
-```
+TidyTap does not record or transmit keystrokes or mouse activity. It processes input on your Mac and keeps settings and restoration backups there too. It has no analytics or automatic update checks.
 
-The app opens as a normal Dock application with one settings window. Enabling an input feature launches the embedded background-only `TidyTapHelper`; settings changes are applied from the saved snapshot. **Start at login** registers the helper for the next login. Turning it off removes automatic startup; enabled features continue in the manually launched worker. When all input features are off, including fixed wheel step size, the helper removes its event tap and exits after restoring owned state.
+You can change the permission in System Settings → Privacy & Security → Accessibility.
 
-## Removing TidyTap / restoring state
+</details>
 
-Use this order so Caps Lock backups and the helper are safely restored:
+<details>
+<summary>Can I use other mice? Will it affect my trackpad?</summary>
 
-1. Turn off all input features and **Start at login**.
-2. Confirm that the Caps Lock backup has been restored and the helper has exited.
-3. Quit TidyTap and delete `TidyTap.app`.
+TidyTap leaves your trackpad's scroll direction alone. It does not restrict mice by brand, but behavior can vary with how a mouse reports input. Fast wheel scrolling may move farther than your chosen line count. Horizontal scrolling is unchanged.
 
-Deleting the app first is not supported for automatic restoration. TidyTap does not remove third-party utilities. Stop or disable conflicting tools such as Scroll Reverser or a personal Caps Lock LaunchAgent yourself before validation.
+Compatibility depends on how your mouse reports input. See [compatibility notes](docs/TROUBLESHOOTING.md#device-compatibility).
 
-## Development
+</details>
 
-List targets and schemes:
+<details>
+<summary>How do I update? Can I install with Homebrew?</summary>
 
-```sh
-xcodebuild -project TidyTap.xcodeproj -list
-```
+There is no automatic updater or official Homebrew installation. Stop TidyTap using the steps below, download the latest DMG, and replace the app in Applications. Reopen it and turn on your preferred features.
 
-Build without signing credentials:
+</details>
 
-```sh
-xcodebuild -project TidyTap.xcodeproj -scheme TidyTap -configuration Debug \
-  CODE_SIGNING_ALLOWED=NO build
-```
+## Stopping or uninstalling
 
-Run the app tests and the Swift package tests:
+1. Turn off all five input features and "Start at login".
+2. Wait for the app to report that changes were applied. Check that Caps Lock and language switching work as they did before, then quit with `⌘Q`.
+3. To uninstall, move TidyTap from Applications to the Trash.
 
-```sh
-xcodebuild -project TidyTap.xcodeproj -scheme TidyTap \
-  -configuration Debug CODE_SIGNING_ALLOWED=NO test
-swift test --package-path Packages/TidyTapInputEngine
-```
+**Deleting the app first will not automatically restore your settings.** If you see an error or features keep running, follow [the shutdown and restoration checks](docs/TROUBLESHOOTING.md#check-shutdown-and-restoration). There is no dedicated uninstaller.
 
-Run the process-level launch smoke after changing either app entry point:
+## Need help?
 
-```sh
-Scripts/launch-smoke.sh
-```
+Check the status message at the bottom of the app and its Accessibility permission first. If scrolling feels wrong, check whether another mouse app is adjusting it too.
 
-It builds an unsigned Release app, applies an ad-hoc signature, launches the
-main app and helper with isolated all-off preferences, verifies one settings
-window plus helper startup/exit, and checks that live input and production
-preference state did not change.
+If the [troubleshooting guide](docs/TROUBLESHOOTING.md) does not help, [report a bug](https://github.com/Sharknia/TidyTap/issues/new) with your macOS and app versions, mouse model, and steps to reproduce it. You can also email [zel@kakao.com](mailto:zel@kakao.com).
 
-To create a signed archive, copy `Config/LocalSigning.xcconfig.example` to the gitignored `Config/LocalSigning.xcconfig` and provide a real Developer ID identity. Do not commit signing values.
-
-## Privacy and limitations
-
-TidyTap makes no network requests and has no telemetry, analytics, cloud sync, updater, or key/mouse recording. Event callbacks process only the required button and scroll values in memory; they are not stored.
-
-The MVP does not provide custom mappings, profiles, horizontal-scroll reversal, speed/acceleration controls, navigation outside Safari/Finder, inactive-window navigation, a menu-bar item, an uninstaller, or automatic helper restart. Input-source list management is also out of scope. The supported removal sequence above is required.
-
-## Contact
-
-- Email: [zel@kakao.com](mailto:zel@kakao.com)
-- GitHub: [Sharknia/TidyTap](https://github.com/Sharknia/TidyTap)
-
-## License
-
-TidyTap is released under the [MIT License](LICENSE).
+Build commands, tests, and implementation details are in [Development](docs/DEVELOPMENT.md).
