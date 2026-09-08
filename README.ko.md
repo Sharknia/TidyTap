@@ -1,109 +1,84 @@
 # TidyTap
 
-[![릴리스](https://img.shields.io/github/v/release/Sharknia/TidyTap?include_prereleases&label=release)](https://github.com/Sharknia/TidyTap/releases)
-[![에셋 다운로드](https://img.shields.io/github/downloads/Sharknia/TidyTap/total?label=asset%20downloads)](https://github.com/Sharknia/TidyTap/releases)
-[![언어](https://img.shields.io/badge/languages-%ED%95%9C%EA%B5%AD%EC%96%B4%20%2F%20English-2ea44f)](README.ko.md)
-[![라이선스: MIT](https://img.shields.io/badge/license-MIT-2ea44f.svg)](LICENSE)
+맥에서 Caps Lock으로 한·영을 전환하고, 마우스 스크롤과 측면 버튼을 조절하고, Finder에서 `⌘X`로 파일을 잘라내세요. TidyTap은 필요한 기능만 골라 쓸 수 있는 무료 오픈소스 앱입니다.
 
-TidyTap은 macOS 입력 불편을 해결하는 작은 유틸리티입니다.
+**[Mac용 다운로드](https://github.com/Sharknia/TidyTap/releases/latest)** · [English](README.md)
 
-- Caps Lock을 대문자 고정 없이 두 입력 소스 전환키(F18 매핑)로 사용합니다.
-- 모든 비연속 line-based 마우스 휠 이벤트의 세로 방향을 반전하고 트랙패드 스크롤은 그대로 둡니다. 지원 대상은 VXE Mouse 1K Dongle이며, 기존 물리 검증은 장치 분류와 버튼 보고에 한정됩니다. 새 단계 크기 동작의 물리 검증을 뜻하지 않으며, 구현에 제조사 필터는 없습니다.
-- 휠 단계 크기를 방향 반전과 별도로 켜고 조절합니다(논리적 1–10줄, 기본 3줄). 기본은 꺼짐이며 꺼도 선택한 크기를 기억합니다. 비연속 단일 단계 입력에 적용하고 더 큰 입력의 크기는 보존합니다. 모든 마우스·속도에서 가속을 완전히 제거한다는 의미는 아니며, 물리 검증은 별도로 남아 있습니다.
-- 활성 Safari 또는 Finder 창에서 마우스 버튼 3/4를 뒤로/앞으로 이동키로 사용합니다.
-- Finder 파일 목록에서 `⌘X`로 잘라내고 `⌘V`로 이동합니다. 일반 `⌘C → ⌘V`는 복사입니다. 선택 항목 옆에 약 1초 동안 ‘이동 준비됨’ 또는 ‘복사 준비됨’을 표시합니다. 기본은 꺼짐이며 파일 이름 변경·검색 등 텍스트 입력에서는 원래 단축키를 유지합니다.
+Apple Silicon · macOS 15.1 이상 · 한국어·영어 · [MIT 라이선스](LICENSE)
 
-각 기능은 독립적으로 토글할 수 있습니다. 설정 창에는 **로그인할 때 시작** 옵션도 있습니다. 마우스 기능을 사용하려면 **TidyTap**에 손쉬운 사용 권한을 허용하세요. Worker는 같은 앱 내부 실행 파일이며 별도의 권한 대상이 아닙니다. TidyTap은 Dock에 표시되는 일반 앱이며, `Command-Q`로 설정 앱을 종료해도 켜진 helper는 계속 실행됩니다.
+<p align="center">
+  <img src="docs/images/settings-ko.png" alt="TidyTap 설정 화면. Caps Lock, Finder 잘라내기, 스크롤, 측면 버튼을 각각 켜고 끌 수 있습니다." width="420">
+</p>
 
-Finder 잘라내기는 0.1.3 릴리스에 포함된 기능입니다. 이동 명령을 보내면 기억을 지우므로 Finder에서 이동을 취소하거나 실패하면 다시 `⌘X`가 필요합니다. 바탕화면·다른 파일 관리자·우클릭 붙여넣기는 변환하지 않습니다. [설계](docs/FINDER_CUT_PASTE_PLAN.md)와 [검증 범위](docs/FINDER_CUT_PASTE_VALIDATION.md)를 참고하세요.
+## 어떤 기능이 있나요?
 
-## 지원 범위와 상태
+| 기능 | 사용 방법 |
+| --- | --- |
+| Caps Lock 한·영 전환 | 대문자 고정 대신 한국어·영어 등 두 입력 소스를 전환합니다. |
+| 마우스 휠 방향 반전 | 마우스의 세로 스크롤 방향만 바꿉니다. 트랙패드는 그대로입니다. |
+| 휠 이동량 조절 | 일반적인 휠 한 칸의 이동량을 1~10줄로 조절합니다. |
+| 측면 버튼 | Safari·Finder에서 뒤로·앞으로 이동합니다. |
+| Finder 잘라내기 | `⌘X`를 누르고 대상 폴더에서 `⌘V`로 파일을 이동합니다. `⌘C`는 그대로 복사입니다. |
 
-TidyTap은 macOS 15.1(Sequoia) 이상을 실행하는 Apple Silicon Mac을 지원합니다. 이번 15.1 타깃 빌드는 MacBook Pro `Mac15,6`(Apple M3 Pro)와 macOS 26.5.2(`25F84`)에서 확인했으며, macOS 15.1 실제 실행 검증은 남아 있습니다. 0.1.3 릴리스 launch-smoke와 마지막 시스템 상태 미변경 검사가 통과했습니다. 물리 검증은 스크롤 장치 분류(VXE와 내장·Magic Trackpad 구분)와 VXE 측면 버튼이 Core Graphics 버튼 3/4로 보고되는지에 한정됩니다. Caps Lock 입력 소스 백업·복원, 권한 허용·회수, 휠 및 Safari/Finder 탐색 통합 동작, helper 수명·로그인 동작, 지원 제거 순서는 아직 통합 라이브 검증이 남아 있으며 완료를 주장하지 않습니다. UI는 한국어와 영어를 지원합니다.
+> **창을 닫거나 `⌘Q`로 종료해도 켜둔 기능은 계속 작동합니다.** 완전히 멈추려면 앱에서 모든 기능을 꺼주세요. [종료·삭제 방법](#종료하거나-삭제하려면)
 
-프로젝트 버전: `0.1.3`. 공개된 버전과 서명된 다운로드 파일은 [GitHub Releases](https://github.com/Sharknia/TidyTap/releases)에서 확인하세요.
+## 설치하기
 
-[MVP 작업 계획](docs/MVP_PLAN.md)과 [English README](README.md)도 참고하세요.
+1. [최신 릴리스](https://github.com/Sharknia/TidyTap/releases/latest)의 **Assets**에서 `.dmg` 파일을 받습니다.
+2. DMG를 열어 TidyTap을 Applications(응용 프로그램)로 드래그하고, 응용 프로그램 폴더에서 실행합니다.
+3. 원하는 기능을 켭니다. 권한 안내가 나오면 앱의 권한 설정 버튼을 눌러 TidyTap의 손쉬운 사용 권한을 허용하세요.
 
-## 권한
+로그인 후에도 사용하려면 앱에서 "로그인할 때 시작"을 켜세요. Intel Mac용 빌드는 제공하지 않습니다. macOS 15.1 이상을 대상으로 만들었으며, 실제 테스트는 macOS 26.5.2에서 진행했습니다.
 
-이미 VIA 등에서 Caps Lock 위치의 키를 F19 같은 다른 키로 바꾸고 한·영 전환 단축키도 맞춰 둔 경우에는 TidyTap의 Caps Lock 기능을 꺼두세요. 이 기능은 실제 Caps Lock을 F18로 매핑하고 macOS 입력 소스 단축키를 F18로 바꿉니다. 기존 사용자 지정 키를 자동 감지하거나 재사용하지 않습니다. 마우스 기능은 독립적으로 사용할 수 있습니다.
+## 알아두면 좋은 점
 
-- Caps Lock 입력 소스 전환: 손쉬운 사용 및 입력 모니터링 권한이 필요하지 않습니다.
-- 마우스 휠 반전 및 단계 크기 고정: 손쉬운 사용 권한이 필요합니다.
-- Safari/Finder 측면 버튼: 손쉬운 사용 권한만 필요합니다.
+- 측면 버튼은 사용 중인 Safari·Finder 창에서만 작동합니다.
+- Finder 잘라내기는 바탕화면·다른 파일 관리자·우클릭 붙여넣기에서는 작동하지 않습니다. 이동을 취소했다면 다시 `⌘X`를 눌러주세요.
+- Scroll Reverser 같은 앱을 함께 쓴다면 겹치는 기능은 한쪽에서 꺼주세요.
+- VIA 등에서 Caps Lock 키를 이미 바꿨다면 TidyTap의 Caps Lock 기능은 꺼두세요.
+- 메뉴 막대 아이콘은 없습니다. 설정을 바꾸려면 응용 프로그램 폴더에서 TidyTap을 여세요.
 
-손쉬운 사용은 이벤트 수신도 허용하므로 입력 모니터링 목록에 TidyTap을 별도로 추가할 필요가 없습니다. 앱은 Worker의 실제 이벤트 접근 가능 여부와 이벤트 탭 생성 성공을 계속 확인합니다. 손쉬운 사용이 없으면 해당 권한을 안내하고, 권한이 있어도 입력 처리를 시작하지 못하면 적용 실패로 표시합니다. 권한 버튼을 누르면 실제로 권한을 사용하는 내장 helper가 macOS 공개 API로 권한을 요청하며, TidyTap으로 돌아오면 꺼진 기능을 다시 켜지 않은 채 helper의 현재 권한 상태만 갱신합니다. 지원하지 않는 앱의 측면 버튼과 연속 또는 분류할 수 없는 스크롤은 원래 입력 그대로 통과합니다.
+## 자주 묻는 질문
 
-## 설치 및 실행
+<details>
+<summary>손쉬운 사용 권한은 왜 필요한가요? 입력을 수집하나요?</summary>
 
-릴리스 DMG는 [GitHub Releases](https://github.com/Sharknia/TidyTap/releases)에서 받으세요. 개발 중에는 앱을 로컬에서 빌드한 뒤 결과물을 여세요.
+스크롤·측면 버튼·Finder 단축키를 처리하려면 macOS의 손쉬운 사용 권한이 필요합니다. Caps Lock 전환만 쓴다면 필요하지 않습니다. 입력 모니터링에 별도로 추가할 필요도 없습니다.
 
-```sh
-xcodebuild -project TidyTap.xcodeproj -scheme TidyTap -configuration Debug \
-  -derivedDataPath build \
-  CODE_SIGNING_ALLOWED=NO build
-open build/Build/Products/Debug/TidyTap.app
-```
+TidyTap은 키보드·마우스 입력을 기록하거나 전송하지 않습니다. 입력은 맥 안에서 처리하고, 설정과 복원용 백업도 맥에 보관합니다. 사용 분석이나 자동 업데이트 확인은 하지 않습니다.
 
-앱은 Dock에 표시되는 일반 macOS 앱으로 설정 창 하나를 엽니다. 입력 기능을 켜면 내장된 백그라운드 전용 `TidyTapHelper`가 실행되고 저장된 설정을 적용합니다. **로그인할 때 시작**은 다음 로그인부터 helper를 등록합니다. 이 옵션을 끄면 자동 시작을 해제하고 수동 실행한 Worker에서 켜진 기능을 계속 처리합니다. 휠 단계 크기 고정을 포함해 모든 입력 기능을 끄면 helper는 소유한 상태를 복원하고 event tap을 제거한 뒤 종료합니다.
+권한은 시스템 설정 → 개인정보 보호 및 보안 → 손쉬운 사용에서 변경할 수 있습니다.
 
-## 제거 및 복원 순서
+</details>
 
-Caps Lock 백업과 helper를 안전하게 복원하려면 반드시 다음 순서를 따르세요.
+<details>
+<summary>다른 마우스도 쓸 수 있나요? 트랙패드에는 영향이 없나요?</summary>
 
-1. 모든 입력 기능과 **로그인할 때 시작**을 끕니다.
-2. Caps Lock 백업이 복원되고 helper가 종료됐는지 확인합니다.
-3. TidyTap을 종료하고 `TidyTap.app`을 삭제합니다.
+트랙패드 스크롤 방향은 바꾸지 않습니다. 마우스는 제조사에 따라 제한하지 않지만, 입력을 전달하는 방식에 따라 동작이 다를 수 있습니다. 휠을 빠르게 돌릴 때는 설정한 줄 수와 이동량이 다를 수 있으며 가로 스크롤은 바꾸지 않습니다.
 
-앱을 먼저 삭제한 경우 자동 복원은 지원하지 않습니다. TidyTap은 타사 유틸리티를 제거하지 않습니다. 검증 전 Scroll Reverser나 개인용 Caps Lock LaunchAgent 같은 충돌 도구는 직접 종료하거나 비활성화하세요.
+마우스가 입력을 전달하는 방식에 따라 호환성이 달라집니다. [호환성 안내](docs/TROUBLESHOOTING.ko.md#기기-호환성)를 참고하세요.
 
-## 개발
+</details>
 
-대상과 scheme 확인:
+<details>
+<summary>업데이트는 어떻게 하나요? Homebrew로 설치할 수 있나요?</summary>
 
-```sh
-xcodebuild -project TidyTap.xcodeproj -list
-```
+자동 업데이트와 공식 Homebrew 설치는 지원하지 않습니다. 아래 방법으로 TidyTap을 종료한 뒤 최신 DMG를 받아 응용 프로그램 폴더의 앱을 교체하세요. 다시 실행해 원하는 기능을 켜면 됩니다.
 
-서명 자격 증명 없이 빌드:
+</details>
 
-```sh
-xcodebuild -project TidyTap.xcodeproj -scheme TidyTap -configuration Debug \
-  CODE_SIGNING_ALLOWED=NO build
-```
+## 종료하거나 삭제하려면
 
-앱 테스트와 Swift 패키지 테스트:
+1. 다섯 가지 입력 기능과 "로그인할 때 시작"을 모두 끕니다.
+2. "변경 사항이 적용되었습니다"가 표시되면 Caps Lock과 한·영 전환이 사용 전처럼 동작하는지 확인하고 `⌘Q`로 종료합니다.
+3. 삭제하려면 응용 프로그램 폴더의 TidyTap을 휴지통으로 옮깁니다.
 
-```sh
-xcodebuild -project TidyTap.xcodeproj -scheme TidyTap \
-  -configuration Debug CODE_SIGNING_ALLOWED=NO test
-swift test --package-path Packages/TidyTapInputEngine
-```
+**앱부터 삭제하면 설정이 자동으로 복원되지 않습니다.** 오류가 뜨거나 기능이 계속 작동한다면 [종료와 복원 상태 확인](docs/TROUBLESHOOTING.ko.md#종료와-복원-상태-확인)을 따라주세요. 전용 제거 프로그램은 없습니다.
 
-앱 진입점을 변경한 뒤에는 프로세스 단위 launch smoke도 실행합니다.
+## 문제가 생겼나요?
 
-```sh
-Scripts/launch-smoke.sh
-```
+앱 하단의 상태 메시지와 손쉬운 사용 권한을 먼저 확인하세요. 스크롤이 어색하면 다른 마우스 앱에서 같은 기능을 사용 중인지 확인해보세요.
 
-이 스크립트는 unsigned Release 앱을 빌드해 ad-hoc 서명하고, 격리된 all-off
-설정으로 앱과 helper를 실행합니다. 설정 창 하나, helper 시작·종료, 실제 입력
-및 운영 preferences 상태가 바뀌지 않았는지를 함께 검증합니다.
+[문제 해결 안내](docs/TROUBLESHOOTING.ko.md)로 해결되지 않으면 [버그를 제보](https://github.com/Sharknia/TidyTap/issues/new)해주세요. macOS·앱 버전, 마우스 모델과 재현 방법을 알려주시면 도움이 됩니다. 이메일: [zel@kakao.com](mailto:zel@kakao.com)
 
-서명 archive가 필요하면 `Config/LocalSigning.xcconfig.example`을 gitignore 대상인 `Config/LocalSigning.xcconfig`으로 복사하고 실제 Developer ID 정보를 입력하세요. 서명 값은 커밋하지 마세요.
-
-## 개인정보 보호와 제한사항
-
-TidyTap은 네트워크 요청을 하지 않으며 텔레메트리, 분석, 클라우드 동기화, 업데이트 확인, 키 입력·마우스 기록을 제공하지 않습니다. 이벤트 콜백은 필요한 버튼·스크롤 값만 메모리에서 즉시 처리하고 저장하지 않습니다.
-
-MVP에는 사용자 지정 매핑, 프로필, 수평 스크롤 반전, 속도·가속 조절, Safari/Finder 외 앱 탐색, 비활성 창 탐색, 메뉴 막대 항목, 별도 제거 프로그램, helper 자동 재시작이 없습니다. 입력 소스 목록 관리도 범위 밖이며, 위 제거 순서를 사용해야 합니다.
-
-## 연락처
-
-- 이메일: [zel@kakao.com](mailto:zel@kakao.com)
-- GitHub: [Sharknia/TidyTap](https://github.com/Sharknia/TidyTap)
-
-## 라이선스
-
-TidyTap은 [MIT 라이선스](LICENSE)로 배포됩니다.
+빌드·테스트·구현 상세는 [개발 문서](docs/DEVELOPMENT.ko.md)에 있습니다.
