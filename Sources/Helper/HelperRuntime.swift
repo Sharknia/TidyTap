@@ -195,7 +195,8 @@ final class HelperRuntime {
             from: NSRange(location: 0, length: bold.length),
             documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
         )
-        try store.add(.text(plain: bold.string, rtf: rtf, html: nil), copiedAt: now.addingTimeInterval(-1))
+        let html = Data("<span style=\"font-weight:700;color:#ff0000\">TidyTap G2 bold text</span>".utf8)
+        try store.add(.text(plain: bold.string, rtf: rtf, html: html), copiedAt: now.addingTimeInterval(-1))
         guard let bitmap = NSBitmapImageRep(
             bitmapDataPlanes: nil, pixelsWide: 48, pixelsHigh: 48,
             bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
