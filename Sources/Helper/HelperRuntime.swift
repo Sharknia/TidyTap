@@ -223,7 +223,10 @@ private final class SettingsProbeTerminator: TidyTapTerminating {
 
 /// Temporary, opt-in G1 probe. It uses the product input backend and never reads the pasteboard.
 private final class ClipboardProbeHotkey: @unchecked Sendable {
-    private let backend = CGEventTapBackend(clipboardShortcutHandler: ClipboardHistoryAppHost.present)
+    private let backend = CGEventTapBackend(clipboardShortcutHandler: {
+        FileHandle.standardError.write(Data("clipboard-g1: hotkey matched\n".utf8))
+        ClipboardHistoryAppHost.present()
+    })
 
     func start() -> Bool {
         do {

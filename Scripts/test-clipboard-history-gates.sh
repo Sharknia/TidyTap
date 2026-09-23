@@ -88,6 +88,11 @@ fi
 print -- "격리 Helper 준비 완료."
 /usr/bin/grep -F "$ready_marker" "$helper_log"
 
+report_hotkey_count() {
+  local count=$(/usr/bin/grep -Fc "clipboard-g1: hotkey matched" "$helper_log" || true)
+  print -- "격리 Helper의 ⌥C 수신: ${count}회"
+}
+
 if [[ "${1:-}" == "--settings-integration" || "${1:-}" == "--settings-denied" ]]; then
   env TIDYTAP_LAUNCH_SMOKE=1 TIDYTAP_LAUNCH_SMOKE_PREFERENCES_SUITE="$suite" \
     "$app_path/Contents/MacOS/TidyTap" >"$app_log" 2>&1 &
@@ -161,6 +166,7 @@ if [[ "${1:-}" == "--g2-media" ]]; then
   print -- "TextEdit 리치 텍스트 문서에서 ⌥C→Enter는 이미지, 새 줄에서 ⌥C→↓→Enter는 서식 없이, 다시 새 줄에서 ⌥C→↓→⇧Enter는 서식 포함으로 붙여넣습니다."
   print -- "붙여넣기는 현재 시스템 클립보드를 해당 시험 항목으로 바꿉니다. 시험 종료는 이 터미널에서 Enter, 또는 240초 뒤 자동 정리입니다."
   read -r -t 240 _ || true
+  report_hotkey_count
   [[ ! -s "$app_log" ]] || /bin/cat "$app_log"
   print -- "이미지·서식 실사용 시험을 종료합니다."
   exit 0
@@ -177,5 +183,6 @@ print -- "TextEdit의 빈 문서에서 ⌥C를 누르세요. 히스토리 창이
 print -- "Enter를 누르면 현재 시스템 클립보드는 시험 문구로 바뀝니다. 취소하려면 Esc를 누르세요."
 print -- "결과를 확인한 뒤 이 터미널에 Enter를 누르세요. 120초 후 자동 정리합니다."
 read -r -t 120 _ || true
+report_hotkey_count
 [[ ! -s "$app_log" ]] || /bin/cat "$app_log"
 print -- "시험을 종료합니다."
