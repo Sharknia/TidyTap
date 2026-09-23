@@ -1,4 +1,5 @@
 @preconcurrency import AppKit
+import ApplicationServices
 import Foundation
 import TidyTapInputEngine
 
@@ -78,5 +79,158 @@ final class FinderFeedbackAppHost: NSObject {
         guard isOwnedTransientHost || isAwaitedRegularApp else { return }
         awaitingApplicationPID = nil
         TidyTapIPC.postFinderFeedback(latestPayload)
+    }
+}
+
+@MainActor
+final class ClipboardHistoryAppHost: NSObject {
+    static let shared = ClipboardHistoryAppHost()
+
+    private struct PasteSession {
+        let id: UUID
+        let targetPID: pid_t
+        let focusedElement: AXUIElement?
+    }
+
+    private var pasteSession: PasteSession?
+
+    override private init() {
+        super.init()
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(pasteRequested(_:)),
+            name: TidyTapIPC.clipboardHistoryPaste,
+            object: TidyTapProduct.appBundleIdentifier,
+            suspensionBehavior: .deliverImmediately
+        )
+    }
+
+    nonisolated static func present() {
+        DispatchQueue.main.async { shared.presentOnMain() }
+    }
+
+    private func presentOnMain() {
+        guard let targetPID = NSWorkspace.shared.frontmostApplication?.processIdentifier else { return }
+        let sessionID = UUID()
+        pasteSession = PasteSession(id: sessionID, targetPID: targetPID, focusedElement: focusedElement(for: targetPID))
+        let displayID = focusedDisplayID(for: targetPID)
+        let appURL = Bundle.main.bundleURL.resolvingSymlinksInPath().standardizedFileURL
+        if NSRunningApplication.runningApplications(withBundleIdentifier: TidyTapProduct.appBundleIdentifier)
+            .contains(where: { $0.bundleURL?.resolvingSymlinksInPath().standardizedFileURL == appURL }) {
+            if TidyTapLaunchSmoke.current() != nil {
+                FileHandle.standardError.write(Data("clipboard-g1: reused exact app\n".utf8))
+            }
+            TidyTapIPC.postClipboardHistoryToggle(targetPID: targetPID, sessionID: sessionID, displayID: displayID)
+        } else {
+            let configuration = NSWorkspace.OpenConfiguration()
+            configuration.activates = false
+            configuration.addsToRecentItems = false
+            configuration.allowsRunningApplicationSubstitution = false
+            var environment = [
+                TidyTapIPC.clipboardHistoryModeEnvironmentKey: "1",
+                TidyTapIPC.clipboardTargetPIDEnvironmentKey: String(targetPID),
+                TidyTapIPC.clipboardSessionEnvironmentKey: sessionID.uuidString
+            ]
+            if let displayID {
+                environment[TidyTapIPC.clipboardDisplayIDEnvironmentKey] = String(displayID)
+            }
+            if let smoke = TidyTapLaunchSmoke.current() {
+                environment[TidyTapLaunchSmoke.enabledKey] = "1"
+                environment[TidyTapLaunchSmoke.preferencesSuiteKey] = smoke.preferencesSuite
+                if let logPath = ProcessInfo.processInfo.environment["TIDYTAP_CLIPBOARD_G1_LOG_PATH"] {
+                    environment["TIDYTAP_CLIPBOARD_G1_LOG_PATH"] = logPath
+                }
+            }
+            configuration.environment = environment
+            NSWorkspace.shared.openApplication(at: appURL, configuration: configuration) { app, error in
+                if TidyTapLaunchSmoke.current() != nil {
+                    let exact = app?.bundleURL?.resolvingSymlinksInPath().standardizedFileURL == appURL
+                    FileHandle.standardError.write(Data("clipboard-g1: launched exact app=\(exact)\n".utf8))
+                }
+                if let error {
+                    FileHandle.standardError.write(Data("clipboard-history: app launch failed \(error)\n".utf8))
+                }
+            }
+        }
+    }
+
+    @objc private func pasteRequested(_ notification: Notification) {
+        guard let request = TidyTapIPC.clipboardPasteRequest(in: notification),
+              let session = pasteSession, session.id == request.sessionID else { return }
+        pasteSession = nil
+        let error = paste(session: session, entryID: request.entryID, formatted: request.formatted)
+        TidyTapIPC.postClipboardHistoryPasteResult(sessionID: session.id, error: error)
+    }
+
+    private func focusedElement(for processID: pid_t) -> AXUIElement? {
+        var value: CFTypeRef?
+        let application = AXUIElementCreateApplication(processID)
+        guard AXUIElementCopyAttributeValue(application, kAXFocusedUIElementAttribute as CFString, &value) == .success,
+              let value, CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
+        return (value as! AXUIElement)
+    }
+
+    private func focusedDisplayID(for processID: pid_t) -> CGDirectDisplayID? {
+        var windowValue: CFTypeRef?
+        let application = AXUIElementCreateApplication(processID)
+        guard AXUIElementCopyAttributeValue(application, kAXFocusedWindowAttribute as CFString, &windowValue) == .success,
+              let windowValue, CFGetTypeID(windowValue) == AXUIElementGetTypeID() else { return nil }
+        let window = windowValue as! AXUIElement
+        var positionValue: CFTypeRef?
+        var sizeValue: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(window, kAXPositionAttribute as CFString, &positionValue) == .success,
+              AXUIElementCopyAttributeValue(window, kAXSizeAttribute as CFString, &sizeValue) == .success,
+              let positionValue, let sizeValue,
+              CFGetTypeID(positionValue) == AXValueGetTypeID(),
+              CFGetTypeID(sizeValue) == AXValueGetTypeID() else { return nil }
+        var origin = CGPoint.zero
+        var size = CGSize.zero
+        guard AXValueGetValue(positionValue as! AXValue, .cgPoint, &origin),
+              AXValueGetValue(sizeValue as! AXValue, .cgSize, &size),
+              origin.x.isFinite, origin.y.isFinite,
+              size.width.isFinite, size.height.isFinite,
+              size.width > 0, size.height > 0 else { return nil }
+        let center = CGPoint(x: origin.x + size.width / 2, y: origin.y + size.height / 2)
+        var displayID: CGDirectDisplayID = 0
+        var count: UInt32 = 0
+        guard CGGetDisplaysWithPoint(center, 1, &displayID, &count) == .success,
+              count == 1 else { return nil }
+        return displayID
+    }
+
+    private func paste(session: PasteSession, entryID: UUID, formatted: Bool) -> String? {
+        guard CGPreflightPostEventAccess(),
+              NSWorkspace.shared.frontmostApplication?.processIdentifier == session.targetPID,
+              NSRunningApplication(processIdentifier: session.targetPID)?.isTerminated == false else {
+            return "targetUnavailable"
+        }
+        guard let originalFocus = session.focusedElement,
+              let currentFocus = focusedElement(for: session.targetPID),
+              CFEqual(currentFocus, originalFocus) else { return "focusChanged" }
+        let suite = TidyTapLaunchSmoke.current()?.preferencesSuite ?? TidyTapProduct.appBundleIdentifier
+        guard let store = try? ClipboardHistoryStore(
+            directory: TidyTapProduct.clipboardHistoryDirectory(preferencesSuite: suite),
+            retention: TidyTapClipboardPolicy.retention,
+            maximumEntries: TidyTapClipboardPolicy.maximumEntries,
+            maximumBytes: TidyTapClipboardPolicy.maximumBytes,
+            maximumItemBytes: TidyTapClipboardPolicy.maximumItemBytes
+        ), let entries = try? store.entries(),
+              let entry = entries.first(where: { $0.id == entryID }) else { return "entryUnavailable" }
+        guard let source = CGEventSource(stateID: .hidSystemState),
+              let down = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: true),
+              let up = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: false) else {
+            return "eventUnavailable"
+        }
+        guard ClipboardPasteboardWriter.write(
+            entry.content,
+            style: formatted ? .formatted : .plain,
+            to: .general
+        ) else { return "pasteboardWriteFailed" }
+        for event in [down, up] {
+            event.flags = .maskCommand
+            CGEventTapBackend.markSynthetic(event)
+            event.post(tap: .cgSessionEventTap)
+        }
+        return nil
     }
 }

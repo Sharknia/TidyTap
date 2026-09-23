@@ -19,7 +19,7 @@ struct AXQueryBudget {
 }
 
 final class FinderSystemEnvironment: FinderCutPasteEnvironment, @unchecked Sendable {
-    private static let syntheticEventMarker: Int64 = 0x5449_4459_5441_50
+    static let syntheticEventMarker: Int64 = 0x5449_4459_5441_50
 
     func focusedFileListContext() -> FinderContext? {
         var budget = AXQueryBudget(startedAt: ProcessInfo.processInfo.systemUptime)

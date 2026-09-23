@@ -10,16 +10,27 @@ public struct CGInputPermissionChecker: InputPermissionChecking {
 }
 
 public final class CGEventTapBackend: EventTapBackend, @unchecked Sendable {
+    public static func markSynthetic(_ event: CGEvent) {
+        event.setIntegerValueField(.eventSourceUserData, value: FinderSystemEnvironment.syntheticEventMarker)
+    }
+
     private let lock = NSLock()
     private var handler: EventTapHandler?
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var gestureMonitor: Any?
     private var finderCutPaste: FinderCutPasteController?
+    private var clipboardShortcut: ClipboardShortcut?
+    private var clipboardKeyDown = false
     private let feedbackHandler: @Sendable (FinderFeedback) -> Void
+    private let clipboardShortcutHandler: @Sendable () -> Void
 
-    public init(feedbackHandler: @escaping @Sendable (FinderFeedback) -> Void = { _ in }) {
+    public init(
+        feedbackHandler: @escaping @Sendable (FinderFeedback) -> Void = { _ in },
+        clipboardShortcutHandler: @escaping @Sendable () -> Void = {}
+    ) {
         self.feedbackHandler = feedbackHandler
+        self.clipboardShortcutHandler = clipboardShortcutHandler
     }
 
     public func install(
@@ -40,9 +51,12 @@ public final class CGEventTapBackend: EventTapBackend, @unchecked Sendable {
             eventMask |= Self.mask(for: .otherMouseDown)
             eventMask |= Self.mask(for: .otherMouseUp)
         }
-        if configuration.finderCutPasteEnabled {
+        if configuration.finderCutPasteEnabled || configuration.clipboardShortcut != nil {
             eventMask |= Self.mask(for: .keyDown)
             eventMask |= Self.mask(for: .keyUp)
+        }
+        setClipboardShortcut(configuration.clipboardShortcut)
+        if configuration.finderCutPasteEnabled {
             finderCutPaste = FinderCutPasteController(
                 environment: FinderSystemEnvironment(),
                 feedbackHandler: feedbackHandler
@@ -103,6 +117,7 @@ public final class CGEventTapBackend: EventTapBackend, @unchecked Sendable {
         tap = nil
         finderCutPaste?.setEnabled(false)
         finderCutPaste = nil
+        setClipboardShortcut(nil)
         clearHandler()
     }
 
@@ -134,9 +149,11 @@ public final class CGEventTapBackend: EventTapBackend, @unchecked Sendable {
         switch type {
         case .tapDisabledByTimeout:
             finderCutPaste?.resetAfterTapDisable()
+            clipboardKeyDown = false
             input = .disabled(.timeout)
         case .tapDisabledByUserInput:
             finderCutPaste?.resetAfterTapDisable()
+            clipboardKeyDown = false
             input = .disabled(.userInput)
         case .scrollWheel:
             input = .scroll(Self.scrollObservation(from: event))
@@ -157,9 +174,13 @@ public final class CGEventTapBackend: EventTapBackend, @unchecked Sendable {
     }
 
     private func processKeyboard(type: CGEventType, event: CGEvent) -> Unmanaged<CGEvent>? {
-        guard !FinderSystemEnvironment.isSynthetic(event), let finderCutPaste else {
+        guard !FinderSystemEnvironment.isSynthetic(event) else {
             return Unmanaged.passUnretained(event)
         }
+        if handleClipboardShortcut(type: type, event: event) {
+            return nil
+        }
+        guard let finderCutPaste else { return Unmanaged.passUnretained(event) }
         let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
         let isDown = type == .keyDown
         let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
@@ -183,6 +204,33 @@ public final class CGEventTapBackend: EventTapBackend, @unchecked Sendable {
             event.flags.insert(.maskAlternate)
             return Unmanaged.passUnretained(event)
         }
+    }
+
+    /// Keep the matching key-up out of the target app, even if modifiers were
+    /// released before the key. Repeats are consumed without reopening the UI.
+    func setClipboardShortcut(_ shortcut: ClipboardShortcut?) {
+        clipboardShortcut = shortcut
+        clipboardKeyDown = false
+    }
+
+    func handleClipboardShortcut(type: CGEventType, event: CGEvent) -> Bool {
+        guard let clipboardShortcut else { return false }
+        let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+        guard keyCode == clipboardShortcut.keyCode else { return false }
+        if type == .keyUp, clipboardKeyDown {
+            clipboardKeyDown = false
+            return true
+        }
+        guard type == .keyDown else { return false }
+        let modifiers = event.flags.intersection([.maskControl, .maskAlternate, .maskCommand, .maskShift])
+        guard modifiers.rawValue == clipboardShortcut.modifiers else { return false }
+        if !clipboardKeyDown {
+            clipboardKeyDown = true
+            if event.getIntegerValueField(.keyboardEventAutorepeat) == 0 {
+                clipboardShortcutHandler()
+            }
+        }
+        return true
     }
 
     private static func isUnmodifiedCommand(_ flags: CGEventFlags) -> Bool {

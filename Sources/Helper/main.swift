@@ -13,6 +13,10 @@ func writeLockOwner(_ owner: TidyTapWorkerLockOwner, to descriptor: Int32) -> Bo
 // Manual launches and ServiceManagement may race. The kernel releases this
 // lock on every exit/crash, so no stale PID or distributed election is needed.
 let suite = TidyTapLaunchSmoke.current()?.preferencesSuite ?? TidyTapProduct.appBundleIdentifier
+if ProcessInfo.processInfo.environment["TIDYTAP_CLIPBOARD_G1_PROBE"] == "1",
+   TidyTapLaunchSmoke.current() == nil {
+    exit(1)
+}
 let lockURL = TidyTapProduct.workerLockURL(preferencesSuite: suite)
 let lockDirectory = lockURL.deletingLastPathComponent()
 try FileManager.default.createDirectory(at: lockDirectory, withIntermediateDirectories: true)

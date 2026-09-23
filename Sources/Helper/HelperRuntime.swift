@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import TidyTapInputEngine
 
 /// A background-only helper. It owns the process lifetime and applies the
@@ -6,18 +7,104 @@ import TidyTapInputEngine
 @MainActor
 final class HelperRuntime {
     private var lifecycle: HelperLifecycle?
+    private var clipboardProbeHotkey: ClipboardProbeHotkey?
+    private var clipboardCaptureHost: HelperClipboardCaptureHost?
     private let launchSmoke = TidyTapLaunchSmoke.current()
 
     func start(setReadiness: @escaping (TidyTapWorkerLockOwner.Readiness) -> Bool = { _ in true }) {
+        if ProcessInfo.processInfo.environment["TIDYTAP_CLIPBOARD_G1_PROBE"] == "1" {
+            guard let launchSmoke else { exit(1) }
+            do {
+                let store = try ClipboardHistoryStore(
+                    directory: TidyTapProduct.clipboardHistoryDirectory(preferencesSuite: launchSmoke.preferencesSuite),
+                    retention: TidyTapClipboardPolicy.retention,
+                    maximumEntries: TidyTapClipboardPolicy.maximumEntries,
+                    maximumBytes: TidyTapClipboardPolicy.maximumBytes,
+                    maximumItemBytes: TidyTapClipboardPolicy.maximumItemBytes
+                )
+                if try store.entries().isEmpty {
+                    if ProcessInfo.processInfo.environment["TIDYTAP_CLIPBOARD_G2_MEDIA_PROBE"] == "1" {
+                        try seedClipboardMediaProbe(in: store)
+                    } else {
+                        try store.add(.text(plain: "TidyTap G2 test text", rtf: nil, html: nil))
+                    }
+                }
+                FileHandle.standardError.write(Data("clipboard-g1: prepared entries=\(try store.entries().count)\n".utf8))
+            } catch {
+                FileHandle.standardError.write(Data("clipboard-g1: could not prepare isolated test entry\n".utf8))
+                exit(1)
+            }
+            let hotkey = ClipboardProbeHotkey()
+            guard hotkey.start() else {
+                FileHandle.standardError.write(Data("clipboard-g1: shortcut tap unavailable\n".utf8))
+                exit(1)
+            }
+            let permissions = CGInputPermissionChecker()
+            FileHandle.standardError.write(Data("clipboard-g1: shortcut tap active post=\(permissions.accessibilityAllowed) listen=\(permissions.inputMonitoringAllowed) axTrusted=\(AXIsProcessTrusted())\n".utf8))
+            clipboardProbeHotkey = hotkey
+            return
+        }
+        if ProcessInfo.processInfo.environment["TIDYTAP_CLIPBOARD_G3_PROBE"] == "1" {
+            guard let launchSmoke else { exit(1) }
+            let directory = TidyTapProduct.clipboardHistoryDirectory(preferencesSuite: launchSmoke.preferencesSuite)
+            do {
+                let store = try ClipboardHistoryStore(
+                    directory: directory,
+                    retention: TidyTapClipboardPolicy.retention,
+                    maximumEntries: TidyTapClipboardPolicy.maximumEntries,
+                    maximumBytes: TidyTapClipboardPolicy.maximumBytes,
+                    maximumItemBytes: TidyTapClipboardPolicy.maximumItemBytes
+                )
+                FileHandle.standardError.write(Data("clipboard-g3: existing entries=\(try store.entries().count)\n".utf8))
+                if #available(macOS 26.0, *) {
+                    FileHandle.standardError.write(Data("clipboard-g3: access before=\(NSPasteboard.general.accessBehavior)\n".utf8))
+                }
+                var capturedCount = 0
+                let host = HelperClipboardCaptureHost(directory: directory, onCaptured: {
+                    capturedCount += 1
+                    guard let entry = try? store.entries().first else { return }
+                    let summary: String
+                    switch entry.content {
+                    case .text(let plain, let rtf, let html):
+                        summary = "text bytes=\(plain.utf8.count) rtf=\(rtf != nil) html=\(html != nil)"
+                    case .image(let data, let type):
+                        summary = "image type=\(type.rawValue) bytes=\(data.count)"
+                    }
+                    FileHandle.standardError.write(Data("clipboard-g3: captured #\(capturedCount) \(summary)\n".utf8))
+                })
+                host.onFailure = { code in
+                    FileHandle.standardError.write(Data("clipboard-g3: stopped reason=\(code)\n".utf8))
+                }
+                try host.apply(enabled: true)
+                clipboardCaptureHost = host
+                let hotkey = ClipboardProbeHotkey()
+                guard hotkey.start() else {
+                    host.stop()
+                    FileHandle.standardError.write(Data("clipboard-g3: shortcut tap unavailable\n".utf8))
+                    exit(1)
+                }
+                clipboardProbeHotkey = hotkey
+                if #available(macOS 26.0, *) {
+                    FileHandle.standardError.write(Data("clipboard-g3: access after=\(NSPasteboard.general.accessBehavior)\n".utf8))
+                }
+                FileHandle.standardError.write(Data("clipboard-g3: monitor active\n".utf8))
+            } catch {
+                FileHandle.standardError.write(Data("clipboard-g3: monitor unavailable reason=\(error)\n".utf8))
+                exit(1)
+            }
+            return
+        }
         let preferences: TidyTapPreferencesStore
         let capsFeature: TidyTapCapsFeatureApplying
         let inputFeatures: TidyTapInputFeaturesApplying
         let menuBar: TidyTapMenuBarApplying
+        let settingsProbe = launchSmoke != nil &&
+            ProcessInfo.processInfo.environment["TIDYTAP_CLIPBOARD_SETTINGS_PROBE"] == "1"
 
         if let launchSmoke {
             preferences = TidyTapPreferencesStore(defaults: launchSmoke.makePreferences())
             capsFeature = LaunchSmokeCapsFeature(smoke: launchSmoke)
-            inputFeatures = LaunchSmokeInputFeatures(smoke: launchSmoke)
+            inputFeatures = settingsProbe ? InputFeaturesAdapter() : LaunchSmokeInputFeatures(smoke: launchSmoke)
             menuBar = LaunchSmokeMenuBar(smoke: launchSmoke)
         } else {
             preferences = TidyTapPreferencesStore()
@@ -29,13 +116,32 @@ final class HelperRuntime {
             menuBar = MenuBarController()
         }
 
+        let deniedReadState: (() -> HelperClipboardCaptureHost.ReadState)? =
+            settingsProbe && ProcessInfo.processInfo.environment["TIDYTAP_CLIPBOARD_SETTINGS_PROBE_DENY"] == "1"
+                ? { .denied } : nil
+        let captureHost: HelperClipboardCaptureHost? = launchSmoke == nil || settingsProbe
+            ? HelperClipboardCaptureHost(
+                directory: TidyTapProduct.clipboardHistoryDirectory(
+                    preferencesSuite: launchSmoke?.preferencesSuite ?? TidyTapProduct.appBundleIdentifier
+                ),
+                onCaptured: TidyTapIPC.postClipboardHistoryChanged,
+                readState: deniedReadState
+            )
+            : nil
         let coordinator = ApplyCoordinator(
             preferences: preferences,
             capsFeature: capsFeature,
             inputFeatures: inputFeatures,
             menuBar: menuBar,
-            terminator: ApplicationTerminator(setReadiness: setReadiness)
+            terminator: settingsProbe ? SettingsProbeTerminator() : ApplicationTerminator(setReadiness: setReadiness),
+            clipboardPreflight: { enabled in
+                _ = try captureHost?.prepare(enabled: enabled)
+            }
         )
+        captureHost?.onFailure = { [weak coordinator] code in
+            coordinator?.reportClipboardCaptureFailure(code: code)
+        }
+        clipboardCaptureHost = captureHost
         if let productionInputFeatures = inputFeatures as? InputFeaturesAdapter {
             productionInputFeatures.runtimeStatusHandler = { [weak coordinator] requestID, result, error in
                 DispatchQueue.main.async {
@@ -45,7 +151,27 @@ final class HelperRuntime {
         }
         let lifecycle = HelperLifecycle(
             coordinator: coordinator,
-            permissionCoordinator: HelperPermissionCoordinator(preferences: preferences)
+            permissionCoordinator: HelperPermissionCoordinator(preferences: preferences),
+            afterApply: { [weak captureHost, weak coordinator] status in
+                guard let captureHost else { return }
+                do {
+                    try captureHost.apply(enabled: status.effectiveSettings?.clipboardHistoryEnabled == true)
+                } catch {
+                    captureHost.stop()
+                    let code: String
+                    if let access = error as? ClipboardCaptureService.CaptureError {
+                        switch access {
+                        case .readDenied: code = "clipboardHistory.readDenied"
+                        case .continuousAccessRequired: code = "clipboardHistory.continuousAccessRequired"
+                        }
+                    } else {
+                        code = "clipboardHistory.storageFailed"
+                    }
+                    coordinator?.reportClipboardCaptureFailure(
+                        code: code
+                    )
+                }
+            }
         )
         self.lifecycle = lifecycle
         lifecycle.start()
@@ -53,7 +179,73 @@ final class HelperRuntime {
     }
 
     func stop() {
+        clipboardProbeHotkey?.stop()
+        clipboardCaptureHost?.stop()
         lifecycle?.stop()
+    }
+
+    private func seedClipboardMediaProbe(in store: ClipboardHistoryStore) throws {
+        let now = Date()
+        try store.add(.text(plain: "TidyTap G2 plain text", rtf: nil, html: nil), copiedAt: now.addingTimeInterval(-2))
+        let bold = NSAttributedString(
+            string: "TidyTap G2 bold text",
+            attributes: [.font: NSFont.boldSystemFont(ofSize: 22), .foregroundColor: NSColor.systemRed]
+        )
+        let rtf = try bold.data(
+            from: NSRange(location: 0, length: bold.length),
+            documentAttributes: [.documentType: NSAttributedString.DocumentType.rtf]
+        )
+        try store.add(.text(plain: bold.string, rtf: rtf, html: nil), copiedAt: now.addingTimeInterval(-1))
+        guard let bitmap = NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: 48, pixelsHigh: 48,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+            isPlanar: false, colorSpaceName: .deviceRGB,
+            bytesPerRow: 0, bitsPerPixel: 0
+        ) else { throw ClipboardHistoryStore.StoreError.invalidPolicy }
+        for x in 0..<48 {
+            for y in 0..<48 {
+                bitmap.setColor(x < 24 ? .systemOrange : .systemBlue, atX: x, y: y)
+            }
+        }
+        guard let png = bitmap.representation(using: .png, properties: [:]) else {
+            throw ClipboardHistoryStore.StoreError.invalidPolicy
+        }
+        try store.add(.image(data: png, type: .png), copiedAt: now)
+    }
+}
+
+@MainActor
+private final class SettingsProbeTerminator: TidyTapTerminating {
+    func terminate() {}
+}
+
+/// Temporary, opt-in G1 probe. It uses the product input backend and never reads the pasteboard.
+private final class ClipboardProbeHotkey: @unchecked Sendable {
+    private let backend = CGEventTapBackend(clipboardShortcutHandler: ClipboardHistoryAppHost.present)
+
+    func start() -> Bool {
+        do {
+            try backend.install(
+                configuration: .init(
+                    reverseMouseScroll: false,
+                    sideButtonNavigation: false,
+                    clipboardShortcut: .init(keyCode: 8, modifiers: CGEventFlags.maskAlternate.rawValue)
+                ),
+                captureSideButtons: false,
+                handler: { _ in .passThrough }
+            )
+            return true
+        } catch {
+            let permissions = CGInputPermissionChecker()
+            FileHandle.standardError.write(Data(
+                "clipboard-g1: tap unavailable post=\(permissions.accessibilityAllowed) listen=\(permissions.inputMonitoringAllowed) error=\(error)\n".utf8
+            ))
+            return false
+        }
+    }
+
+    func stop() {
+        backend.uninstall()
     }
 }
 
@@ -88,6 +280,7 @@ private final class LaunchSmokeInputFeatures: TidyTapInputFeaturesApplying {
         sideButtonNavigation: Bool,
         fixedMouseWheelStepEnabled: Bool,
         finderCutPasteEnabled: Bool,
+        clipboardShortcut: TidyTapClipboardShortcut?,
         mouseWheelStepLines: Int,
         requestID: UUID
     ) throws -> TidyTapInputFeatureApplyResult {
@@ -96,6 +289,7 @@ private final class LaunchSmokeInputFeatures: TidyTapInputFeaturesApplying {
             sideButtonNavigation: sideButtonNavigation,
             fixedMouseWheelStepEnabled: fixedMouseWheelStepEnabled,
             finderCutPasteEnabled: finderCutPasteEnabled,
+            clipboardShortcut: clipboardShortcut,
             mouseWheelStepLines: mouseWheelStepLines
         )
         smoke.report(
@@ -113,6 +307,7 @@ private final class LaunchSmokeInputFeatures: TidyTapInputFeaturesApplying {
             sideButtonNavigation: false,
             fixedMouseWheelStepEnabled: false,
             finderCutPasteEnabled: false,
+            clipboardShortcut: nil,
             mouseWheelStepLines: configuration.mouseWheelStepLines
         )
     }

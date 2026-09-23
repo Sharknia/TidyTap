@@ -2,7 +2,8 @@ import AppKit
 
 let application = NSApplication.shared
 let initialFinderFeedback = TidyTapIPC.finderFeedback(in: ProcessInfo.processInfo.environment)
-if initialFinderFeedback != nil {
+if initialFinderFeedback != nil ||
+    ProcessInfo.processInfo.environment[TidyTapIPC.clipboardHistoryModeEnvironmentKey] == "1" {
     application.setActivationPolicy(.accessory)
 }
 let applicationDelegate = AppDelegate(

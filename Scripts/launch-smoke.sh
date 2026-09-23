@@ -12,6 +12,9 @@ main_log="$smoke_root/main.log"
 helper_log="$smoke_root/helper.log"
 main_suite="com.sharknia.TidyTap.LaunchSmoke.Main.$$.${RANDOM}"
 helper_suite="com.sharknia.TidyTap.LaunchSmoke.Helper.$$.${RANDOM}"
+main_history_dir="$HOME/Library/Application Support/$main_suite/clipboard-history"
+expired_history_entry="$main_history_dir/expired.clip"
+recent_history_entry="$main_history_dir/recent.clip"
 settings_content_width=560
 settings_content_height=760
 main_pid=""
@@ -28,7 +31,7 @@ cleanup() {
   fi
   /usr/bin/defaults delete "$main_suite" >/dev/null 2>&1 || true
   /usr/bin/defaults delete "$helper_suite" >/dev/null 2>&1 || true
-  rm -rf "$HOME/Library/Application Support/$helper_suite"
+  rm -rf "$HOME/Library/Application Support/$main_suite" "$HOME/Library/Application Support/$helper_suite"
   rm -rf "$smoke_root"
 }
 trap cleanup EXIT
@@ -100,6 +103,33 @@ fi
 
 xcrun swiftc Scripts/verify-process-window.swift -o "$smoke_root/verify-process-window"
 
+# The settings app should prune expired history even when the feature is off.
+# Keep one valid recent item so this check cannot pass by deleting everything.
+/usr/bin/python3 - "$main_history_dir" <<'PY'
+import datetime
+import os
+import pathlib
+import plistlib
+import sys
+
+directory = pathlib.Path(sys.argv[1])
+directory.mkdir(parents=True, mode=0o700, exist_ok=True)
+directory.chmod(0o700)
+for name, copied_at in [
+    ("expired.clip", datetime.datetime(1970, 1, 2, 3, 46, 40)),
+    ("recent.clip", datetime.datetime.utcnow()),
+]:
+    entry = {
+        "id": "00000000-0000-0000-0000-000000000001" if name == "expired.clip"
+            else "00000000-0000-0000-0000-000000000002",
+        "copiedAt": copied_at,
+        "content": {"text": {"plain": name}},
+    }
+    path = directory / name
+    path.write_bytes(plistlib.dumps(entry, fmt=plistlib.FMT_BINARY))
+    path.chmod(0o600)
+PY
+
 env \
   TIDYTAP_LAUNCH_SMOKE=1 \
   TIDYTAP_LAUNCH_SMOKE_PREFERENCES_SUITE="$main_suite" \
@@ -107,7 +137,25 @@ env \
 main_pid=$!
 
 wait_for_log "$main_pid" "$main_log" "TIDYTAP_LAUNCH_SMOKE main-delegate-started"
-"$smoke_root/verify-process-window" "$main_pid" "$settings_content_width" "$settings_content_height"
+if [[ -e "$expired_history_entry" || ! -e "$recent_history_entry" ]]; then
+  print -u2 -- "Settings startup did not prune only expired clipboard history."
+  exit 1
+fi
+window_verified=0
+for attempt in {1..20}; do
+  if "$smoke_root/verify-process-window" "$main_pid" "$settings_content_width" "$settings_content_height" \
+      >"$smoke_root/window-check.log" 2>&1; then
+    window_verified=1
+    break
+  fi
+  sleep 0.1
+done
+cat "$smoke_root/window-check.log"
+if (( window_verified == 0 )); then
+  tail -10 "$main_log" >&2
+  print -u2 -- "Settings window did not settle at its requested size."
+  exit 1
+fi
 /usr/bin/grep -Fq "TIDYTAP_LAUNCH_SMOKE main-helper-launch-skipped" "$main_log"
 /usr/bin/grep -Fq "TIDYTAP_LAUNCH_SMOKE main-login-item-mutation-skipped" "$main_log"
 
@@ -263,4 +311,4 @@ if [[ "$live_state_before" != "$live_state_after" ]]; then
   exit 1
 fi
 
-print -- "Launch smoke passed: settings window, all-off exit, duplicate-worker exclusion, restart after exit, fixed-step-only lifecycle, and no live state mutation."
+print -- "Launch smoke passed: settings window, expired clipboard pruning, all-off exit, duplicate-worker exclusion, restart after exit, fixed-step-only lifecycle, and no live state mutation."

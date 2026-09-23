@@ -18,6 +18,20 @@ enum TidyTapProduct {
             .appendingPathComponent(preferencesSuite, isDirectory: true)
             .appendingPathComponent("worker.lock")
     }
+
+    static func clipboardHistoryDirectory(preferencesSuite: String = appBundleIdentifier) -> URL {
+        workerLockURL(preferencesSuite: preferencesSuite)
+            .deletingLastPathComponent()
+            .appendingPathComponent("clipboard-history", isDirectory: true)
+    }
+}
+
+/// Confirmed local retention and size bounds. Deletion controls are decided separately.
+enum TidyTapClipboardPolicy {
+    static let retention: TimeInterval = 7 * 24 * 60 * 60
+    static let maximumEntries = 100
+    static let maximumBytes = 50 * 1024 * 1024
+    static let maximumItemBytes = 10 * 1024 * 1024
 }
 
 /// Written only after the worker owns `worker.lock`. A launcher must still

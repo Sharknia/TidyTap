@@ -1,3 +1,5 @@
+import AppKit
+import CoreGraphics
 import XCTest
 import TidyTapInputEngine
 import ServiceManagement
@@ -67,6 +69,26 @@ final class TidyTapSettingsTests: XCTestCase {
         ))
     }
 
+    func testClipboardHistoryEffectiveOffIgnoresStaleApplyStatus() {
+        var enabled = TidyTapSettings.defaults
+        enabled.clipboardHistoryEnabled = true
+        enabled.clipboardHistoryShortcut = .init(keyCode: 8, modifiers: CGEventFlags.maskAlternate.rawValue)
+        let requestID = UUID()
+        var disabled = enabled
+        disabled.clipboardHistoryEnabled = false
+
+        XCTAssertFalse(enabled.clipboardHistoryIsEffectivelyOff(requestID: requestID, status: nil))
+        XCTAssertFalse(enabled.clipboardHistoryIsEffectivelyOff(
+            requestID: requestID,
+            status: .applied(UUID(), effectiveSettings: disabled)
+        ))
+        XCTAssertTrue(enabled.clipboardHistoryIsEffectivelyOff(
+            requestID: requestID,
+            status: .applied(requestID, effectiveSettings: disabled)
+        ))
+        XCTAssertTrue(disabled.clipboardHistoryIsEffectivelyOff(requestID: requestID, status: nil))
+    }
+
     func testBundleIdentifiersUseTheTidyTapNamespace() {
         XCTAssertEqual(TidyTapProduct.appBundleIdentifier, "com.sharknia.TidyTap")
         XCTAssertEqual(TidyTapProduct.helperBundleIdentifier, "com.sharknia.TidyTap.Helper")
@@ -93,6 +115,51 @@ final class TidyTapSettingsTests: XCTestCase {
             TidyTapIPC.finderFeedbackModeEnvironmentKey: "1",
             TidyTapIPC.finderFeedbackKindEnvironmentKey: "copyReady"
         ]))
+    }
+
+    func testClipboardWindowRequestCarriesProcessIDSessionAndDisplayWithoutContents() {
+        let sessionID = UUID()
+        let notification = Notification(
+            name: TidyTapIPC.clipboardHistoryToggle,
+            object: TidyTapProduct.appBundleIdentifier,
+            userInfo: [
+                TidyTapIPC.clipboardTargetPIDUserInfoKey: Int32(1234),
+                TidyTapIPC.clipboardSessionUserInfoKey: sessionID.uuidString,
+                TidyTapIPC.clipboardDisplayIDUserInfoKey: UInt32(5)
+            ]
+        )
+        XCTAssertEqual(TidyTapIPC.clipboardTargetPID(in: notification), 1234)
+        XCTAssertEqual(TidyTapIPC.clipboardSessionID(in: notification), sessionID)
+        XCTAssertEqual(TidyTapIPC.clipboardDisplayID(in: notification), 5)
+        XCTAssertEqual(TidyTapIPC.clipboardTargetPID(in: [
+            TidyTapIPC.clipboardTargetPIDEnvironmentKey: "1234"
+        ]), 1234)
+        XCTAssertEqual(TidyTapIPC.clipboardSessionID(in: [
+            TidyTapIPC.clipboardSessionEnvironmentKey: sessionID.uuidString
+        ]), sessionID)
+        XCTAssertEqual(TidyTapIPC.clipboardDisplayID(in: [
+            TidyTapIPC.clipboardDisplayIDEnvironmentKey: "5"
+        ]), 5)
+        XCTAssertNil(TidyTapIPC.clipboardTargetPID(in: [:]))
+        XCTAssertEqual(notification.userInfo?.count, 3, "clipboard contents stay outside distributed notifications")
+    }
+
+    func testClipboardPasteRequestCarriesOnlyEntryIDAndStyle() throws {
+        let sessionID = UUID()
+        let entryID = UUID()
+        let request = Notification(
+            name: TidyTapIPC.clipboardHistoryPaste,
+            userInfo: [
+                TidyTapIPC.clipboardSessionUserInfoKey: sessionID.uuidString,
+                TidyTapIPC.clipboardEntryUserInfoKey: entryID.uuidString,
+                TidyTapIPC.clipboardFormattedUserInfoKey: true
+            ]
+        )
+        let decoded = try XCTUnwrap(TidyTapIPC.clipboardPasteRequest(in: request))
+        XCTAssertEqual(decoded.sessionID, sessionID)
+        XCTAssertEqual(decoded.entryID, entryID)
+        XCTAssertTrue(decoded.formatted)
+        XCTAssertEqual(request.userInfo?.count, 3, "clipboard contents stay outside distributed notifications")
     }
 
     func testPermissionSettingsURLsTargetTheirExactPrivacyPanes() {
@@ -192,6 +259,137 @@ final class TidyTapSettingsTests: XCTestCase {
         {"capsLockInputSourceSwitching":false,"reverseMouseWheelVertically":false,"sideButtonNavigation":false,"launchAtLogin":false,"fixedMouseWheelStepEnabled":true,"mouseWheelStepLines":7}
         """.utf8)
         XCTAssertFalse(try JSONDecoder().decode(TidyTapSettings.self, from: legacy).finderCutPasteEnabled)
+    }
+
+    func testClipboardHistorySettingsMigrateAndKeepHelperAliveOnlyWhenEnabled() throws {
+        let legacy = Data("""
+        {"capsLockInputSourceSwitching":false,"reverseMouseWheelVertically":false,"sideButtonNavigation":false,"launchAtLogin":false}
+        """.utf8)
+        let restored = try JSONDecoder().decode(TidyTapSettings.self, from: legacy)
+        XCTAssertFalse(restored.clipboardHistoryEnabled)
+        XCTAssertNil(restored.clipboardHistoryShortcut)
+        XCTAssertFalse(restored.pasteFormattedTextByDefault)
+        XCTAssertFalse(restored.requiresHelper)
+
+        var settings = restored
+        settings.clipboardHistoryShortcut = .init(keyCode: 8, modifiers: CGEventFlags.maskAlternate.rawValue)
+        XCTAssertFalse(settings.requiresHelper)
+        settings.clipboardHistoryEnabled = true
+        settings.pasteFormattedTextByDefault = true
+        XCTAssertTrue(settings.requiresHelper)
+        XCTAssertEqual(try JSONDecoder().decode(TidyTapSettings.self, from: JSONEncoder().encode(settings)), settings)
+        XCTAssertEqual(
+            TidyTapFeaturePermissionState(
+                accessibility: .authorized,
+                inputMonitoring: .authorized
+            ).requiredPermissions(for: .clipboardHistory),
+            [.accessibility, .inputMonitoring]
+        )
+    }
+
+    func testHelperClipboardCaptureUsesAnIsolatedDirectoryOnlyWhileEnabled() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("tidytap-helper-capture-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let board = NSPasteboard.withUniqueName()
+        defer { board.releaseGlobally() }
+        let host = HelperClipboardCaptureHost(directory: directory, pasteboard: board)
+
+        try host.apply(enabled: true)
+        board.clearContents()
+        XCTAssertTrue(board.setString("A", forType: .string))
+        host.captureLatestIfChanged()
+        let store = try ClipboardHistoryStore(
+            directory: directory,
+            retention: TidyTapClipboardPolicy.retention,
+            maximumEntries: TidyTapClipboardPolicy.maximumEntries,
+            maximumBytes: TidyTapClipboardPolicy.maximumBytes,
+            maximumItemBytes: TidyTapClipboardPolicy.maximumItemBytes
+        )
+        XCTAssertEqual(try store.entries().map(\.content), [.text(plain: "A", rtf: nil, html: nil)])
+
+        try host.apply(enabled: false)
+        board.clearContents()
+        XCTAssertTrue(board.setString("B", forType: .string))
+        host.captureLatestIfChanged()
+        XCTAssertEqual(try store.entries().count, 1)
+    }
+
+    func testClipboardAccessProbeRunsOnceAndAskModeNeverStartsPassiveCapture() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("tidytap-access-probe-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let board = NSPasteboard.withUniqueName()
+        defer { board.releaseGlobally() }
+        var state = HelperClipboardCaptureHost.ReadState.unspecified
+        var probes = 0
+        let host = HelperClipboardCaptureHost(
+            directory: directory,
+            pasteboard: board,
+            readState: { state },
+            probeRead: { probes += 1; state = .ask }
+        )
+        XCTAssertThrowsError(try host.prepare(enabled: true)) { error in
+            guard case ClipboardCaptureService.CaptureError.continuousAccessRequired = error else {
+                return XCTFail("unexpected access state: \(error)")
+            }
+        }
+        XCTAssertEqual(probes, 1)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
+        XCTAssertThrowsError(try host.prepare(enabled: true))
+        XCTAssertEqual(probes, 1, "ask mode cannot trigger a second background access prompt")
+
+        state = .allowed
+        XCTAssertNoThrow(try host.prepare(enabled: true))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: directory.path))
+    }
+
+    func testUnspecifiedClipboardPrivacyWithoutPromptStillStartsAfterOneProbe() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("tidytap-access-default-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let board = NSPasteboard.withUniqueName()
+        defer { board.releaseGlobally() }
+        var probes = 0
+        let host = HelperClipboardCaptureHost(
+            directory: directory,
+            pasteboard: board,
+            readState: { .unspecified },
+            probeRead: { probes += 1 }
+        )
+        XCTAssertNoThrow(try host.prepare(enabled: true))
+        XCTAssertNoThrow(try host.prepare(enabled: true))
+        XCTAssertEqual(probes, 1)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: directory.path))
+    }
+
+    func testClipboardPermissionRevocationStopsCaptureEvenWithoutANewCopy() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("tidytap-revoked-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let board = NSPasteboard.withUniqueName()
+        defer { board.releaseGlobally() }
+        var state = HelperClipboardCaptureHost.ReadState.allowed
+        var failures = [String]()
+        let host = HelperClipboardCaptureHost(
+            directory: directory,
+            pasteboard: board,
+            readState: { state }
+        )
+        host.onFailure = { failures.append($0) }
+        try host.apply(enabled: true)
+        state = .denied
+        host.captureLatestIfChanged()
+        XCTAssertEqual(failures, ["clipboardHistory.readDenied"])
+
+        state = .allowed
+        board.clearContents()
+        XCTAssertTrue(board.setString("not collected without a new enable", forType: .string))
+        host.captureLatestIfChanged()
+        let store = try ClipboardHistoryStore(
+            directory: directory,
+            retention: TidyTapClipboardPolicy.retention,
+            maximumEntries: TidyTapClipboardPolicy.maximumEntries,
+            maximumBytes: TidyTapClipboardPolicy.maximumBytes,
+            maximumItemBytes: TidyTapClipboardPolicy.maximumItemBytes
+        )
+        XCTAssertTrue(try store.entries().isEmpty)
     }
 
     func testWheelStepSettingsUseDefaultsAndNormalizeTheSupportedRange() {
@@ -306,6 +504,108 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(status.applyRequestID, requestID)
         XCTAssertEqual(store.status, status)
         XCTAssertEqual(calls.values, ["caps:true", "input:true:false", "input:false:false", "caps:false"])
+    }
+
+    func testClipboardShortcutAppliesAndInvalidReplacementKeepsThePriorTap() {
+        let shortcut = TidyTapClipboardShortcut(
+            keyCode: 8, modifiers: CGEventFlags.maskAlternate.rawValue, displayKey: "C"
+        )
+        var settings = TidyTapSettings.defaults
+        settings.clipboardHistoryEnabled = true
+        settings.clipboardHistoryShortcut = shortcut
+        let store = InMemoryPreferences(request: .init(settings: settings, applyRequestID: UUID()))
+        let calls = CallLog()
+        let input = RecordingInput(calls: calls)
+        input.dropsClipboardDisplayKey = true
+        let coordinator = ApplyCoordinator(
+            preferences: store,
+            capsFeature: RecordingCaps(calls: calls),
+            inputFeatures: input,
+            menuBar: RecordingMenu(calls: calls),
+            terminator: RecordingTerminator(calls: calls)
+        )
+
+        let applied = coordinator.applyLatestSettings()
+        XCTAssertEqual(applied.outcome, .applied)
+        XCTAssertEqual(applied.effectiveSettings?.clipboardHistoryShortcut, shortcut)
+        XCTAssertEqual(store.request.settings.clipboardHistoryShortcut, shortcut)
+        XCTAssertEqual(input.currentConfiguration().clipboardShortcut?.displayKey, nil)
+        coordinator.reportRuntimeInput(requestID: store.request.applyRequestID, .applied, error: nil)
+        XCTAssertEqual(store.status?.effectiveSettings?.clipboardHistoryShortcut, shortcut)
+
+        settings.clipboardHistoryShortcut = .init(keyCode: 8, modifiers: CGEventFlags.maskShift.rawValue)
+        store.request = .init(settings: settings, applyRequestID: UUID())
+        let rejected = coordinator.applyLatestSettings()
+        XCTAssertEqual(rejected.outcome, .failed)
+        XCTAssertEqual(rejected.errorCode, "eventTap.invalidClipboardShortcut")
+        XCTAssertEqual(input.currentConfiguration().clipboardShortcut?.keyCode, shortcut.keyCode)
+        XCTAssertEqual(rejected.effectiveSettings?.clipboardHistoryShortcut, shortcut)
+    }
+
+    func testShortcutDisplayUsesPhysicalLetterWhileKoreanInputIsActive() {
+        let recorded = TidyTapClipboardShortcut(
+            keyCode: 8, modifiers: CGEventFlags.maskAlternate.rawValue, displayKey: "ㅊ"
+        )
+        XCTAssertEqual(recorded.displayName, "C")
+        XCTAssertEqual(
+            TidyTapClipboardShortcut(keyCode: 8, modifiers: recorded.modifiers).displayName,
+            "C"
+        )
+        XCTAssertEqual(
+            TidyTapClipboardShortcut(keyCode: 8, modifiers: recorded.modifiers)
+                .preservingDisplayKey(from: recorded),
+            recorded
+        )
+    }
+
+    func testClipboardStorageFailureTurnsOffTheShortcutAndReportsTheReason() {
+        var settings = TidyTapSettings.defaults
+        settings.clipboardHistoryEnabled = true
+        settings.clipboardHistoryShortcut = .init(keyCode: 8, modifiers: CGEventFlags.maskAlternate.rawValue)
+        let requestID = UUID()
+        let store = InMemoryPreferences(request: .init(settings: settings, applyRequestID: requestID))
+        let calls = CallLog()
+        let input = RecordingInput(calls: calls)
+        let coordinator = ApplyCoordinator(
+            preferences: store,
+            capsFeature: RecordingCaps(calls: calls),
+            inputFeatures: input,
+            menuBar: RecordingMenu(calls: calls),
+            terminator: RecordingTerminator(calls: calls)
+        )
+        XCTAssertEqual(coordinator.applyLatestSettings().outcome, .applied)
+
+        coordinator.reportClipboardCaptureFailure(code: "clipboardHistory.storageFailed")
+
+        XCTAssertFalse(store.request.settings.clipboardHistoryEnabled)
+        XCTAssertNil(input.currentConfiguration().clipboardShortcut)
+        XCTAssertEqual(store.status?.outcome, .failed)
+        XCTAssertEqual(store.status?.errorCode, "clipboardHistory.storageFailed")
+        XCTAssertFalse(store.status?.effectiveSettings?.clipboardHistoryEnabled ?? true)
+    }
+
+    func testClipboardReadDenialFailsBeforeAnyInputFeatureIsApplied() {
+        var settings = TidyTapSettings.defaults
+        settings.clipboardHistoryEnabled = true
+        settings.clipboardHistoryShortcut = .init(keyCode: 8, modifiers: CGEventFlags.maskAlternate.rawValue)
+        let store = InMemoryPreferences(request: .init(settings: settings, applyRequestID: UUID()))
+        let calls = CallLog()
+        let input = RecordingInput(calls: calls)
+        let coordinator = ApplyCoordinator(
+            preferences: store,
+            capsFeature: RecordingCaps(calls: calls),
+            inputFeatures: input,
+            menuBar: RecordingMenu(calls: calls),
+            terminator: RecordingTerminator(calls: calls),
+            clipboardPreflight: { _ in throw ClipboardCaptureService.CaptureError.readDenied }
+        )
+
+        let result = coordinator.applyLatestSettings()
+        XCTAssertEqual(result.outcome, .failed)
+        XCTAssertEqual(result.errorCode, "clipboardHistory.readDenied")
+        XCTAssertFalse(store.request.settings.clipboardHistoryEnabled)
+        XCTAssertNil(input.currentConfiguration().clipboardShortcut)
+        XCTAssertTrue(calls.values.isEmpty)
     }
 
     func testFirstApplyCapsFailurePreservesPersistedWheelStepBeforeInputIsTouched() {
@@ -1173,6 +1473,29 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(coordinator.settingsForUI(), requested)
     }
 
+    func testOldHelperCannotClaimClipboardHistoryWasApplied() throws {
+        let requestID = UUID()
+        var requested = TidyTapSettings.defaults
+        requested.clipboardHistoryEnabled = true
+        requested.clipboardHistoryShortcut = .init(keyCode: 8, modifiers: CGEventFlags.maskAlternate.rawValue)
+        let store = InMemoryPreferences(request: .init(settings: requested, applyRequestID: requestID))
+        store.status = .applied(requestID, effectiveSettings: .defaults)
+        let coordinator = SettingsCoordinator(
+            preferences: store,
+            helperLauncher: RecordingHelperLauncher(),
+            loginItemManager: StatefulLoginItem(status: .disabled)
+        )
+
+        let result = try XCTUnwrap(coordinator.receiveApplyResult())
+        XCTAssertEqual(result.outcome, .failed)
+        XCTAssertEqual(result.errorCode, "eventTap.incompatibleClipboardHistory")
+        XCTAssertFalse(result.effectiveSettings?.clipboardHistoryEnabled ?? true)
+        XCTAssertFalse(coordinator.settingsForUI().clipboardHistoryEnabled)
+
+        store.status = .applied(requestID, effectiveSettings: requested)
+        XCTAssertEqual(coordinator.receiveApplyResult()?.outcome, .applied)
+    }
+
     func testFixedStepAppliedReplyWithMismatchedSizePreservesActualStateAcrossAllPaths() throws {
         let requestID = UUID()
         var requested = TidyTapSettings.defaults
@@ -1938,6 +2261,7 @@ private final class RecordingCaps: TidyTapCapsFeatureApplying {
 private final class RecordingInput: TidyTapInputFeaturesApplying {
     let calls: CallLog
     var configuration: TidyTapInputFeatureConfiguration
+    var dropsClipboardDisplayKey = false
     init(calls: CallLog, configuration: TidyTapInputFeatureConfiguration = .disabled) {
         self.calls = calls; self.configuration = configuration
     }
@@ -1946,6 +2270,7 @@ private final class RecordingInput: TidyTapInputFeaturesApplying {
         sideButtonNavigation: Bool,
         fixedMouseWheelStepEnabled: Bool,
         finderCutPasteEnabled: Bool,
+        clipboardShortcut: TidyTapClipboardShortcut? = nil,
         mouseWheelStepLines: Int,
         requestID: UUID
     ) throws -> TidyTapInputFeatureApplyResult {
@@ -1955,6 +2280,9 @@ private final class RecordingInput: TidyTapInputFeaturesApplying {
             sideButtonNavigation: sideButtonNavigation,
             fixedMouseWheelStepEnabled: fixedMouseWheelStepEnabled,
             finderCutPasteEnabled: finderCutPasteEnabled,
+            clipboardShortcut: dropsClipboardDisplayKey
+                ? clipboardShortcut.map { .init(keyCode: $0.keyCode, modifiers: $0.modifiers) }
+                : clipboardShortcut,
             mouseWheelStepLines: mouseWheelStepLines
         )
         return .applied
@@ -1972,6 +2300,7 @@ private final class FailingInput: TidyTapInputFeaturesApplying {
         sideButtonNavigation: Bool,
         fixedMouseWheelStepEnabled: Bool,
         finderCutPasteEnabled: Bool,
+        clipboardShortcut: TidyTapClipboardShortcut? = nil,
         mouseWheelStepLines: Int,
         requestID: UUID
     ) throws -> TidyTapInputFeatureApplyResult {
@@ -1984,6 +2313,7 @@ private final class FailingInput: TidyTapInputFeaturesApplying {
             sideButtonNavigation: sideButtonNavigation,
             fixedMouseWheelStepEnabled: fixedMouseWheelStepEnabled,
             finderCutPasteEnabled: finderCutPasteEnabled,
+            clipboardShortcut: clipboardShortcut,
             mouseWheelStepLines: mouseWheelStepLines
         )
         return .applied
@@ -2001,6 +2331,7 @@ private final class FailingRollbackInput: TidyTapInputFeaturesApplying {
         sideButtonNavigation: Bool,
         fixedMouseWheelStepEnabled: Bool,
         finderCutPasteEnabled: Bool,
+        clipboardShortcut: TidyTapClipboardShortcut? = nil,
         mouseWheelStepLines: Int,
         requestID: UUID
     ) throws -> TidyTapInputFeatureApplyResult {
@@ -2013,6 +2344,7 @@ private final class FailingRollbackInput: TidyTapInputFeaturesApplying {
             sideButtonNavigation: sideButtonNavigation,
             fixedMouseWheelStepEnabled: fixedMouseWheelStepEnabled,
             finderCutPasteEnabled: finderCutPasteEnabled,
+            clipboardShortcut: clipboardShortcut,
             mouseWheelStepLines: mouseWheelStepLines
         )
         return .applied
@@ -2028,6 +2360,7 @@ private final class PartialInput: TidyTapInputFeaturesApplying {
         sideButtonNavigation: Bool,
         fixedMouseWheelStepEnabled: Bool,
         finderCutPasteEnabled: Bool,
+        clipboardShortcut: TidyTapClipboardShortcut? = nil,
         mouseWheelStepLines: Int,
         requestID: UUID
     ) throws -> TidyTapInputFeatureApplyResult {
@@ -2036,6 +2369,7 @@ private final class PartialInput: TidyTapInputFeaturesApplying {
             sideButtonNavigation: sideButtonNavigation,
             fixedMouseWheelStepEnabled: false,
             finderCutPasteEnabled: finderCutPasteEnabled,
+            clipboardShortcut: nil,
             mouseWheelStepLines: mouseWheelStepLines
         )
         return .partiallyApplied(unavailablePermissions: [.inputMonitoring])
@@ -2271,6 +2605,7 @@ private enum TestError: Error, Equatable {
 private final class AlwaysFailingCreationInput: TidyTapInputFeaturesApplying {
     func apply(reverseMouseWheel: Bool, sideButtonNavigation: Bool,
                fixedMouseWheelStepEnabled: Bool, finderCutPasteEnabled: Bool,
+               clipboardShortcut: TidyTapClipboardShortcut? = nil,
                mouseWheelStepLines: Int, requestID: UUID) throws -> TidyTapInputFeatureApplyResult {
         throw TidyTapInputFeatureAdapterError.engine(.eventTapCreationFailed)
     }

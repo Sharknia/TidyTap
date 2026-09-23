@@ -1,4 +1,41 @@
+import CoreGraphics
 import Foundation
+
+struct TidyTapClipboardShortcut: Codable, Equatable {
+    var keyCode: Int64
+    var modifiers: UInt64
+    var displayKey: String? = nil
+
+    private static let ansiNames: [Int64: String] = [
+        0: "A", 11: "B", 8: "C", 2: "D", 14: "E", 3: "F", 5: "G", 4: "H",
+        34: "I", 38: "J", 40: "K", 37: "L", 46: "M", 45: "N", 31: "O", 35: "P",
+        12: "Q", 15: "R", 1: "S", 17: "T", 32: "U", 9: "V", 13: "W", 7: "X",
+        16: "Y", 6: "Z", 29: "0", 18: "1", 19: "2", 20: "3", 21: "4",
+        23: "5", 22: "6", 26: "7", 28: "8", 25: "9", 49: "Space"
+    ]
+
+    var displayName: String {
+        if let displayKey, !displayKey.isEmpty,
+           displayKey.utf8.allSatisfy({ $0 < 128 && $0 >= 32 }) {
+            return displayKey.uppercased()
+        }
+        return Self.ansiNames[keyCode] ?? displayKey ?? "#\(keyCode)"
+    }
+
+    func preservingDisplayKey(from remembered: Self?) -> Self {
+        guard let remembered, remembered.keyCode == keyCode,
+              remembered.modifiers == modifiers else { return self }
+        return Self(keyCode: keyCode, modifiers: modifiers, displayKey: remembered.displayKey)
+    }
+
+    var isValid: Bool {
+        let allowed = CGEventFlags.maskControl.rawValue | CGEventFlags.maskAlternate.rawValue |
+            CGEventFlags.maskCommand.rawValue | CGEventFlags.maskShift.rawValue
+        let required = CGEventFlags.maskControl.rawValue | CGEventFlags.maskAlternate.rawValue |
+            CGEventFlags.maskCommand.rawValue
+        return (0...127).contains(keyCode) && modifiers & ~allowed == 0 && modifiers & required != 0
+    }
+}
 
 /// The complete user-configurable state for the 0.0.2 preferences domain.
 struct TidyTapSettings: Codable, Equatable {
@@ -10,6 +47,9 @@ struct TidyTapSettings: Codable, Equatable {
     /// events. This is intentionally independent from direction reversal.
     var fixedMouseWheelStepEnabled: Bool
     var finderCutPasteEnabled: Bool
+    var clipboardHistoryEnabled: Bool
+    var clipboardHistoryShortcut: TidyTapClipboardShortcut?
+    var pasteFormattedTextByDefault: Bool
     /// The remembered fixed-wheel step, even while the feature is disabled or
     /// unavailable because permissions were revoked.
     var mouseWheelStepLines: Int {
@@ -28,6 +68,9 @@ struct TidyTapSettings: Codable, Equatable {
         launchAtLogin: Bool,
         fixedMouseWheelStepEnabled: Bool = false,
         finderCutPasteEnabled: Bool = false,
+        clipboardHistoryEnabled: Bool = false,
+        clipboardHistoryShortcut: TidyTapClipboardShortcut? = nil,
+        pasteFormattedTextByDefault: Bool = false,
         mouseWheelStepLines: Int = Self.defaultMouseWheelStepLines
     ) {
         self.capsLockInputSourceSwitching = capsLockInputSourceSwitching
@@ -36,6 +79,9 @@ struct TidyTapSettings: Codable, Equatable {
         self.launchAtLogin = launchAtLogin
         self.fixedMouseWheelStepEnabled = fixedMouseWheelStepEnabled
         self.finderCutPasteEnabled = finderCutPasteEnabled
+        self.clipboardHistoryEnabled = clipboardHistoryEnabled
+        self.clipboardHistoryShortcut = clipboardHistoryShortcut
+        self.pasteFormattedTextByDefault = pasteFormattedTextByDefault
         self.normalizedMouseWheelStepLines = Self.normalizedMouseWheelStepLines(mouseWheelStepLines)
     }
 
@@ -46,6 +92,9 @@ struct TidyTapSettings: Codable, Equatable {
         launchAtLogin: false,
         fixedMouseWheelStepEnabled: false,
         finderCutPasteEnabled: false,
+        clipboardHistoryEnabled: false,
+        clipboardHistoryShortcut: nil,
+        pasteFormattedTextByDefault: false,
         mouseWheelStepLines: defaultMouseWheelStepLines
     )
 
@@ -55,6 +104,7 @@ struct TidyTapSettings: Codable, Equatable {
             reverseMouseWheelVertically ||
             fixedMouseWheelStepEnabled ||
             finderCutPasteEnabled ||
+            clipboardHistoryEnabled ||
             sideButtonNavigation
     }
 
@@ -65,6 +115,9 @@ struct TidyTapSettings: Codable, Equatable {
         case launchAtLogin
         case fixedMouseWheelStepEnabled
         case finderCutPasteEnabled
+        case clipboardHistoryEnabled
+        case clipboardHistoryShortcut
+        case pasteFormattedTextByDefault
         case mouseWheelStepLines
     }
 
@@ -81,6 +134,9 @@ struct TidyTapSettings: Codable, Equatable {
             launchAtLogin: try values.decode(Bool.self, forKey: .launchAtLogin),
             fixedMouseWheelStepEnabled: try values.decodeIfPresent(Bool.self, forKey: .fixedMouseWheelStepEnabled) ?? false,
             finderCutPasteEnabled: try values.decodeIfPresent(Bool.self, forKey: .finderCutPasteEnabled) ?? false,
+            clipboardHistoryEnabled: try values.decodeIfPresent(Bool.self, forKey: .clipboardHistoryEnabled) ?? false,
+            clipboardHistoryShortcut: try values.decodeIfPresent(TidyTapClipboardShortcut.self, forKey: .clipboardHistoryShortcut),
+            pasteFormattedTextByDefault: try values.decodeIfPresent(Bool.self, forKey: .pasteFormattedTextByDefault) ?? false,
             mouseWheelStepLines: try values.decodeIfPresent(Int.self, forKey: .mouseWheelStepLines) ?? Self.defaultMouseWheelStepLines
         )
     }
@@ -93,6 +149,9 @@ struct TidyTapSettings: Codable, Equatable {
         try values.encode(launchAtLogin, forKey: .launchAtLogin)
         try values.encode(fixedMouseWheelStepEnabled, forKey: .fixedMouseWheelStepEnabled)
         try values.encode(finderCutPasteEnabled, forKey: .finderCutPasteEnabled)
+        try values.encode(clipboardHistoryEnabled, forKey: .clipboardHistoryEnabled)
+        try values.encodeIfPresent(clipboardHistoryShortcut, forKey: .clipboardHistoryShortcut)
+        try values.encode(pasteFormattedTextByDefault, forKey: .pasteFormattedTextByDefault)
         try values.encode(mouseWheelStepLines, forKey: .mouseWheelStepLines)
     }
 
@@ -106,6 +165,7 @@ enum TidyTapFeature: String, Codable, CaseIterable {
     case mouseWheel
     case sideButtonNavigation
     case finderCutPaste
+    case clipboardHistory
 }
 
 enum TidyTapPermission: String, Codable, CaseIterable {
@@ -142,6 +202,8 @@ struct TidyTapFeaturePermissionState: Codable, Equatable {
         case .sideButtonNavigation:
             [.accessibility]
         case .finderCutPaste:
+            [.accessibility, .inputMonitoring]
+        case .clipboardHistory:
             [.accessibility, .inputMonitoring]
         }
     }
@@ -390,4 +452,15 @@ enum TidyTapPreferences {
     static let capsLockOwnershipKey = "capsLockOwnership"
     static let permissionRequestKey = "permissionRequest"
     static let permissionResultKey = "permissionResult"
+}
+
+extension TidyTapSettings {
+    func clipboardHistoryIsEffectivelyOff(
+        requestID: UUID,
+        status: TidyTapApplyStatus?
+    ) -> Bool {
+        !clipboardHistoryEnabled ||
+            (status?.applyRequestID == requestID &&
+             status?.effectiveSettings?.clipboardHistoryEnabled == false)
+    }
 }
