@@ -158,7 +158,7 @@ if [[ "${1:-}" == "--g2-media" ]]; then
     exit 1
   fi
   print -- "시험 기록: 맨 위 48x48 주황·파랑 이미지, 두 번째 빨간 굵은 글씨, 세 번째 일반 텍스트."
-  print -- "TextEdit 리치 텍스트 문서에서 ⌥C→Enter는 이미지, 다시 ⌥C→↓→⇧Enter는 서식 포함, 다시 ⌥C→↓→Enter는 서식 없이 붙여넣습니다."
+  print -- "TextEdit 리치 텍스트 문서에서 ⌥C→Enter는 이미지, 새 줄에서 ⌥C→↓→Enter는 서식 없이, 다시 새 줄에서 ⌥C→↓→⇧Enter는 서식 포함으로 붙여넣습니다."
   print -- "붙여넣기는 현재 시스템 클립보드를 해당 시험 항목으로 바꿉니다. 시험 종료는 이 터미널에서 Enter, 또는 240초 뒤 자동 정리입니다."
   read -r -t 240 _ || true
   [[ ! -s "$app_log" ]] || /bin/cat "$app_log"

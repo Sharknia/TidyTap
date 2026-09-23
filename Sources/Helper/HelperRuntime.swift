@@ -202,9 +202,11 @@ final class HelperRuntime {
             isPlanar: false, colorSpaceName: .deviceRGB,
             bytesPerRow: 0, bitsPerPixel: 0
         ) else { throw ClipboardHistoryStore.StoreError.invalidPolicy }
+        let orange = NSColor(deviceRed: 1, green: 0.45, blue: 0, alpha: 1)
+        let blue = NSColor(deviceRed: 0, green: 0.35, blue: 1, alpha: 1)
         for x in 0..<48 {
             for y in 0..<48 {
-                bitmap.setColor(x < 24 ? .systemOrange : .systemBlue, atX: x, y: y)
+                bitmap.setColor(x < 24 ? orange : blue, atX: x, y: y)
             }
         }
         guard let png = bitmap.representation(using: .png, properties: [:]) else {
