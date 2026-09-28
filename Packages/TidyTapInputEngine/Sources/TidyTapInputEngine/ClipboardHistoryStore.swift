@@ -3,6 +3,7 @@ import Foundation
 
 public struct ClipboardHistoryEntry: Codable, Equatable {
     public let id: UUID
+    /// Recency timestamp; refreshed after a successful history paste response.
     public let copiedAt: Date
     public let content: ClipboardCapturedContent
 }
@@ -63,6 +64,27 @@ public final class ClipboardHistoryStore {
             }
         }
         return entry
+    }
+
+    /// Reusing an item makes it recent without creating a duplicate entry.
+    @discardableResult
+    public func promote(_ id: UUID, at date: Date = Date()) throws -> ClipboardHistoryEntry? {
+        try withLock {
+            try prune(now: date)
+            let items = try readEntries()
+            guard let existing = items.first(where: { $0.entry.id == id }) else { return nil }
+            let latest = items.map(\.entry.copiedAt).max() ?? date
+            let promotedAt = max(date, latest.addingTimeInterval(0.001))
+            let entry = ClipboardHistoryEntry(id: id, copiedAt: promotedAt, content: existing.entry.content)
+            let data = try encoder.encode(entry)
+            guard data.count <= maximumItemBytes else { throw StoreError.itemTooLarge }
+            let name = String(format: "%013lld-%@.clip", Int64(promotedAt.timeIntervalSince1970 * 1000), id.uuidString)
+            let destination = directory.appendingPathComponent(name)
+            try writeSecurely(data, to: destination)
+            if destination != existing.url { try FileManager.default.removeItem(at: existing.url) }
+            try prune(now: promotedAt)
+            return entry
+        }
     }
 
     public func recordOversizedCopy(changeCount: Int) throws {

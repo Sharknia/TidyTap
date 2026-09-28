@@ -1080,7 +1080,7 @@ private struct SettingsViewCopy {
         startShortcutPrompt = text("Suggested: ⌥V. Click Start Recording to choose a shortcut.")
         startShortcutRecording = text("Start Recording")
         retryShortcutRecording = text("Record Again")
-        clipboardStorageNotice = text("TidyTap may read the current clipboard once to check access, without saving it. New copies are saved on this Mac for up to 7 days (100 items, 50 MiB total, 10 MiB each). Turning history off stops collecting new copies; saved items remain until they expire.")
+        clipboardStorageNotice = text("TidyTap may read the current clipboard once to check access, without saving it. New copies are saved on this Mac for up to 7 days (100 items, 50 MiB total, 10 MiB each). Pasting an item from history renews its 7-day period. Turning history off stops collecting new copies; saved items remain until they expire.")
         invalidShortcutCaption = text("Use Command, Option, or Control with a key.")
         clipboardReadDenied = text("Clipboard access is denied. Allow TidyTap to read the clipboard, then turn history on again.")
         clipboardContinuousAccessRequired = text("In System Settings, always allow TidyTap to read the clipboard, then turn history on again.")

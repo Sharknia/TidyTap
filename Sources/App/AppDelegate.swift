@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
     private var clipboardHistoryPanel: ClipboardHistoryPanelController?
     private var clipboardPasteTarget: ClipboardPasteTarget?
     private var pendingClipboardPasteSessionID: UUID?
+    private var pendingClipboardPasteEntryID: UUID?
     private var updaterController: SPUStandardUpdaterController?
 
     init(
@@ -290,8 +291,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
         guard let result = TidyTapIPC.clipboardPasteResult(in: notification),
               result.sessionID == pendingClipboardPasteSessionID else { return }
         pendingClipboardPasteSessionID = nil
+        let entryID = pendingClipboardPasteEntryID
+        pendingClipboardPasteEntryID = nil
         clipboardProbeReport("helper result=\(result.error ?? "posted")")
-        if let error = result.error { showClipboardError(reason: error) }
+        if let error = result.error {
+            showClipboardError(reason: error)
+        } else if let entryID {
+            promotePastedHistoryEntry(entryID)
+        }
     }
 
     @objc private func clipboardHistoryChanged(_ notification: Notification) {
@@ -372,6 +379,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
     }
 
     private func paste(_ entry: ClipboardHistoryEntry, style: ClipboardTextPasteStyle) {
+        pendingClipboardPasteSessionID = nil
+        pendingClipboardPasteEntryID = nil
         guard let target = clipboardPasteTarget, !target.application.isTerminated else {
             showClipboardError(reason: "targetUnavailable")
             return
@@ -408,6 +417,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
             return
         }
         pendingClipboardPasteSessionID = target.sessionID
+        pendingClipboardPasteEntryID = entry.id
         TidyTapIPC.postClipboardHistoryPaste(
             sessionID: target.sessionID,
             entryID: entry.id,
@@ -417,8 +427,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
             guard let self, self.pendingClipboardPasteSessionID == target.sessionID else { return }
             self.pendingClipboardPasteSessionID = nil
+            self.pendingClipboardPasteEntryID = nil
             self.clipboardProbeReport("helper result=timeout")
             self.showClipboardError(reason: "helperTimeout")
+        }
+    }
+
+    private func promotePastedHistoryEntry(_ id: UUID) {
+        do {
+            let suite = launchSmoke?.preferencesSuite ?? TidyTapProduct.appBundleIdentifier
+            let store = try ClipboardHistoryStore(
+                directory: TidyTapProduct.clipboardHistoryDirectory(preferencesSuite: suite),
+                retention: TidyTapClipboardPolicy.retention,
+                maximumEntries: TidyTapClipboardPolicy.maximumEntries,
+                maximumBytes: TidyTapClipboardPolicy.maximumBytes,
+                maximumItemBytes: TidyTapClipboardPolicy.maximumItemBytes
+            )
+            _ = try store.promote(id)
+        } catch {
+            NSLog("TidyTap clipboard history recency update failed")
         }
     }
 

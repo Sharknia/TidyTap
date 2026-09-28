@@ -29,6 +29,30 @@ final class ClipboardHistoryStoreTests: XCTestCase {
             .filter { $0.pathExtension == "clip" }.count, 3)
     }
 
+    func testSuccessfulReusePromotesOneItemAndRenewsRetention() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("tidytap-promote-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let now = Date(timeIntervalSince1970: 100_000)
+        let store = try ClipboardHistoryStore(
+            directory: directory, retention: 60,
+            maximumEntries: 10, maximumBytes: 4096, maximumItemBytes: 2048
+        )
+        let a = try store.add(.text(plain: "A", rtf: nil, html: nil), copiedAt: now.addingTimeInterval(-50))
+        let b = try store.add(.text(plain: "B", rtf: nil, html: nil), copiedAt: now.addingTimeInterval(-20))
+        let c = try store.add(.text(plain: "C", rtf: nil, html: nil), copiedAt: now.addingTimeInterval(-10))
+        XCTAssertEqual(try store.entries(now: now).map(\.id), [c.id, b.id, a.id])
+
+        XCTAssertEqual(try store.promote(a.id, at: now)?.id, a.id)
+        XCTAssertEqual(try store.entries(now: now).map(\.id), [a.id, c.id, b.id])
+        XCTAssertGreaterThan(try XCTUnwrap(store.promote(a.id, at: now)).copiedAt, now)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "clip" }.count, 3)
+        XCTAssertNil(try store.promote(UUID(), at: now))
+        XCTAssertEqual(try store.entries(now: now.addingTimeInterval(59)).map(\.id), [a.id])
+        XCTAssertNil(try store.promote(a.id, at: now.addingTimeInterval(61)),
+                     "expired history is not revived by a late result")
+    }
+
     func testRecordsSurviveReopenAndOldestItemsCanBeRemoved() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("tidytap-store-\(UUID())")
         defer { try? FileManager.default.removeItem(at: directory) }
