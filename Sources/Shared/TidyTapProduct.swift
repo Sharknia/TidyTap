@@ -1,5 +1,7 @@
 import Darwin
+import AppKit
 import Foundation
+import Security
 
 enum TidyTapProduct {
     static let appBundleIdentifier = "com.sharknia.TidyTap"
@@ -16,6 +18,23 @@ enum TidyTapProduct {
     static func isInstalledCopy(_ appURL: URL, allowDevelopment: Bool = false) -> Bool {
         allowDevelopment || appURL.standardizedFileURL.resolvingSymlinksInPath() ==
             installedAppURL.standardizedFileURL.resolvingSymlinksInPath()
+    }
+
+    /// Ignore ad-hoc development copies when arbitrating production processes.
+    /// Released older copies share the installed app's designated requirement.
+    static func isSameSignedApp(_ app: NSRunningApplication) -> Bool {
+        guard app.bundleIdentifier == appBundleIdentifier else { return false }
+        var installedCode: SecStaticCode?
+        guard SecStaticCodeCreateWithPath(installedAppURL as CFURL, SecCSFlags(), &installedCode) == errSecSuccess,
+              let installedCode else { return false }
+        var requirement: SecRequirement?
+        guard SecCodeCopyDesignatedRequirement(installedCode, SecCSFlags(), &requirement) == errSecSuccess,
+              let requirement else { return false }
+        var runningCode: SecCode?
+        let attributes = [kSecGuestAttributePid as String: NSNumber(value: app.processIdentifier)] as CFDictionary
+        guard SecCodeCopyGuestWithAttributes(nil, attributes, SecCSFlags(), &runningCode) == errSecSuccess,
+              let runningCode else { return false }
+        return SecCodeCheckValidity(runningCode, SecCSFlags(), requirement) == errSecSuccess
     }
 
     static func appLockURL(preferencesSuite: String = appBundleIdentifier) -> URL {

@@ -29,7 +29,7 @@ guard flock(appLockDescriptor, LOCK_EX | LOCK_NB) == 0 else { exit(0) }
 
 if launchSmoke == nil {
     if NSRunningApplication.runningApplications(withBundleIdentifier: TidyTapProduct.appBundleIdentifier)
-        .contains(where: { $0.processIdentifier != getpid() }) {
+        .contains(where: { $0.processIdentifier != getpid() && TidyTapProduct.isSameSignedApp($0) }) {
         let environment = ProcessInfo.processInfo.environment
         if environment[TidyTapProduct.backgroundUpdateEnvironmentKey] != "1" &&
             environment[TidyTapIPC.clipboardHistoryModeEnvironmentKey] != "1" &&

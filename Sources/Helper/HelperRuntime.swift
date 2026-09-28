@@ -22,7 +22,8 @@ final class HelperRuntime: NSObject {
         guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
               app.bundleIdentifier == TidyTapProduct.appBundleIdentifier,
               let url = app.bundleURL,
-              !TidyTapProduct.isInstalledCopy(url) else { return }
+              !TidyTapProduct.isInstalledCopy(url),
+              TidyTapProduct.isSameSignedApp(app) else { return }
         stop()
         CFRunLoopStop(CFRunLoopGetMain())
     }

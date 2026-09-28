@@ -37,9 +37,10 @@ final class FinderFeedbackAppHost: NSObject {
             clipboardChangeCount: feedback.clipboardChangeCount
         )
         latestPayload = payload
+        let applicationURL = Bundle.main.bundleURL.resolvingSymlinksInPath().standardizedFileURL
         if let runningApp = NSRunningApplication.runningApplications(
             withBundleIdentifier: TidyTapProduct.appBundleIdentifier
-        ).first {
+        ).first(where: { $0.bundleURL?.resolvingSymlinksInPath().standardizedFileURL == applicationURL }) {
             awaitingApplicationPID = runningApp.processIdentifier
             TidyTapIPC.postFinderFeedback(payload)
             return
@@ -47,7 +48,6 @@ final class FinderFeedbackAppHost: NSObject {
         // LaunchServices performs a non-activating app launch. Direct Process
         // execution can activate even an accessory app before its first frame.
         guard !launchInFlight else { return }
-        let applicationURL = Bundle.main.bundleURL
         let nonce = UUID()
         var feedbackEnvironment = TidyTapIPC.finderFeedbackEnvironment(payload)
         feedbackEnvironment[TidyTapIPC.finderFeedbackNonceEnvironmentKey] = nonce.uuidString

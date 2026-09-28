@@ -24,7 +24,7 @@ if TidyTapLaunchSmoke.current() == nil,
    NSRunningApplication.runningApplications(withBundleIdentifier: TidyTapProduct.appBundleIdentifier)
     .contains(where: {
         guard let url = $0.bundleURL else { return false }
-        return !TidyTapProduct.isInstalledCopy(url)
+        return !TidyTapProduct.isInstalledCopy(url) && TidyTapProduct.isSameSignedApp($0)
     }) {
     exit(0)
 }

@@ -260,7 +260,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
     @objc private func otherTidyTapDidLaunch(_ notification: Notification) {
         guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
               app.bundleIdentifier == TidyTapProduct.appBundleIdentifier,
-              app.processIdentifier != getpid() else { return }
+              app.processIdentifier != getpid(),
+              TidyTapProduct.isSameSignedApp(app) else { return }
         // A same-version second process exits on app.lock. Wait for that exit
         // before treating a still-running copy as an older installation.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
