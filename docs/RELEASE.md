@@ -152,12 +152,11 @@ upload to GitHub or install the app.
 
 The app embeds Sparkle 2 and reads the public feed at
 `https://raw.githubusercontent.com/Sharknia/TidyTap/main/appcast.xml`.
-The branch's committed feed currently contains no update item and is not yet
-on public `main`. A preview build can exercise the check UI, but an end-to-end
-download/install/relaunch cannot be claimed until a newer signed, notarized
-release and its appcast item exist. The branch still uses 0.1.4/build 5, the
-same version and build as public `main`; increase both the release version and
-`CFBundleVersion` before preparing an update candidate.
+The committed feed is an empty template until a verified release asset exists.
+Publish the DMG first, then its signed appcast item on `main`. A preview build
+can exercise the check UI, but an end-to-end download/install/relaunch cannot
+be claimed until a newer signed, notarized release and its appcast item exist.
+Version 0.2.0 uses build 6; later releases must increase `CFBundleVersion`.
 It checks automatically while the app is running, and Settings has a manual
 **Check for Updates** button. An installed version from before this integration
 cannot gain that ability without one manual DMG replacement. The update source
