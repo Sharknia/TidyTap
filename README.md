@@ -12,7 +12,7 @@ Switch languages with Caps Lock, adjust your mouse wheel, use side buttons in Sa
 Apple silicon · macOS 15.1+ · English & Korean · [MIT license](LICENSE)
 
 <p align="center">
-  <img src="docs/images/settings-en.png" alt="TidyTap settings in English, with separate switches for Caps Lock, Finder cut and paste, scrolling, and side buttons" width="420">
+  <img src="docs/images/settings-en.png" alt="TidyTap 0.1.4 settings in English, with separate switches for Caps Lock, Finder cut and paste, scrolling, and side buttons" width="420">
 </p>
 
 ## What can it do?
@@ -24,6 +24,8 @@ Apple silicon · macOS 15.1+ · English & Korean · [MIT license](LICENSE)
 | Wheel scroll amount | Adjust ordinary single wheel steps to scroll 1 to 10 lines. |
 | Side buttons | Go back and forward in Safari and Finder. |
 | Finder cut & paste | Press `⌘X`, open the destination folder, then press `⌘V` to move files. `⌘C` still copies. |
+
+The development branch also has a **clipboard history preview**, which is not in the public 0.1.4 release. When enabled, it asks you to record a shortcut (Settings suggests `⌥V` but does not assign it). The shortcut opens a searchable text-and-image history; `Enter` pastes the selected item. Text pastes without formatting by default, and `Shift+Enter` uses the opposite style. A successful paste request moves that history item to the top. See the [current validation status](docs/CLIPBOARD_HISTORY_ACCEPTANCE_STATUS.md).
 
 > **Closing the window or quitting with `⌘Q` keeps enabled features running.** To stop them, turn off all features in the app. [How to stop or uninstall](#stopping-or-uninstalling)
 
@@ -48,9 +50,13 @@ Enable "Start at login" to use your settings after signing in. There is no Intel
 <details>
 <summary>Why does it need Accessibility access? Does it collect my input?</summary>
 
-macOS requires Accessibility access to handle scrolling, side buttons, and Finder shortcuts. Caps Lock switching alone needs no permission. You do not need to add TidyTap separately to Input Monitoring.
+macOS requires Accessibility access to handle scrolling, side buttons, Finder shortcuts, and the clipboard history shortcut/paste in the development preview. Caps Lock switching alone needs no permission. You do not need to add TidyTap separately to Input Monitoring. Clipboard reading is checked separately when you enable history.
 
-TidyTap does not record or transmit keystrokes or mouse activity. It processes input on your Mac and keeps settings and restoration backups there too. There is no analytics. Updater-enabled versions check a public GitHub feed for new releases; input and clipboard history are never sent with that request.
+TidyTap does not record or transmit keystrokes or mouse activity. It processes input on your Mac and keeps settings and restoration backups there too. There is no analytics.
+
+In the development preview, enabling clipboard history separately stores newly copied supported text and images on this Mac for a 7-day retention period, up to 100 items and 50 MiB total (10 MiB per item). Recopying identical content or using an item through history renews its 7-day period. Turning the feature off stops collection but keeps existing entries until they expire. Expired files are removed on the next copy, history open, or settings open; they may remain on disk while TidyTap is not running. Source-marked concealed, transient, or auto-generated clipboard items are skipped, but unmarked sensitive content may be stored. During first activation, macOS may allow one read of the current clipboard to check access; that content is not added to history.
+
+Updater-enabled versions check a public GitHub feed for new releases; input and clipboard history are never sent with that request.
 
 You can change the permission in System Settings → Privacy & Security → Accessibility.
 
@@ -68,15 +74,15 @@ Compatibility depends on how your mouse reports input. See [compatibility notes]
 <details>
 <summary>How do I update? Can I install with Homebrew?</summary>
 
-Version 0.1.4 and earlier need one manual DMG replacement. Updater-enabled versions check for new releases while running and offer **Check for Updates** in Settings; Sparkle can then install a signed update in-app after you click Install. There is no official Homebrew installation.
+Published version 0.1.4 and earlier need one manual DMG replacement. The development preview includes Sparkle and offers **Check for Updates** in Settings; automatic checks run while the settings app is open. Installation requires your click. The update feed is not public yet, so the preview cannot download an update today. The first public updater-enabled release still needs to be installed manually. There is no official Homebrew installation.
 
 </details>
 
 ## Stopping or uninstalling
 
-1. Turn off all five input features and "Start at login".
+1. Turn off all five input features, clipboard history if present, and "Start at login". To remove saved history too, use **Clear all history** while clipboard history is still on, before turning it off.
 2. Wait for the app to report that changes were applied. Check that Caps Lock and language switching work as they did before, then quit with `⌘Q`.
-3. To uninstall, move TidyTap from Applications to the Trash.
+3. To uninstall, move TidyTap from Applications to the Trash. Deleting the app alone does not remove saved clipboard history from `~/Library/Application Support/com.sharknia.TidyTap/clipboard-history`.
 
 **Deleting the app first will not automatically restore your settings.** If you see an error or features keep running, follow [the shutdown and restoration checks](docs/TROUBLESHOOTING.md#check-shutdown-and-restoration). There is no dedicated uninstaller.
 

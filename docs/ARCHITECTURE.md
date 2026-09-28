@@ -1,95 +1,37 @@
 # TidyTap 아키텍처
 
-이 문서는 `docs/MVP_PLAN.md`의 0.0.2 범위를 구현하기 위한 최소 프로세스·모듈 경계를 고정한다. 이 문서에 없는 기능, 프로필, daemon, 시스템 확장은 MVP에 추가하지 않는다.
+이 문서는 현재 `0.1.4` 개발 브랜치의 구현 경계를 설명한다. 공개 0.1.4에 이미 병합된 최초 설치 수정과 이 브랜치의 **미출시** 클립보드 히스토리·Sparkle 업데이트를 구분한다. 초기 0.0.2 설계는 Git 이력의 이전 버전을 참고한다.
 
-## 1. 프로세스 구성
+## 프로세스와 소유권
 
 ```text
-TidyTap.app (AppKit, Dock 앱)
-  ├─ 단일 설정 창 및 토글
-  ├─ 권한 상태 표시 / 시스템 설정 열기
-  ├─ UserDefaults(preferences domain) 읽기·쓰기
-  └─ DistributedNotificationCenter 설정 변경 알림
-                    │
-                    ▼
-TidyTap.app/Contents/MacOS/TidyTapHelper (일반 실행 파일, 별도 백그라운드 프로세스)
-  ├─ 설정 재읽기 및 적용 조정
-  ├─ Caps Lock → F18 / 입력 소스 설정 적용
-  ├─ 단일 CGEventTap (휠·측면 버튼)
-  └─ 입력 기능 적용 후 필요 시 종료
+/Applications/TidyTap.app
+  ├─ TidyTap (AppKit 설정·히스토리 패널·Sparkle)
+  ├─ TidyTapHelper (입력 처리·클립보드 감시·붙여넣기)
+  ├─ LaunchAgent plist (로그인 시 같은 Helper 실행)
+  └─ Sparkle framework 및 updater services
 ```
 
-`TidyTap.app`은 Dock에 보이는 일반 AppKit 설정 앱이다. `Command-Q`는 이 프로세스만 종료한다. helper는 Dock에 표시하지 않으며, 앱이 종료된 뒤에도 켜진 입력 기능을 계속 처리한다. 모든 입력 기능이 꺼지면 helper는 event tap을 제거하고 종료한다.
+설정 창은 일반 Dock 앱이다. `⌘Q`는 앱만 종료하고 켜진 기능의 Helper는 계속 실행한다. Helper는 `NSApplication`을 만들지 않아 두 번째 설정 앱으로 등록되지 않는다. 모든 입력 기능과 클립보드 히스토리를 끄면 Helper가 복원·정리 후 종료한다. 로그인 실행은 `SMAppService.agent`를 사용하며 기존 내부 실행 파일과 같은 권한 주체 `com.sharknia.TidyTap` 아래에서 동작한다. 별도 root daemon이나 시스템 확장은 없다.
 
-권한 주체는 `com.sharknia.TidyTap` 하나다. 별도 `TidyTapHelper.app` 번들은 만들지 않는다. 일반 실행은 `Process`로 앱 내부 실행 파일을 시작하고, 로그인 실행은 `SMAppService.agent`와 앱에 포함된 LaunchAgent plist의 `BundleProgram` 및 `AssociatedBundleIdentifiers`를 사용한다. root daemon, 추가 권한, 별도 설치 스크립트는 필요하지 않다. 0.0.2의 로그인 항목과 실행 중인 옛 Helper는 전환 시 정리한다.
+앱과 Helper는 각각 사용자별 `flock`을 보유한다. 같은 앱의 두 번째 실행은 종료되고, 생산 앱은 `/Applications/TidyTap.app`에서만 시작한다. 새 앱이 시작할 때 같은 서명의 다른 TidyTap이 남아 있으면 충돌을 알리고 시작을 막으며, 실행 중 다른 복사본이 나타나면 앱의 후속 작업을 중단한다. 로컬 격리 시험은 별도 preferences suite를 사용한다. [실행 경로](../Sources/App/main.swift), [Helper 잠금](../Sources/Helper/main.swift), [설치본·서명 판별](../Sources/Shared/TidyTapProduct.swift)이 기준이다.
 
-## 2. 모듈 및 파일 경계
+## 설정·입력 적용
 
-실제 파일명은 다음 경계를 유지하는 범위에서 정할 수 있다. 앱과 helper가 공유해야 하는 타입은 공용 모듈에만 둔다.
+설정 스냅샷은 [TidyTapSettings.swift](../Sources/Shared/TidyTapSettings.swift)의 사용자 preferences domain에 저장한다. 앱이 요청 ID를 포함한 변경 알림을 보내면 Helper가 전체 스냅샷을 다시 읽고, [ApplyCoordinator.swift](../Sources/Helper/ApplyCoordinator.swift)가 직렬 적용·실패 복원·결과 보고를 맡는다. 앱은 일치하는 요청 ID의 결과만 성공으로 표시한다. 0.1.4에서는 로그인 항목이 아직 없는 신규 설치에서도 일반 기능 토글을 적용할 수 있게 했고, 실패 뒤 Helper 종료 직전의 새 요청을 보존했다. [0.1.4 릴리스 노트](RELEASE_NOTES_0.1.4.md)에 검증 범위가 있다.
 
-| 모듈/예상 파일 | 소유 책임 | 소유하지 않는 것 |
-| --- | --- | --- |
-| `Shared/Preferences.swift` | 세 기능 토글, 로그인 옵션, 백업 메타데이터가 담긴 Codable/UserDefaults 모델과 preferences domain 키 | 이벤트 탭, UI |
-| `Shared/IPC.swift` | 설정 변경 알림과 상관관계가 있는 적용 요청/결과 계약 | 설정 저장, 기능 적용 |
-| `App/main.swift`, `App/AppDelegate.swift`, `App/SettingsViewController.swift` | 강하게 보유한 delegate로 `NSApplication` 실행, AppKit 창, 한국어/영어 문자열, 토글과 권한 상태 표시 | HID/event tap 구현 |
-| `App/SettingsCoordinator.swift` | 사용자 변경 검증, UserDefaults 저장, helper 시작 요청, IPC 알림 | 이벤트 콜백 |
-| `App/PermissionCoordinator.swift` | 접근성·입력 모니터링 상태 확인 및 시스템 설정 열기 | 권한 우회, 권한 자동 승인 |
-| `App/LoginItemCoordinator.swift` | `SMAppService`로 helper 로그인 항목 등록/해제 및 상태 표시 | helper 기능 토글 |
-| `Helper/main.swift`, `Helper/HelperRuntime.swift` | 단일 Worker에서 CFRunLoop 실행, 전체 설정 초기 적용, IPC 수신, 종료 조건 | 설정 UI |
-| `Helper/ApplyCoordinator.swift` | 설정 스냅샷을 읽어 Caps/이벤트 탭 적용 순서 조정, 트랜잭션과 롤백, 결과 보고 | 개별 이벤트 판정 |
-| `Helper/CapsLockController.swift` | Caps Lock HID 매핑의 백업·충돌 검사·적용·조건부 복원 | 입력 소스 단축키, 다른 키 매핑, UI |
-| `Helper/InputSourceShortcutController.swift` | 입력 소스 단축키의 현재값 확인, F18 설정 및 조건부 백업 복원 | HID 매핑, 입력 소스 목록 변경 |
-| `Helper/EventTapController.swift` | 단일 `CGEventTap` 생성·권한 실패 처리·비활성 콜백 재활성화·제거 | Caps Lock 설정 |
-| `Helper/ScrollController.swift` | 마우스 분류 규칙에 따른 VXE 수직 line scroll만 반전 | 트랙패드 제스처 수정, 속도/가속 수정 |
-| `Helper/SideButtonController.swift` | 전면 앱이 Safari/Finder일 때 button 3/4를 `Command-[`/`]`로 1회 합성하고 원본 소비 | 앱별 프로필, 다른 앱 입력 수정 |
-| `Helper/MenuBarController.swift` | 레거시 트랜잭션/launch-smoke 호환 seam (no-op) | 상태 항목 또는 메뉴 |
+Caps Lock은 HID 매핑과 입력 소스 단축키의 백업·조건부 복원을 사용한다. 휠 방향·단계 크기, Safari/Finder 측면 버튼, Finder 파일 잘라내기와 클립보드 호출 키는 입력 엔진의 event tap 경로를 공유한다. Finder `⌘X`는 파일 이동 대기 상태를 관리하고, 일반 `⌘C`는 복사로 둔다. 클립보드 히스토리는 최초 단축키 입력과 적용 성공 전에는 수집하지 않는다. 기존 입력 기능과 Finder 동작의 상세 수용 범위는 [MVP 계획](MVP_PLAN.md), [Finder 검증](FINDER_CUT_PASTE_VALIDATION.md), [클립보드 수용 현황](CLIPBOARD_HISTORY_ACCEPTANCE_STATUS.md)을 참고한다.
 
-개별 controller는 다른 controller의 내부 상태를 직접 변경하지 않는다. `ApplyCoordinator`만 설정 스냅샷을 전달하고, 복원 순서와 실패 결과를 취합한다.
+## 클립보드 히스토리 — 미출시 프리뷰
 
-## 3. 설정 저장 및 IPC
+Helper의 [ClipboardCaptureService.swift](../Packages/TidyTapInputEngine/Sources/TidyTapInputEngine/ClipboardCaptureService.swift)는 새 복사에 대한 지원 텍스트·이미지를 읽는다. [ClipboardHistoryStore.swift](../Packages/TidyTapInputEngine/Sources/TidyTapInputEngine/ClipboardHistoryStore.swift)는 본문을 preferences와 분리해 `~/Library/Application Support/com.sharknia.TidyTap/clipboard-history`에 보관한다. 최근 복사 또는 성공 응답을 받은 히스토리 붙여넣기 요청은 같은 항목을 맨 위로 올리고 7일 보관 시점을 갱신한다. 완전히 같은 내용·서식의 재복사는 한 항목만 남긴다. 상한은 7일·100개·총 50 MiB·항목당 10 MiB다. 기능을 끄면 수집만 멈추며 기존 기록은 만료 때까지 남는다.
 
-설정 앱과 helper는 사용자 Library의 하나의 TidyTap preferences domain을 사용한다. 설정 앱은 각 변경에 단조 증가하는 `applyRequestID`(UUID)를 생성하고, 전체 설정 스냅샷과 함께 저장한 뒤 `DistributedNotificationCenter`에 고정된 변경 알림을 게시한다. 알림에는 설정값을 싣지 않는다. helper는 알림을 받으면 1초 안에 domain 전체와 `applyRequestID`를 다시 읽고 현재 적용 상태와 비교하여 필요한 controller만 갱신한다. helper는 시작 시에도 반드시 전체 설정을 읽는다.
+Helper는 호출 대상 PID·세션 ID만 앱에 알리고, 앱의 [ClipboardHistoryPanelController.swift](../Sources/App/ClipboardHistoryPanelController.swift)가 검색·목록·미리보기를 표시한다. 선택한 기록 ID와 붙여넣기 방식은 다시 Helper에 보낸다. Helper가 대상 앱·입력 위치를 검사한 다음 시스템 클립보드에 항목을 쓰고 붙여넣기 키 이벤트를 전송한다. 전송 성공 응답은 **대상 앱이 실제로 삽입했다는 확인이 아니다**. 취소는 클립보드를 바꾸지 않고, 자체 붙여넣기 쓰기는 새 복사로 재수집하지 않는다. 읽기 거부는 손쉬운 사용 권한과 별도로 처리한다. [URS](CLIPBOARD_HISTORY_URS.md)와 [수용 현황](CLIPBOARD_HISTORY_ACCEPTANCE_STATUS.md)은 요구와 확인된 증거를 구분한다.
 
-helper가 실행되지 않은 상태의 알림은 큐에 쌓이지 않아도 된다. 다음 helper 시작 시 저장된 스냅샷이 기준이다. 동시에 여러 알림이 오면 마지막으로 읽은 전체 스냅샷 하나를 적용하며, 적용 중에는 serial coordinator로 재진입을 막는다.
+## 업데이트·배포 — 미출시 프리뷰
 
-helper는 같은 preferences domain의 별도 status 키에 `applyRequestID`, 성공/실패 상태, 실패한 구성요소, 사람이 읽을 수 있는 오류 코드, 실제로 남은 유효 설정 스냅샷을 원자적으로 기록하고, `TidyTapApplyResult` 알림에 동일한 ID를 담아 앱에 반환한다. 앱은 자신이 보낸 ID와 일치하는 결과만 현재 토글 상태에 반영한다. 앱이 결과 알림을 놓쳐도 시작할 때 status 키를 다시 읽어 유효 설정을 복원한다. 설정 저장 실패나 일치하는 적용 결과가 실패인 경우 토글을 성공 상태로 표시하지 않고 오류/권한 상태를 표시한다.
+설정 앱은 Sparkle 2로 `main/appcast.xml` 주소의 피드를 자동 확인하도록 구성됐고 **업데이트 확인** 버튼을 제공한다. 설치는 사용자가 눌러야 한다. `appcast.xml`은 현재 브랜치에만 있는 빈 뼈대여서 공개 주소에서는 아직 업데이트를 제공하지 않는다. 프리뷰를 실행한다고 기존 공개 0.1.4 설치본이 자동으로 교체되는 것은 아니다. Sparkle 설치 직전에 Helper 종료를 요청하고 잠금 해제를 기다린 뒤 새 앱의 Helper를 시작한다. 서명·공증·EdDSA appcast 및 첫 수동 교체 절차는 [릴리스 문서](RELEASE.md)에 있다. 현재 브랜치의 서명 프리뷰와 공개 릴리스는 별개다.
 
-적용은 helper 내부의 직렬 트랜잭션이다. 새 스냅샷을 검증하고, 변경 전 각 controller의 복원 가능한 상태를 캡처한 뒤 Caps(HID와 단축키), event tap 순서로 적용한다. Caps 단계에서 `CapsLockController`가 HID 매핑을 소유하고, 성공한 뒤 `InputSourceShortcutController`가 단축키를 소유한다. 어느 단계든 실패하면 이미 변경한 항목을 역순으로 롤백한다. 롤백도 실패하면 원본 이벤트를 통과시키고 실패 상태와 복구 필요 상태를 보고한다. 전체 적용이 성공한 경우에만 새 `applyRequestID`를 활성 상태로 확정한다.
+## 권한과 정보 경계
 
-## 4. 세 기능의 소유와 매핑
-
-| UI 토글 | helper 구성 | 적용 조건 |
-| --- | --- | --- |
-| Caps Lock으로 입력 소스 전환 | `CapsLockController` + `InputSourceShortcutController` | Caps 토글만 켜져 있으면 helper가 실행된다. Caps Lock HID 항목과 F18 단축키를 각각 백업·검증 후 적용한다. |
-| 마우스 휠 수직 방향 반전 | `EventTapController` + `ScrollController` | 접근성 및 입력 모니터링 권한이 모두 있고 토글이 켜진 동안에만 scroll callback이 VXE line-based 수직 값의 부호를 반전한다. 수평·트랙패드·알 수 없는 연속 scroll은 통과시킨다. |
-| Safari와 Finder에서 측면 버튼으로 뒤로/앞으로 | `EventTapController` + `SideButtonController` | 접근성 권한이 있고 토글이 켜진 동안, 전면 앱이 Safari/Finder일 때만 button 3/4의 down에서 탐색 키를 한 번 합성하고 해당 down/up을 소비한다. 다른 앱에서는 그대로 통과시킨다. 측면 버튼 전용 경로는 입력 모니터링 권한을 요구하지 않는다. |
-
-두 입력 기능은 하나의 `CGEventTap`을 공유한다. 둘 다 꺼지면 tap을 제거한다. 권한 거부/회수 시 해당 토글은 활성으로 확정하지 않고 원본 이벤트를 수정하지 않는다. Caps 기능은 계획서의 전제대로 접근성·입력 모니터링 권한 없이 동작해야 한다. 휠 토글의 게이트는 접근성+입력 모니터링, 측면 버튼 토글만 켠 경우의 게이트는 접근성이다.
-
-## 5. helper 시작·종료와 SMAppService
-
-helper의 번들 식별자는 앱이 등록할 수 있는 login item helper로 고정한다. `LoginItemCoordinator`는 `SMAppService.mainApp`이 아닌 helper 번들에 해당하는 ServiceManagement 등록 API를 사용하여 `로그인할 때 시작` 토글을 등록/해제하고, 그 상태를 읽어 UI에 반영한다. 등록은 로그인 시 helper가 실행되도록 하는 것뿐이며 현재 프로세스를 강제로 종료하지 않는다.
-
-- 핵심 기능 토글 중 하나가 켜지면 설정 앱이 앱 내부 실행 파일을 Process로 시작한다.
-- `로그인할 때 시작`이 켜져 있으면 ServiceManagement가 다음 로그인 직후 helper를 시작하고, helper는 저장된 전체 설정을 복원한다.
-- 로그인 실행을 끄면 다음 로그인 자동 시작만 해제한다. 현재 세션의 활성 기능과 helper는 유지한다.
-- 모든 세 기능이 꺼지면 helper는 Caps 상태를 필요한 방식으로 복원하고 event tap을 제거한 뒤 종료한다.
-- 설정 앱 종료나 `Command-Q`는 helper를 종료시키지 않는다. helper가 비정상 종료된 뒤 자동 재시작은 제공하지 않으며, 사용자가 앱을 다시 열어 복구한다.
-
-Worker가 사용자별 파일에 프로세스 수명 동안 flock을 보유하여 일반 실행과 로그인 실행이 겹쳐도 입력 엔진은 한 번만 시작한다. 종료·충돌 시 커널이 잠금을 해제한다. helper가 설정 변경 중 종료되더라도 고정 modifier나 mouse-down 상태를 남기지 않도록 각 callback의 합성 상태를 button-up 또는 종료 경로에서 정리한다.
-
-## 6. 권한 경계
-
-Caps Lock 전용 경로와 helper 시작은 권한을 요청하지 않는다. 휠 경로는 접근성 및 입력 모니터링 권한을 모두 검사하고, 측면 버튼 전용 경로는 접근성 권한만 검사한다. 권한이 없거나 회수되면 event tap은 원본 이벤트를 통과시키고, 해당 토글은 켜진 것처럼 저장/표시하지 않는다. 사용자가 권한 버튼을 누른 경우에만 실제 사용 프로세스인 helper가 공개 CGRequest API를 호출한다. 설정 창을 처음 열거나 앱이 다시 전면에 오면 UUID로 연결된 읽기 전용 요청/결과를 통해 helper의 현재 상태를 확인하며, 이 확인은 설정·Caps 저널·event tap을 변경하지 않는다.
-
-콜백은 필요한 이벤트 종류, 버튼, 스크롤 값, 전면 앱 확인만 메모리에서 즉시 처리한다. 키 입력·마우스 좌표·이벤트 원문을 저장하거나 네트워크로 보내지 않는다. 타사 유틸리티를 종료·제거하거나 권한을 우회하지 않는다.
-
-## 7. 백업·복원 소유권
-
-`CapsLockController`는 기존 HID 매핑의 백업과 복원만 소유한다. 활성화 전 충돌을 검사하고, 기존 매핑 배열에 TidyTap의 Caps Lock→F18 항목만 추가한다. 비활성화 때는 현재 배열에서 TidyTap이 만든 정확한 항목만 제거한다. `InputSourceShortcutController`는 입력 소스 단축키의 백업과 복원만 소유한다. 현재 값이 TidyTap이 설정한 F18과 같을 때만 백업값으로 복원한다. 사용자가 중간에 값을 바꿨으면 덮어쓰지 않고 충돌 상태를 보고한다. helper는 두 변경의 정확한 before/after 계획을 `prepared` 저널로 먼저 저장하므로 HID만 반영된 시점이나 단축키 plist 기록 후 활성화 전 시점에 종료되어도 다음 시작에서 남은 단계만 검증·완료한다. 커밋된 저널과 F18 단축키는 남았지만 재부팅으로 휘발성 HID 매핑만 사라진 경우에는 다른 Caps Lock 매핑이 없음을 확인한 뒤 HID 항목만 재적용한다. 두 controller의 변경 순서·검증·역순 롤백은 `ApplyCoordinator`가 단일 트랜잭션으로 조정한다. 다른 HID 매핑은 어떤 경우에도 덮어쓰거나 제거하지 않는다.
-
-앱 삭제를 감지하여 자동 복원하지 않는다. 지원 제거 절차는 모든 토글과 옵션을 끄고, Caps 백업 복원 및 helper 종료를 확인한 후 앱을 종료·삭제하는 순서이며 README에도 동일하게 기록한다.
-
-## 8. 실패 및 중단 경계
-
-단계 0에서 마우스/트랙패드 분류, Safari/Finder 탐색, helper 독립 실행, Caps 설정·조건부 복원 중 하나라도 검증되지 않으면 UI 구현을 진행하지 않는다. 이 문서는 그 실패를 기능 확장으로 우회하지 않는다. helper의 충돌 자동 재시작, 별도 daemon/system extension, 앱별 프로필과 사용자 지정 매핑은 모두 MVP 밖이다.
+손쉬운 사용 권한은 마우스·Finder·클립보드 단축키/붙여넣기에 필요하고, Caps Lock 전용 경로에는 필요하지 않다. 입력 모니터링 목록을 독립 승인 대상으로 표시하지 않는다. 클립보드 읽기는 별도로 확인하며, 최초 활성화 때 현재 내용을 한 번 읽을 수 있지만 소급 저장하지 않는다. 키 입력·마우스 좌표·원본 이벤트를 저장하거나 전송하지 않는다. 히스토리를 켠 뒤의 지원 복사 내용은 위 로컬 저장소에 기록한다. 업데이트 요청에는 그 내용을 넣지 않는다. 권한 주체의 이전 검증은 [권한 문서](PERMISSION_OWNERSHIP.md)에, 클립보드의 아직 남은 실제 OS 검증은 [수용 현황](CLIPBOARD_HISTORY_ACCEPTANCE_STATUS.md)에 있다.
