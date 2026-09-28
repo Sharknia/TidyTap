@@ -395,7 +395,7 @@ final class HelperLauncherTests: XCTestCase {
         XCTAssertNotEqual(replacementOwner.processIdentity, owner.processIdentity)
         XCTAssertNotNil(replacementOwner.launchNonce)
         XCTAssertEqual(runtime.inspectProcess(replacementOwner), .gone)
-        XCTAssertEqual(try runtime.workersAtExpectedPath().count, 0)
+        try waitForNoWorkersAtExpectedPath(runtime: runtime)
     }
 
     private func makeLauncher(
@@ -507,6 +507,14 @@ final class HelperLauncherTests: XCTestCase {
                 process.waitUntilExit()
                 return
             }
+            usleep(10_000)
+        }
+        throw HelperLauncherTestError.workerDidNotExit
+    }
+
+    private func waitForNoWorkersAtExpectedPath(runtime: SystemTidyTapWorkerRuntime) throws {
+        for _ in 0..<200 {
+            if try runtime.workersAtExpectedPath().isEmpty { return }
             usleep(10_000)
         }
         throw HelperLauncherTestError.workerDidNotExit

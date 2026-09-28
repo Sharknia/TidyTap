@@ -12,9 +12,13 @@ main_log="$smoke_root/main.log"
 helper_log="$smoke_root/helper.log"
 main_suite="com.sharknia.TidyTap.LaunchSmoke.Main.$$.${RANDOM}"
 helper_suite="com.sharknia.TidyTap.LaunchSmoke.Helper.$$.${RANDOM}"
+main_history_dir="$HOME/Library/Application Support/$main_suite/clipboard-history"
+expired_history_entry="$main_history_dir/expired.clip"
+recent_history_entry="$main_history_dir/recent.clip"
 settings_content_width=560
 settings_content_height=760
 main_pid=""
+duplicate_main_pid=""
 helper_pid=""
 
 cleanup() {
@@ -22,13 +26,17 @@ cleanup() {
     kill "$main_pid" 2>/dev/null || true
     wait "$main_pid" 2>/dev/null || true
   fi
+  if [[ -n "$duplicate_main_pid" ]] && kill -0 "$duplicate_main_pid" 2>/dev/null; then
+    kill "$duplicate_main_pid" 2>/dev/null || true
+    wait "$duplicate_main_pid" 2>/dev/null || true
+  fi
   if [[ -n "$helper_pid" ]] && kill -0 "$helper_pid" 2>/dev/null; then
     kill "$helper_pid" 2>/dev/null || true
     wait "$helper_pid" 2>/dev/null || true
   fi
   /usr/bin/defaults delete "$main_suite" >/dev/null 2>&1 || true
   /usr/bin/defaults delete "$helper_suite" >/dev/null 2>&1 || true
-  rm -rf "$HOME/Library/Application Support/$helper_suite"
+  rm -rf "$HOME/Library/Application Support/$main_suite" "$HOME/Library/Application Support/$helper_suite"
   rm -rf "$smoke_root"
 }
 trap cleanup EXIT
@@ -93,12 +101,40 @@ fi
 "$project_root/Scripts/verify-macos-support.sh" "$app_path"
 
 # Sign nested code first so the parent resource seal contains that signature.
+"$project_root/Scripts/sign-sparkle-adhoc.sh" "$app_path" >/dev/null
 /usr/bin/codesign --force --sign - --timestamp=none "$helper_path" >/dev/null
 /usr/bin/codesign --force --sign - --timestamp=none "$app_path" >/dev/null
 /usr/bin/codesign --verify --strict "$helper_path"
 /usr/bin/codesign --verify --deep --strict "$app_path"
 
 xcrun swiftc Scripts/verify-process-window.swift -o "$smoke_root/verify-process-window"
+
+# The settings app should prune expired history even when the feature is off.
+# Keep one valid recent item so this check cannot pass by deleting everything.
+/usr/bin/python3 - "$main_history_dir" <<'PY'
+import datetime
+import os
+import pathlib
+import plistlib
+import sys
+
+directory = pathlib.Path(sys.argv[1])
+directory.mkdir(parents=True, mode=0o700, exist_ok=True)
+directory.chmod(0o700)
+for name, copied_at in [
+    ("expired.clip", datetime.datetime(1970, 1, 2, 3, 46, 40)),
+    ("recent.clip", datetime.datetime.utcnow()),
+]:
+    entry = {
+        "id": "00000000-0000-0000-0000-000000000001" if name == "expired.clip"
+            else "00000000-0000-0000-0000-000000000002",
+        "copiedAt": copied_at,
+        "content": {"text": {"plain": name}},
+    }
+    path = directory / name
+    path.write_bytes(plistlib.dumps(entry, fmt=plistlib.FMT_BINARY))
+    path.chmod(0o600)
+PY
 
 env \
   TIDYTAP_LAUNCH_SMOKE=1 \
@@ -107,9 +143,41 @@ env \
 main_pid=$!
 
 wait_for_log "$main_pid" "$main_log" "TIDYTAP_LAUNCH_SMOKE main-delegate-started"
-"$smoke_root/verify-process-window" "$main_pid" "$settings_content_width" "$settings_content_height"
+if [[ -e "$expired_history_entry" || ! -e "$recent_history_entry" ]]; then
+  print -u2 -- "Settings startup did not prune only expired clipboard history."
+  exit 1
+fi
+window_verified=0
+for attempt in {1..20}; do
+  if "$smoke_root/verify-process-window" "$main_pid" "$settings_content_width" "$settings_content_height" \
+      >"$smoke_root/window-check.log" 2>&1; then
+    window_verified=1
+    break
+  fi
+  sleep 0.1
+done
+cat "$smoke_root/window-check.log"
+if (( window_verified == 0 )); then
+  tail -10 "$main_log" >&2
+  print -u2 -- "Settings window did not settle at its requested size."
+  exit 1
+fi
 /usr/bin/grep -Fq "TIDYTAP_LAUNCH_SMOKE main-helper-launch-skipped" "$main_log"
 /usr/bin/grep -Fq "TIDYTAP_LAUNCH_SMOKE main-login-item-mutation-skipped" "$main_log"
+
+env TIDYTAP_LAUNCH_SMOKE=1 TIDYTAP_LAUNCH_SMOKE_PREFERENCES_SUITE="$main_suite" \
+  "$app_path/Contents/MacOS/TidyTap" >"$smoke_root/duplicate-main.log" 2>&1 &
+duplicate_main_pid=$!
+for attempt in {1..20}; do
+  kill -0 "$duplicate_main_pid" 2>/dev/null || break
+  sleep 0.1
+done
+if kill -0 "$duplicate_main_pid" 2>/dev/null || ! kill -0 "$main_pid" 2>/dev/null; then
+  print -u2 -- "A second settings process stayed running or displaced the first."
+  exit 1
+fi
+wait "$duplicate_main_pid"
+duplicate_main_pid=""
 
 kill "$main_pid"
 wait "$main_pid" 2>/dev/null || true
@@ -255,6 +323,42 @@ guard let data = defaults.data(forKey: "applyStatus"),
 }
 ' "$helper_suite"
 
+# An update must stop its matching worker gracefully and release worker.lock.
+# The test notification uses the isolated suite, so the installed worker never sees it.
+xcrun swift -e '
+import Foundation
+let defaults = UserDefaults(suiteName: CommandLine.arguments[1])!
+let request: [String: Any] = ["applyRequestID": UUID().uuidString, "settings": [
+    "capsLockInputSourceSwitching": true, "reverseMouseWheelVertically": false,
+    "sideButtonNavigation": false, "launchAtLogin": false
+]]
+defaults.set(try JSONSerialization.data(withJSONObject: request), forKey: "settings")
+defaults.synchronize()
+' "$helper_suite"
+env TIDYTAP_UPDATE_STOP_PROBE=1 TIDYTAP_LAUNCH_SMOKE=1 \
+  TIDYTAP_LAUNCH_SMOKE_PREFERENCES_SUITE="$helper_suite" \
+  "$helper_path" >"$smoke_root/update-stop.log" 2>&1 &
+helper_pid=$!
+wait_for_log "$helper_pid" "$smoke_root/update-stop.log" "TIDYTAP_LAUNCH_SMOKE helper-delegate-started"
+xcrun swift -e '
+import Foundation
+DistributedNotificationCenter.default().postNotificationName(
+    Notification.Name("com.sharknia.TidyTap.prepareForUpdate"),
+    object: CommandLine.arguments[1], userInfo: nil, deliverImmediately: true
+)
+' "$helper_suite"
+attempts=0
+while kill -0 "$helper_pid" 2>/dev/null && (( attempts < 100 )); do
+  sleep 0.1
+  (( attempts += 1 ))
+done
+if kill -0 "$helper_pid" 2>/dev/null; then
+  print -u2 -- "Worker did not stop for an update."
+  exit 1
+fi
+wait "$helper_pid"
+helper_pid=""
+
 live_state_after=$(snapshot_live_state)
 if [[ "$live_state_before" != "$live_state_after" ]]; then
   print -u2 -- "Live HID, symbolic-hotkey, or production preference state changed during smoke."
@@ -263,4 +367,4 @@ if [[ "$live_state_before" != "$live_state_after" ]]; then
   exit 1
 fi
 
-print -- "Launch smoke passed: settings window, all-off exit, duplicate-worker exclusion, restart after exit, fixed-step-only lifecycle, and no live state mutation."
+print -- "Launch smoke passed: settings window, expired clipboard pruning, duplicate-app and duplicate-worker exclusion, graceful update stop, all-off exit, restart after exit, fixed-step-only lifecycle, and no live state mutation."

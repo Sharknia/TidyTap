@@ -60,8 +60,11 @@ if [[ ! -f "$helper_path" || ! -x "$helper_path" ]]; then
   print -u2 -- "DMG app does not contain an executable plain TidyTapHelper."
   exit 1
 fi
-if /usr/bin/find "$app_path/Contents" -type d -name '*.app' -print -quit | /usr/bin/grep -q .; then
-  print -u2 -- "DMG app contains an unexpected nested app bundle."
+sparkle_updater="$app_path/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app"
+unexpected_app=$(/usr/bin/find "$app_path/Contents" -type d -name '*.app' \
+  ! -path "$sparkle_updater" -print -quit)
+if [[ ! -d "$sparkle_updater" || -n "$unexpected_app" ]]; then
+  print -u2 -- "DMG app is missing Sparkle's updater or contains an unexpected nested app."
   exit 1
 fi
 

@@ -1,7 +1,14 @@
 import AppKit
+import Sparkle
+import TidyTapInputEngine
+
+private struct ClipboardPasteTarget {
+    let application: NSRunningApplication
+    let sessionID: UUID
+}
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
     private var windowController: NSWindowController?
     private var settingsCoordinator: SettingsCoordinator?
     private let launchSmoke = TidyTapLaunchSmoke.current()
@@ -10,6 +17,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var finderFeedbackPanel: FinderFeedbackPanelController?
     private var feedbackHostTermination: DispatchWorkItem?
     private var pendingPermissionSettingsOpen: TidyTapPendingPermissionSettingsOpen?
+    private var clipboardHistoryPanel: ClipboardHistoryPanelController?
+    private var clipboardPasteTarget: ClipboardPasteTarget?
+    private var pendingClipboardPasteSessionID: UUID?
+    private var pendingClipboardPasteEntryID: UUID?
+    private var updaterController: SPUStandardUpdaterController?
 
     init(
         permissionSettingsOpener: TidyTapPermissionSettingsOpening = SystemPermissionSettingsOpener(),
@@ -21,6 +33,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if launchSmoke == nil {
+            NSWorkspace.shared.notificationCenter.addObserver(
+                self,
+                selector: #selector(otherTidyTapDidLaunch(_:)),
+                name: NSWorkspace.didLaunchApplicationNotification,
+                object: nil
+            )
+        }
+        let environment = ProcessInfo.processInfo.environment
+        let isTransientHost = initialFinderFeedback != nil ||
+            environment[TidyTapIPC.clipboardHistoryModeEnvironmentKey] == "1"
+        if launchSmoke == nil && !isTransientHost {
+            updaterController = SPUStandardUpdaterController(
+                startingUpdater: true, updaterDelegate: self, userDriverDelegate: nil
+            )
+        }
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(clipboardHistoryToggle(_:)),
+            name: TidyTapIPC.clipboardHistoryToggle,
+            object: TidyTapProduct.appBundleIdentifier,
+            suspensionBehavior: .deliverImmediately
+        )
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(clipboardHistoryChanged(_:)),
+            name: TidyTapIPC.clipboardHistoryChanged,
+            object: TidyTapProduct.appBundleIdentifier,
+            suspensionBehavior: .deliverImmediately
+        )
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(clipboardHistoryPasteResult(_:)),
+            name: TidyTapIPC.clipboardHistoryPasteResult,
+            object: TidyTapProduct.appBundleIdentifier,
+            suspensionBehavior: .deliverImmediately
+        )
+        DistributedNotificationCenter.default().addObserver(
+            self,
+            selector: #selector(applyResultDidArrive(_:)),
+            name: TidyTapIPC.applyResult,
+            object: TidyTapProduct.appBundleIdentifier,
+            suspensionBehavior: .deliverImmediately
+        )
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(finderFeedbackDidArrive(_:)),
@@ -28,6 +84,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             object: TidyTapProduct.appBundleIdentifier,
             suspensionBehavior: .deliverImmediately
         )
+        if ProcessInfo.processInfo.environment[TidyTapIPC.clipboardHistoryModeEnvironmentKey] == "1" {
+            toggleClipboardHistory(
+                targetPID: TidyTapIPC.clipboardTargetPID(in: ProcessInfo.processInfo.environment),
+                sessionID: TidyTapIPC.clipboardSessionID(in: ProcessInfo.processInfo.environment),
+                displayID: TidyTapIPC.clipboardDisplayID(in: ProcessInfo.processInfo.environment)
+            )
+            TidyTapIPC.postFinderFeedbackReady()
+            return
+        }
+        if ProcessInfo.processInfo.environment[TidyTapProduct.backgroundUpdateEnvironmentKey] == "1" {
+            NSApp.setActivationPolicy(.accessory)
+            try? HelperLauncher().ensureHelperRunning()
+            TidyTapIPC.postFinderFeedbackReady()
+            return
+        }
         TidyTapIPC.postFinderFeedbackReady()
         if let initialFinderFeedback {
             NSApp.setActivationPolicy(.accessory)
@@ -43,6 +114,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func startSettingsSession() {
+        pruneClipboardHistoryIfPresent()
         guard settingsCoordinator == nil else {
             showSettingsWindow()
             return
@@ -75,13 +147,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.settingsCoordinator = settingsCoordinator
         DistributedNotificationCenter.default().addObserver(
             self,
-            selector: #selector(applyResultDidArrive(_:)),
-            name: TidyTapIPC.applyResult,
-            object: TidyTapProduct.appBundleIdentifier,
-            suspensionBehavior: .deliverImmediately
-        )
-        DistributedNotificationCenter.default().addObserver(
-            self,
             selector: #selector(permissionResultDidArrive(_:)),
             name: TidyTapIPC.permissionResult,
             object: TidyTapProduct.appBundleIdentifier,
@@ -94,6 +159,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             permissionState: settingsCoordinator.latestPermissionState ?? .init(),
             delegate: self
         )
+        controller.onClearClipboardHistory = { [weak self, weak controller] in
+            self?.clearClipboardHistory(settingsController: controller)
+        }
+        if let updaterController {
+            controller.onCheckForUpdates = { updaterController.checkForUpdates(nil) }
+        }
         let window = NSWindow(contentViewController: controller)
         window.title = TidyTapStrings.appName
         window.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
@@ -109,6 +180,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let windowController = NSWindowController(window: window)
         self.windowController = windowController
         showSettingsWindow()
+        launchSmoke?.report(
+            "settings-window-frame-\(Int(window.frame.width))x\(Int(window.frame.height))-" +
+                "content-\(Int(window.contentLayoutRect.width))x\(Int(window.contentLayoutRect.height))"
+        )
         launchSmoke?.report("main-delegate-started")
         if let status = settingsCoordinator.latestApplyStatus {
             controller.showApplyStatus(
@@ -116,6 +191,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 permission: settingsCoordinator.permissionSettingsPane(for: status)
             )
         }
+    }
+
+    /// History can be disabled while the helper is not running. Reopening
+    /// settings is another chance to remove entries that expired meanwhile.
+    private func pruneClipboardHistoryIfPresent() {
+        let suite = launchSmoke?.preferencesSuite ?? TidyTapProduct.appBundleIdentifier
+        let directory = TidyTapProduct.clipboardHistoryDirectory(preferencesSuite: suite)
+        guard FileManager.default.fileExists(atPath: directory.path) else { return }
+        guard let store = try? ClipboardHistoryStore(
+            directory: directory,
+            retention: TidyTapClipboardPolicy.retention,
+            maximumEntries: TidyTapClipboardPolicy.maximumEntries,
+            maximumBytes: TidyTapClipboardPolicy.maximumBytes,
+            maximumItemBytes: TidyTapClipboardPolicy.maximumItemBytes
+        ) else { return }
+        _ = try? store.entries()
     }
 
     /// Keep the complete settings view visible on ordinary displays while
@@ -142,6 +233,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Reopen the settings surface when the Dock icon or a status-item menu
     /// asks the already-running application to open.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if clipboardHistoryPanel?.isVisible == true { return true }
         startSettingsSession()
         return true
     }
@@ -163,9 +255,268 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     deinit {
         DistributedNotificationCenter.default().removeObserver(self)
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
+    }
+
+    @objc private func otherTidyTapDidLaunch(_ notification: Notification) {
+        guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+              app.bundleIdentifier == TidyTapProduct.appBundleIdentifier,
+              app.processIdentifier != getpid(),
+              TidyTapProduct.isSameSignedApp(app) else { return }
+        // A same-version second process exits on app.lock. Wait for that exit
+        // before treating a still-running copy as an older installation.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            if !app.isTerminated { NSApp.terminate(nil) }
+        }
+    }
+
+    func updater(_ updater: SPUUpdater, willInstallUpdate item: SUAppcastItem) {
+        TidyTapIPC.postPrepareForUpdate()
+        let runtime = SystemTidyTapWorkerRuntime()
+        for _ in 0..<40 {
+            if case .free = try? runtime.inspectLock() { return }
+            usleep(50_000)
+        }
+    }
+
+    @objc private func clipboardHistoryToggle(_ notification: Notification) {
+        toggleClipboardHistory(
+            targetPID: TidyTapIPC.clipboardTargetPID(in: notification),
+            sessionID: TidyTapIPC.clipboardSessionID(in: notification),
+            displayID: TidyTapIPC.clipboardDisplayID(in: notification)
+        )
+    }
+
+    @objc private func clipboardHistoryPasteResult(_ notification: Notification) {
+        guard let result = TidyTapIPC.clipboardPasteResult(in: notification),
+              result.sessionID == pendingClipboardPasteSessionID else { return }
+        pendingClipboardPasteSessionID = nil
+        let entryID = pendingClipboardPasteEntryID
+        pendingClipboardPasteEntryID = nil
+        clipboardProbeReport("helper result=\(result.error ?? "posted")")
+        if let error = result.error {
+            showClipboardError(reason: error)
+        } else if let entryID {
+            promotePastedHistoryEntry(entryID)
+        }
+    }
+
+    @objc private func clipboardHistoryChanged(_ notification: Notification) {
+        guard let panel = clipboardHistoryPanel, panel.isVisible else { return }
+        do {
+            let suite = launchSmoke?.preferencesSuite ?? TidyTapProduct.appBundleIdentifier
+            let store = try ClipboardHistoryStore(
+                directory: TidyTapProduct.clipboardHistoryDirectory(preferencesSuite: suite),
+                retention: TidyTapClipboardPolicy.retention,
+                maximumEntries: TidyTapClipboardPolicy.maximumEntries,
+                maximumBytes: TidyTapClipboardPolicy.maximumBytes,
+                maximumItemBytes: TidyTapClipboardPolicy.maximumItemBytes
+            )
+            let entries = try store.entries()
+            let latestCopyTooLarge = store.oversizedCopyChangeCount()
+                .map { $0 == NSPasteboard.general.changeCount } ?? false
+            panel.refreshPreservingSelection(entries, latestCopyTooLarge: latestCopyTooLarge)
+        } catch {
+            // The current visible snapshot remains usable; a later open retries storage.
+        }
+    }
+
+    private func toggleClipboardHistory(targetPID: pid_t?, sessionID: UUID?, displayID: UInt32?) {
+        if clipboardHistoryPanel?.isVisible == true {
+            clipboardHistoryPanel?.close()
+            return
+        }
+        guard let targetPID, let sessionID, targetPID != getpid(),
+              NSWorkspace.shared.frontmostApplication?.processIdentifier == targetPID,
+              let application = NSRunningApplication(processIdentifier: targetPID) else { return }
+        clipboardProbeReport("opened")
+
+        do {
+            let suite = launchSmoke?.preferencesSuite ?? TidyTapProduct.appBundleIdentifier
+            let store = try ClipboardHistoryStore(
+                directory: TidyTapProduct.clipboardHistoryDirectory(preferencesSuite: suite),
+                retention: TidyTapClipboardPolicy.retention,
+                maximumEntries: TidyTapClipboardPolicy.maximumEntries,
+                maximumBytes: TidyTapClipboardPolicy.maximumBytes,
+                maximumItemBytes: TidyTapClipboardPolicy.maximumItemBytes
+            )
+            let entries = try store.entries()
+            let latestCopyTooLarge = store.oversizedCopyChangeCount()
+                .map { $0 == NSPasteboard.general.changeCount } ?? false
+            let preferences = TidyTapPreferencesStore(defaults: launchSmoke?.makePreferences())
+            clipboardPasteTarget = ClipboardPasteTarget(application: application, sessionID: sessionID)
+            let panel = clipboardHistoryPanel ?? ClipboardHistoryPanelController()
+            clipboardHistoryPanel = panel
+            // Activating the history panel also raises other windows owned by
+            // this app. Keep Settings out of the way until explicitly reopened.
+            windowController?.window?.orderOut(nil)
+            panel.show(
+                entries: entries,
+                displayID: displayID,
+                pasteFormattedByDefault: preferences.readRequest().settings.pasteFormattedTextByDefault,
+                latestCopyTooLarge: latestCopyTooLarge,
+                onPaste: { [weak self] entry, style in self?.paste(entry, style: style) },
+                onDelete: { [weak self, weak panel] id, row in
+                    do {
+                        try store.delete(id)
+                        panel?.refreshAfterDeleting(try store.entries(), previousRow: row)
+                    } catch {
+                        self?.showClipboardDeleteError()
+                    }
+                },
+                onCancel: { [weak self] restorePreviousApp in
+                    guard let self else { return }
+                    let target = self.clipboardPasteTarget
+                    self.clipboardPasteTarget = nil
+                    if restorePreviousApp, let target, !target.application.isTerminated {
+                        _ = target.application.activate(options: [])
+                    }
+                }
+            )
+        } catch {
+            showClipboardOpenError()
+        }
+    }
+
+    private func paste(_ entry: ClipboardHistoryEntry, style: ClipboardTextPasteStyle) {
+        pendingClipboardPasteSessionID = nil
+        pendingClipboardPasteEntryID = nil
+        guard let target = clipboardPasteTarget, !target.application.isTerminated else {
+            showClipboardError(reason: "targetUnavailable")
+            return
+        }
+        clipboardPasteTarget = nil
+        clipboardProbeReport("paste requested")
+        clipboardProbeReport("activation=\(target.application.activate(options: []))")
+        pasteWhenTargetIsActive(entry, style: style, target: target, attemptsRemaining: 15)
+    }
+
+    private func pasteWhenTargetIsActive(
+        _ entry: ClipboardHistoryEntry,
+        style: ClipboardTextPasteStyle,
+        target: ClipboardPasteTarget,
+        attemptsRemaining: Int
+    ) {
+        guard !target.application.isTerminated else {
+            showClipboardError(reason: "targetUnavailable")
+            return
+        }
+        let processID = target.application.processIdentifier
+        if NSWorkspace.shared.frontmostApplication?.processIdentifier != processID {
+            guard attemptsRemaining > 0 else {
+                clipboardProbeReport("target not frontmost")
+                showClipboardError(reason: "targetUnavailable")
+                return
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in
+                self?.pasteWhenTargetIsActive(
+                    entry, style: style, target: target,
+                    attemptsRemaining: attemptsRemaining - 1
+                )
+            }
+            return
+        }
+        pendingClipboardPasteSessionID = target.sessionID
+        pendingClipboardPasteEntryID = entry.id
+        TidyTapIPC.postClipboardHistoryPaste(
+            sessionID: target.sessionID,
+            entryID: entry.id,
+            formatted: style == .formatted
+        )
+        clipboardProbeReport("paste sent to helper")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            guard let self, self.pendingClipboardPasteSessionID == target.sessionID else { return }
+            self.pendingClipboardPasteSessionID = nil
+            self.pendingClipboardPasteEntryID = nil
+            self.clipboardProbeReport("helper result=timeout")
+            self.showClipboardError(reason: "helperTimeout")
+        }
+    }
+
+    private func promotePastedHistoryEntry(_ id: UUID) {
+        do {
+            let suite = launchSmoke?.preferencesSuite ?? TidyTapProduct.appBundleIdentifier
+            let store = try ClipboardHistoryStore(
+                directory: TidyTapProduct.clipboardHistoryDirectory(preferencesSuite: suite),
+                retention: TidyTapClipboardPolicy.retention,
+                maximumEntries: TidyTapClipboardPolicy.maximumEntries,
+                maximumBytes: TidyTapClipboardPolicy.maximumBytes,
+                maximumItemBytes: TidyTapClipboardPolicy.maximumItemBytes
+            )
+            _ = try store.promote(id)
+        } catch {
+            NSLog("TidyTap clipboard history recency update failed")
+        }
+    }
+
+    private func clipboardProbeReport(_ event: String) {
+        guard launchSmoke != nil,
+              ProcessInfo.processInfo.environment[TidyTapIPC.clipboardHistoryModeEnvironmentKey] == "1",
+              let path = ProcessInfo.processInfo.environment["TIDYTAP_CLIPBOARD_G1_LOG_PATH"],
+              let handle = try? FileHandle(forWritingTo: URL(fileURLWithPath: path)) else { return }
+        defer { try? handle.close() }
+        _ = try? handle.seekToEnd()
+        try? handle.write(contentsOf: Data("clipboard-g1: \(event)\n".utf8))
+    }
+
+    private func showClipboardError(reason: String? = nil) {
+        NSLog("TidyTap clipboard paste failed: %@", reason ?? "unknown")
+        let alert = NSAlert()
+        alert.messageText = String(localized: "Could not paste the selected item")
+        alert.informativeText = TidyTapStrings.clipboardPasteFailureMessage(for: reason)
+        presentClipboardAlert(alert)
+    }
+
+    private func showClipboardOpenError() {
+        let alert = NSAlert()
+        alert.messageText = String(localized: "Could not open clipboard history")
+        alert.informativeText = String(localized: "Check available storage and try again.")
+        presentClipboardAlert(alert)
+    }
+
+    private func showClipboardDeleteError() {
+        let alert = NSAlert()
+        alert.messageText = String(localized: "Could not delete the selected item")
+        alert.informativeText = String(localized: "Check available storage and try again.")
+        presentClipboardAlert(alert)
+    }
+
+    private func presentClipboardAlert(_ alert: NSAlert) {
+        alert.window.level = .statusBar
+        alert.window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        NSApp.activate(ignoringOtherApps: true)
+        alert.window.orderFrontRegardless()
+        alert.runModal()
+    }
+
+    private func clearClipboardHistory(settingsController: SettingsViewController?) {
+        do {
+            let store = try ClipboardHistoryStore(
+                directory: TidyTapProduct.clipboardHistoryDirectory(
+                    preferencesSuite: launchSmoke?.preferencesSuite ?? TidyTapProduct.appBundleIdentifier
+                ),
+                retention: TidyTapClipboardPolicy.retention,
+                maximumEntries: TidyTapClipboardPolicy.maximumEntries,
+                maximumBytes: TidyTapClipboardPolicy.maximumBytes,
+                maximumItemBytes: TidyTapClipboardPolicy.maximumItemBytes
+            )
+            try store.deleteAll()
+            clipboardHistoryPanel?.updateEntries([])
+            settingsController?.showClipboardClearStatus(success: true)
+        } catch {
+            settingsController?.showClipboardClearStatus(success: false)
+        }
     }
 
     @objc private func applyResultDidArrive(_ notification: Notification) {
+        let preferences = TidyTapPreferencesStore(defaults: launchSmoke?.makePreferences())
+        let request = preferences.readRequest()
+        let applied = preferences.readApplyStatus()
+        if request.settings.clipboardHistoryIsEffectivelyOff(
+            requestID: request.applyRequestID, status: applied
+        ) {
+            clipboardHistoryPanel?.close(restorePreviousApp: settingsCoordinator == nil)
+        }
         guard let coordinator = settingsCoordinator,
               let status = coordinator.receiveApplyResult(),
               let controller = windowController?.contentViewController as? SettingsViewController else {
@@ -187,7 +538,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func finderFeedbackDidArrive(_ notification: Notification) {
         guard let payload = TidyTapIPC.finderFeedback(in: notification) else { return }
-        showFinderFeedback(payload, terminateAfterDisplay: settingsCoordinator == nil)
+        showFinderFeedback(
+            payload,
+            terminateAfterDisplay: settingsCoordinator == nil && clipboardHistoryPanel == nil
+        )
     }
 
     private func showFinderFeedback(

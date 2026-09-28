@@ -1,4 +1,5 @@
 import Darwin
+import AppKit
 import Foundation
 
 func writeLockOwner(_ owner: TidyTapWorkerLockOwner, to descriptor: Int32) -> Bool {
@@ -13,6 +14,24 @@ func writeLockOwner(_ owner: TidyTapWorkerLockOwner, to descriptor: Int32) -> Bo
 // Manual launches and ServiceManagement may race. The kernel releases this
 // lock on every exit/crash, so no stale PID or distributed election is needed.
 let suite = TidyTapLaunchSmoke.current()?.preferencesSuite ?? TidyTapProduct.appBundleIdentifier
+#if DEBUG
+let developmentRun = true
+#else
+let developmentRun = TidyTapLaunchSmoke.current() != nil
+#endif
+guard TidyTapProduct.isInstalledCopy(Bundle.main.bundleURL, allowDevelopment: developmentRun) else { exit(0) }
+if TidyTapLaunchSmoke.current() == nil,
+   NSRunningApplication.runningApplications(withBundleIdentifier: TidyTapProduct.appBundleIdentifier)
+    .contains(where: {
+        guard let url = $0.bundleURL else { return false }
+        return !TidyTapProduct.isInstalledCopy(url) && TidyTapProduct.isSameSignedApp($0)
+    }) {
+    exit(0)
+}
+if ProcessInfo.processInfo.environment["TIDYTAP_CLIPBOARD_G1_PROBE"] == "1",
+   TidyTapLaunchSmoke.current() == nil {
+    exit(1)
+}
 let lockURL = TidyTapProduct.workerLockURL(preferencesSuite: suite)
 let lockDirectory = lockURL.deletingLastPathComponent()
 try FileManager.default.createDirectory(at: lockDirectory, withIntermediateDirectories: true)

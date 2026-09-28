@@ -171,8 +171,9 @@ if $developer_id_preview; then
   # The passed file is the existing ignored local config. It overrides only its
   # local values; the target's Release settings and Config/Signing.xcconfig
   # still supply manual signing, hardened runtime, bundle IDs, and timestamping.
+  archive_path="$candidate_dir/TidyTap.xcarchive"
   run_step \
-    "Developer ID preview build" \
+    "Developer ID preview archive" \
     "Check the Release build settings, source errors, and local signing identity." \
     xcodebuild \
       -quiet \
@@ -181,7 +182,33 @@ if $developer_id_preview; then
       -configuration "$configuration" \
       -derivedDataPath "$derived_data" \
       -xcconfig "$developer_id_config" \
-      build
+      -archivePath "$archive_path" \
+      archive
+  export_options="$candidate_dir/ExportOptions.plist"
+  /usr/bin/python3 - "$export_options" "$team_id" "$identity" <<'PY'
+import plistlib
+import sys
+
+with open(sys.argv[1], "wb") as output:
+    plistlib.dump({
+        "method": "developer-id",
+        "destination": "export",
+        "signingStyle": "manual",
+        "teamID": sys.argv[2],
+        "signingCertificate": sys.argv[3],
+    }, output)
+PY
+  export_path="$candidate_dir/export"
+  run_step \
+    "Developer ID preview export" \
+    "Xcode must re-sign Sparkle's nested updater services for distribution." \
+    xcodebuild \
+      -quiet \
+      -exportArchive \
+      -archivePath "$archive_path" \
+      -exportPath "$export_path" \
+      -exportOptionsPlist "$export_options"
+  app_path="$export_path/TidyTap.app"
   source_directory="$sources_dir"
 else
   run_step \
@@ -197,10 +224,10 @@ else
       CODE_SIGNING_REQUIRED=NO \
       CODE_SIGN_IDENTITY= \
       build
+  app_path="$derived_data/Build/Products/$configuration/TidyTap.app"
   source_directory="$project_root"
 fi
 
-app_path="$derived_data/Build/Products/$configuration/TidyTap.app"
 helper_path="$app_path/Contents/MacOS/TidyTapHelper"
 if [[ ! -d "$app_path" || ! -x "$helper_path" ]]; then
   print -u2 -- "Preview build did not produce TidyTap.app with its embedded TidyTapHelper executable."
@@ -268,12 +295,29 @@ if $developer_id_preview; then
   # ad-hoc signature: that would change the identity macOS associates with AX/IM.
   verify_developer_id_signature "$helper_path" "Developer ID preview helper" "TidyTapHelper"
   verify_developer_id_signature "$app_path" "Developer ID preview app" "com.sharknia.TidyTap"
+  sparkle_framework="$app_path/Contents/Frameworks/Sparkle.framework"
+  if [[ ! -d "$sparkle_framework" ]]; then
+    print -u2 -- "Developer ID preview app is missing Sparkle.framework."
+    exit 1
+  fi
+  verify_developer_id_signature "$sparkle_framework" "Developer ID preview Sparkle framework"
+  for component in \
+    "$sparkle_framework/Versions/B/Autoupdate" \
+    "$sparkle_framework/Versions/B/Updater.app" \
+    "$sparkle_framework/Versions/B/XPCServices/Downloader.xpc" \
+    "$sparkle_framework/Versions/B/XPCServices/Installer.xpc"; do
+    verify_developer_id_signature "$component" "Developer ID preview Sparkle component"
+  done
   run_step \
     "Developer ID preview app resource seal verification" \
     "The app or its embedded helper is not a valid sealed bundle." \
     /usr/bin/codesign --verify --deep --strict --verbose=2 "$app_path"
 else
   # Sign nested code first so the parent app's resource seal includes it.
+  run_step \
+    "Preview Sparkle framework ad-hoc signing" \
+    "Check nested Sparkle binaries and the embedded framework." \
+    "$project_root/Scripts/sign-sparkle-adhoc.sh" "$app_path"
   sign_preview_bundle "$helper_path" "Preview helper"
   sign_preview_bundle "$app_path" "Preview app"
   verify_preview_bundle "$helper_path" "Preview helper"

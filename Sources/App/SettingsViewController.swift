@@ -24,6 +24,11 @@ final class SettingsViewController: NSViewController {
         static let mousePermissions = "settings.mouse.permissions"
         static let capsSwitch = "settings.caps.switch"
         static let finderCutPasteSwitch = "settings.finderCutPaste.switch"
+        static let clipboardHistorySwitch = "settings.clipboardHistory.switch"
+        static let clipboardOptions = "settings.clipboardHistory.options"
+        static let clipboardShortcutButton = "settings.clipboardHistory.shortcut"
+        static let clipboardPasteStyle = "settings.clipboardHistory.pasteStyle"
+        static let clipboardClearHistory = "settings.clipboardHistory.clear"
         static let wheelSwitch = "settings.wheel.switch"
         static let wheelStepSwitch = "settings.wheelStep.switch"
         static let wheelStepSlider = "settings.wheelStep.slider"
@@ -36,6 +41,9 @@ final class SettingsViewController: NSViewController {
     weak var delegate: SettingsViewControllerDelegate?
     var onSettingsChange: ((TidyTapSettings) -> Void)?
     var onPermissionSettingsRequest: ((TidyTapPermission) -> Void)?
+    var captureClipboardShortcut: (() -> TidyTapClipboardShortcut?)?
+    var onClearClipboardHistory: (() -> Void)?
+    var onCheckForUpdates: (() -> Void)?
 
     private(set) var settings: TidyTapSettings
     private(set) var permissionState: TidyTapFeaturePermissionState
@@ -51,6 +59,12 @@ final class SettingsViewController: NSViewController {
     private let statusMessage = NSTextField(wrappingLabelWithString: "")
     private let capsSwitch = NSSwitch()
     private let finderCutPasteSwitch = NSSwitch()
+    private let clipboardHistorySwitch = NSSwitch()
+    private let clipboardShortcutButton = NSButton()
+    private let clipboardPasteStyle = NSPopUpButton()
+    private let clipboardClearHistoryButton = NSButton()
+    private var clipboardOptionsRowView: NSView?
+    private var clipboardOptionsSeparator: NSBox?
     private let wheelSwitch = NSSwitch()
     private let wheelStepSwitch = NSSwitch()
     private let wheelStepSlider = WheelStepSlider()
@@ -157,7 +171,8 @@ final class SettingsViewController: NSViewController {
                     caption: copy.finderCutPasteCaption,
                     toggle: finderCutPasteSwitch,
                     identifier: ControlIdentifier.finderCutPasteSwitch
-                )
+                ),
+                clipboardHistoryGroup()
             ]
         )
 
@@ -220,6 +235,10 @@ final class SettingsViewController: NSViewController {
         guard isViewLoaded else { return }
         capsSwitch.state = settings.capsLockInputSourceSwitching ? .on : .off
         finderCutPasteSwitch.state = settings.finderCutPasteEnabled ? .on : .off
+        clipboardHistorySwitch.state = settings.clipboardHistoryEnabled ? .on : .off
+        clipboardShortcutButton.title = settings.clipboardHistoryShortcut.map(shortcutTitle) ?? copy.setShortcut
+        clipboardPasteStyle.selectItem(at: settings.pasteFormattedTextByDefault ? 1 : 0)
+        updateClipboardOptionsVisibility()
         wheelSwitch.state = settings.reverseMouseWheelVertically ? .on : .off
         wheelStepSwitch.state = settings.fixedMouseWheelStepEnabled ? .on : .off
         updateWheelStepPresentation()
@@ -247,6 +266,23 @@ final class SettingsViewController: NSViewController {
             return
         }
 
+        switch status.errorCode {
+        case "clipboardHistory.readDenied":
+            showStatus(copy.clipboardReadDenied)
+            return
+        case "clipboardHistory.continuousAccessRequired":
+            showStatus(copy.clipboardContinuousAccessRequired)
+            return
+        case "clipboardHistory.storageFailed", "clipboardHistory.storageRecoveryRequired":
+            showStatus(copy.clipboardStorageFailed)
+            return
+        case "eventTap.invalidClipboardShortcut":
+            showStatus(copy.invalidShortcutCaption)
+            return
+        default:
+            break
+        }
+
         switch status.outcome {
         case .pending:
             showStatus(copy.applyingChanges)
@@ -257,6 +293,10 @@ final class SettingsViewController: NSViewController {
         case .recoveryRequired:
             showStatus(copy.changesCouldNotBeApplied)
         }
+    }
+
+    func showClipboardClearStatus(success: Bool) {
+        showStatus(success ? copy.clipboardHistoryCleared : copy.clipboardHistoryClearFailed)
     }
 
     /// Compatibility entry point for persistence failures that are not a
@@ -282,8 +322,7 @@ final class SettingsViewController: NSViewController {
 
         let iconGlass = surface(
             content: iconContent,
-            cornerRadius: 16,
-            tintColor: NSColor.systemTeal.withAlphaComponent(0.09)
+            cornerRadius: 16
         )
         NSLayoutConstraint.activate([
             iconGlass.widthAnchor.constraint(equalToConstant: 58),
@@ -378,6 +417,86 @@ final class SettingsViewController: NSViewController {
         return row
     }
 
+    private func clipboardOptionsRow() -> NSView {
+        let row = NSView()
+        row.identifier = NSUserInterfaceItemIdentifier(ControlIdentifier.clipboardOptions)
+        row.translatesAutoresizingMaskIntoConstraints = false
+        let shortcutLabel = NSTextField(labelWithString: copy.shortcutTitle)
+        let styleLabel = NSTextField(labelWithString: copy.defaultPasteTitle)
+        for label in [shortcutLabel, styleLabel] {
+            label.font = .systemFont(ofSize: 12, weight: .medium)
+            label.textColor = .secondaryLabelColor
+        }
+        clipboardShortcutButton.identifier = NSUserInterfaceItemIdentifier(ControlIdentifier.clipboardShortcutButton)
+        clipboardShortcutButton.bezelStyle = .rounded
+        clipboardShortcutButton.setAccessibilityLabel(copy.changeShortcut)
+        clipboardPasteStyle.identifier = NSUserInterfaceItemIdentifier(ControlIdentifier.clipboardPasteStyle)
+        clipboardPasteStyle.addItems(withTitles: [copy.pastePlain, copy.pasteFormatted])
+        clipboardPasteStyle.setAccessibilityLabel(copy.defaultPasteTitle)
+
+        let shortcutColumn = NSStackView(views: [shortcutLabel, clipboardShortcutButton])
+        let styleColumn = NSStackView(views: [styleLabel, clipboardPasteStyle])
+        for column in [shortcutColumn, styleColumn] {
+            column.orientation = .vertical
+            column.alignment = .leading
+            column.spacing = 4
+        }
+        let columns = NSStackView(views: [shortcutColumn, styleColumn])
+        columns.orientation = .horizontal
+        columns.alignment = .top
+        columns.distribution = .fillEqually
+        columns.spacing = 16
+        columns.translatesAutoresizingMaskIntoConstraints = false
+        row.addSubview(columns)
+        clipboardClearHistoryButton.identifier = NSUserInterfaceItemIdentifier(ControlIdentifier.clipboardClearHistory)
+        clipboardClearHistoryButton.title = copy.clearClipboardHistory
+        clipboardClearHistoryButton.isBordered = false
+        clipboardClearHistoryButton.contentTintColor = .systemRed
+        clipboardClearHistoryButton.translatesAutoresizingMaskIntoConstraints = false
+        row.addSubview(clipboardClearHistoryButton)
+        NSLayoutConstraint.activate([
+            row.heightAnchor.constraint(equalToConstant: 104),
+            columns.leadingAnchor.constraint(equalTo: row.leadingAnchor, constant: 56),
+            columns.trailingAnchor.constraint(equalTo: row.trailingAnchor, constant: -18),
+            columns.topAnchor.constraint(equalTo: row.topAnchor, constant: 8),
+            clipboardShortcutButton.widthAnchor.constraint(greaterThanOrEqualToConstant: 130),
+            clipboardPasteStyle.widthAnchor.constraint(greaterThanOrEqualToConstant: 130),
+            clipboardClearHistoryButton.leadingAnchor.constraint(equalTo: columns.leadingAnchor),
+            clipboardClearHistoryButton.topAnchor.constraint(equalTo: columns.bottomAnchor, constant: 6)
+        ])
+        return row
+    }
+
+    private func clipboardHistoryGroup() -> NSView {
+        let group = NSStackView()
+        group.orientation = .vertical
+        group.alignment = .leading
+        group.spacing = 0
+        group.translatesAutoresizingMaskIntoConstraints = false
+        let toggle = featureRow(
+            symbol: "doc.on.clipboard",
+            title: copy.clipboardHistoryTitle,
+            caption: copy.clipboardHistoryCaption,
+            toggle: clipboardHistorySwitch,
+            identifier: ControlIdentifier.clipboardHistorySwitch
+        )
+        let divider = separator()
+        let options = clipboardOptionsRow()
+        for view in [toggle, divider, options] {
+            group.addArrangedSubview(view)
+            view.widthAnchor.constraint(equalTo: group.widthAnchor).isActive = true
+        }
+        clipboardOptionsSeparator = divider
+        clipboardOptionsRowView = options
+        return group
+    }
+
+    private func updateClipboardOptionsVisibility() {
+        let hidden = clipboardHistorySwitch.state != .on
+        clipboardOptionsSeparator?.isHidden = hidden
+        clipboardOptionsRowView?.isHidden = hidden
+    }
+
     /// The control remains in the layout while disabled, so switching the
     /// feature on and off never makes the window jump or loses its last value.
     private func wheelStepRow() -> NSView {
@@ -439,13 +558,12 @@ final class SettingsViewController: NSViewController {
 
     private func surface(
         content: NSView,
-        cornerRadius: CGFloat,
-        tintColor: NSColor? = nil
+        cornerRadius: CGFloat
     ) -> NSView {
         switch renderingMode {
         case .native:
             if #available(macOS 26.0, *) {
-                return GlassCardView(content: content, cornerRadius: cornerRadius, tintColor: tintColor)
+                return GlassCardView(content: content, cornerRadius: cornerRadius)
             }
             return SemanticSurfaceView(content: content, cornerRadius: cornerRadius)
         case .offscreenSemanticFallback:
@@ -487,10 +605,16 @@ final class SettingsViewController: NSViewController {
     }
 
     private func configureActions() {
-        [capsSwitch, finderCutPasteSwitch, wheelSwitch, wheelStepSwitch, sideSwitch, loginSwitch].forEach {
+        [capsSwitch, finderCutPasteSwitch, clipboardHistorySwitch, wheelSwitch, wheelStepSwitch, sideSwitch, loginSwitch].forEach {
             $0.target = self
             $0.action = #selector(settingChanged(_:))
         }
+        clipboardShortcutButton.target = self
+        clipboardShortcutButton.action = #selector(changeClipboardShortcut(_:))
+        clipboardPasteStyle.target = self
+        clipboardPasteStyle.action = #selector(changePasteStyle(_:))
+        clipboardClearHistoryButton.target = self
+        clipboardClearHistoryButton.action = #selector(clearClipboardHistory(_:))
         wheelStepSlider.target = self
         wheelStepSlider.action = #selector(wheelStepChanged(_:))
         wheelStepSlider.onDragCompleted = { [weak self] in
@@ -510,6 +634,12 @@ final class SettingsViewController: NSViewController {
         version.font = .systemFont(ofSize: 12)
         version.textColor = .secondaryLabelColor
         footer.addArrangedSubview(version)
+        let checkUpdates = NSButton(title: copy.checkForUpdates, target: self, action: #selector(checkForUpdates(_:)))
+        checkUpdates.identifier = NSUserInterfaceItemIdentifier("settings.checkForUpdates")
+        checkUpdates.isBordered = false
+        checkUpdates.font = .systemFont(ofSize: 12)
+        checkUpdates.isEnabled = onCheckForUpdates != nil
+        footer.addArrangedSubview(checkUpdates)
         footer.addArrangedSubview(NSView())
         footer.addArrangedSubview(linkButton(title: TidyTapStrings.email, url: TidyTapStrings.emailURL))
         let dot = NSTextField(labelWithString: "·")
@@ -575,9 +705,12 @@ final class SettingsViewController: NSViewController {
     private func setFeatureControlsEnabled(_ isEnabled: Bool) {
         let update = { [weak self] in
             guard let self else { return }
-            [capsSwitch, finderCutPasteSwitch, wheelSwitch, wheelStepSwitch, sideSwitch, loginSwitch].forEach {
+            [capsSwitch, finderCutPasteSwitch, clipboardHistorySwitch, wheelSwitch, wheelStepSwitch, sideSwitch, loginSwitch].forEach {
                 $0.isEnabled = isEnabled
             }
+            clipboardShortcutButton.isEnabled = isEnabled
+            clipboardPasteStyle.isEnabled = isEnabled
+            clipboardClearHistoryButton.isEnabled = isEnabled
         }
 
         // A pending status can be delivered synchronously from the action
@@ -603,6 +736,10 @@ final class SettingsViewController: NSViewController {
         String(format: copy.versionFormat, displayVersion)
     }
 
+    @objc private func checkForUpdates(_ sender: NSButton) {
+        onCheckForUpdates?()
+    }
+
     private func linkButton(title: String, url: URL) -> NSButton {
         let button = NSButton(title: title, target: self, action: #selector(openLink(_:)))
         button.identifier = NSUserInterfaceItemIdentifier(url.absoluteString)
@@ -618,6 +755,21 @@ final class SettingsViewController: NSViewController {
             settings.capsLockInputSourceSwitching = sender.state == .on
         case finderCutPasteSwitch:
             settings.finderCutPasteEnabled = sender.state == .on
+        case clipboardHistorySwitch:
+            let isFirstActivation = sender.state == .on && !settings.clipboardHistoryEnabled
+            if sender.state == .on, settings.clipboardHistoryShortcut == nil {
+                guard let shortcut = recordClipboardShortcut() else {
+                    sender.state = .off
+                    return
+                }
+                settings.clipboardHistoryShortcut = shortcut
+                clipboardShortcutButton.title = shortcutTitle(shortcut)
+            }
+            settings.clipboardHistoryEnabled = sender.state == .on
+            // The helper has not confirmed registration yet. Keep the switch
+            // and its options off until apply(_:) receives the effective state.
+            if isFirstActivation { sender.state = .off }
+            updateClipboardOptionsVisibility()
         case wheelSwitch:
             settings.reverseMouseWheelVertically = sender.state == .on
         case wheelStepSwitch:
@@ -634,6 +786,61 @@ final class SettingsViewController: NSViewController {
         isHandlingSwitchAction = true
         sendSettingsChange()
         isHandlingSwitchAction = false
+    }
+
+    @objc private func changeClipboardShortcut(_ sender: NSButton) {
+        guard let shortcut = recordClipboardShortcut() else { return }
+        settings.clipboardHistoryShortcut = shortcut
+        sendSettingsChange()
+    }
+
+    @objc private func changePasteStyle(_ sender: NSPopUpButton) {
+        settings.pasteFormattedTextByDefault = sender.indexOfSelectedItem == 1
+        sendSettingsChange()
+    }
+
+    @objc private func clearClipboardHistory(_ sender: NSButton) {
+        let alert = NSAlert()
+        alert.messageText = copy.clearClipboardHistoryQuestion
+        alert.informativeText = copy.clearClipboardHistoryExplanation
+        alert.addButton(withTitle: copy.clearClipboardHistory)
+        alert.addButton(withTitle: copy.cancel)
+        if alert.runModal() == .alertFirstButtonReturn {
+            onClearClipboardHistory?()
+        }
+    }
+
+    private func recordClipboardShortcut() -> TidyTapClipboardShortcut? {
+        if let captureClipboardShortcut { return captureClipboardShortcut() }
+        let alert = NSAlert()
+        alert.messageText = copy.recordShortcutTitle
+        alert.informativeText = copy.clipboardStorageNotice
+        let recorder = ClipboardShortcutRecorder(
+            prompt: copy.recordShortcutCaption,
+            inactivePrompt: copy.startShortcutPrompt,
+            invalidPrompt: copy.invalidShortcutCaption,
+            startTitle: copy.startShortcutRecording,
+            retryTitle: copy.retryShortcutRecording
+        )
+        alert.accessoryView = recorder
+        alert.addButton(withTitle: copy.saveShortcut)
+        alert.addButton(withTitle: copy.cancel)
+        alert.buttons[0].isEnabled = false
+        recorder.onShortcut = { [weak alert] shortcut in
+            alert?.buttons.first?.isEnabled = shortcut != nil
+        }
+        alert.window.initialFirstResponder = recorder.startButton
+        return alert.runModal() == .alertFirstButtonReturn ? recorder.shortcut : nil
+    }
+
+    private func shortcutTitle(_ shortcut: TidyTapClipboardShortcut) -> String {
+        let flags = CGEventFlags(rawValue: shortcut.modifiers)
+        var title = ""
+        if flags.contains(.maskControl) { title += "⌃" }
+        if flags.contains(.maskAlternate) { title += "⌥" }
+        if flags.contains(.maskShift) { title += "⇧" }
+        if flags.contains(.maskCommand) { title += "⌘" }
+        return title + shortcut.displayName
     }
 
     @objc private func wheelStepChanged(_ sender: NSSlider) {
@@ -670,6 +877,117 @@ final class SettingsViewController: NSViewController {
     }
 }
 
+@MainActor
+final class ClipboardShortcutRecorder: NSView {
+    let startButton: NSButton
+    private let label: NSTextField
+    private let prompt: String
+    private let inactivePrompt: String
+    private let invalidPrompt: String
+    private let startTitle: String
+    private let retryTitle: String
+    private(set) var isCapturing = false
+    private(set) var shortcut: TidyTapClipboardShortcut?
+    var onShortcut: ((TidyTapClipboardShortcut?) -> Void)?
+    var statusText: String { label.stringValue }
+
+    init(prompt: String, inactivePrompt: String, invalidPrompt: String,
+         startTitle: String, retryTitle: String) {
+        self.prompt = prompt
+        self.inactivePrompt = inactivePrompt
+        self.invalidPrompt = invalidPrompt
+        self.startTitle = startTitle
+        self.retryTitle = retryTitle
+        label = NSTextField(labelWithString: inactivePrompt)
+        startButton = NSButton(title: startTitle, target: nil, action: nil)
+        super.init(frame: NSRect(x: 0, y: 0, width: 380, height: 88))
+        label.frame = NSRect(x: 4, y: 48, width: 372, height: 28)
+        label.alignment = .center
+        label.font = .systemFont(ofSize: 15, weight: .medium)
+        addSubview(label)
+        startButton.frame = NSRect(x: 120, y: 8, width: 140, height: 32)
+        startButton.bezelStyle = .rounded
+        startButton.target = self
+        startButton.action = #selector(beginCapture(_:))
+        addSubview(startButton)
+        setAccessibilityLabel(inactivePrompt)
+    }
+
+    required init?(coder: NSCoder) { nil }
+    override var acceptsFirstResponder: Bool { true }
+
+    deinit { NotificationCenter.default.removeObserver(self) }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        NotificationCenter.default.removeObserver(self, name: NSWindow.didResignKeyNotification, object: nil)
+        if let window {
+            NotificationCenter.default.addObserver(self, selector: #selector(windowDidResignKey(_:)),
+                                                   name: NSWindow.didResignKeyNotification, object: window)
+        }
+    }
+
+    @objc private func beginCapture(_ sender: NSButton) {
+        shortcut = nil
+        onShortcut?(nil)
+        isCapturing = window?.makeFirstResponder(self) == true
+        label.stringValue = isCapturing ? prompt : inactivePrompt
+        startButton.title = startTitle
+    }
+
+    @objc private func windowDidResignKey(_ notification: Notification) {
+        guard isCapturing else { return }
+        isCapturing = false
+        label.stringValue = inactivePrompt
+        startButton.title = startTitle
+    }
+
+    override func flagsChanged(with event: NSEvent) {
+        guard isCapturing else { return }
+        let symbols = modifierSymbols(event.modifierFlags)
+        label.stringValue = symbols.isEmpty ? prompt : symbols + "…"
+    }
+
+    override func keyDown(with event: NSEvent) {
+        guard isCapturing else { return }
+        if event.keyCode == 53 {
+            super.keyDown(with: event)
+            return
+        }
+        let flags = event.modifierFlags
+        var modifiers: UInt64 = 0
+        if flags.contains(.control) { modifiers |= CGEventFlags.maskControl.rawValue }
+        if flags.contains(.option) { modifiers |= CGEventFlags.maskAlternate.rawValue }
+        if flags.contains(.shift) { modifiers |= CGEventFlags.maskShift.rawValue }
+        if flags.contains(.command) { modifiers |= CGEventFlags.maskCommand.rawValue }
+        let displayKey = event.charactersIgnoringModifiers?.uppercased()
+        var candidate = TidyTapClipboardShortcut(
+            keyCode: Int64(event.keyCode),
+            modifiers: modifiers,
+            displayKey: displayKey?.isEmpty == false ? displayKey : nil
+        )
+        candidate.displayKey = candidate.displayName
+        shortcut = candidate.isValid ? candidate : nil
+        if let shortcut {
+            label.stringValue = modifierSymbols(flags) + shortcut.displayName
+            startButton.title = retryTitle
+            isCapturing = false
+        } else {
+            label.stringValue = invalidPrompt
+        }
+        onShortcut?(shortcut)
+    }
+
+    private func modifierSymbols(_ flags: NSEvent.ModifierFlags) -> String {
+        var symbols = ""
+        if flags.contains(.control) { symbols += "⌃" }
+        if flags.contains(.option) { symbols += "⌥" }
+        if flags.contains(.shift) { symbols += "⇧" }
+        if flags.contains(.command) { symbols += "⌘" }
+        return symbols
+    }
+}
+
 private struct SettingsViewCopy {
     let appName: String
     let subtitle: String
@@ -680,6 +998,31 @@ private struct SettingsViewCopy {
     let capsLockCaption: String
     let finderCutPasteTitle: String
     let finderCutPasteCaption: String
+    let clipboardHistoryTitle: String
+    let clipboardHistoryCaption: String
+    let shortcutTitle: String
+    let setShortcut: String
+    let changeShortcut: String
+    let recordShortcutTitle: String
+    let recordShortcutCaption: String
+    let startShortcutPrompt: String
+    let startShortcutRecording: String
+    let retryShortcutRecording: String
+    let clipboardStorageNotice: String
+    let invalidShortcutCaption: String
+    let clipboardReadDenied: String
+    let clipboardContinuousAccessRequired: String
+    let clipboardStorageFailed: String
+    let clearClipboardHistory: String
+    let clearClipboardHistoryQuestion: String
+    let clearClipboardHistoryExplanation: String
+    let clipboardHistoryCleared: String
+    let clipboardHistoryClearFailed: String
+    let saveShortcut: String
+    let cancel: String
+    let defaultPasteTitle: String
+    let pastePlain: String
+    let pasteFormatted: String
     let mouseWheelTitle: String
     let mouseWheelCaption: String
     let wheelStepTitle: String
@@ -691,6 +1034,7 @@ private struct SettingsViewCopy {
     let launchAtLogin: String
     let launchAtLoginCaption: String
     let versionFormat: String
+    let checkForUpdates: String
     let mousePermissionsTitle: String
     let accessibilityPermissionTitle: String
     let accessibilityPermissionCaption: String
@@ -726,6 +1070,31 @@ private struct SettingsViewCopy {
         capsLockCaption = text("Switch input sources without changing letter case")
         finderCutPasteTitle = text("Use cut in Finder")
         finderCutPasteCaption = text("Cut with ⌘X and move with ⌘V")
+        clipboardHistoryTitle = text("Clipboard history")
+        clipboardHistoryCaption = text("Search and paste copied text and images")
+        shortcutTitle = text("Shortcut · Suggested ⌥V")
+        setShortcut = text("Set shortcut")
+        changeShortcut = text("Change shortcut")
+        recordShortcutTitle = text("Record shortcut")
+        recordShortcutCaption = text("Press the keys you want to use.")
+        startShortcutPrompt = text("Suggested: ⌥V. Click Start Recording to choose a shortcut.")
+        startShortcutRecording = text("Start Recording")
+        retryShortcutRecording = text("Record Again")
+        clipboardStorageNotice = text("TidyTap may read the current clipboard once to check access, without saving it. New copies are saved on this Mac for up to 7 days (100 items, 50 MiB total, 10 MiB each). Pasting an item from history renews its 7-day period. Turning history off stops collecting new copies; saved items remain until they expire.")
+        invalidShortcutCaption = text("Use Command, Option, or Control with a key.")
+        clipboardReadDenied = text("Clipboard access is denied. Allow TidyTap to read the clipboard, then turn history on again.")
+        clipboardContinuousAccessRequired = text("In System Settings, always allow TidyTap to read the clipboard, then turn history on again.")
+        clipboardStorageFailed = text("Clipboard history could not save copied content and was turned off.")
+        clearClipboardHistory = text("Clear all history")
+        clearClipboardHistoryQuestion = text("Delete all clipboard history?")
+        clearClipboardHistoryExplanation = text("This removes saved history. The current clipboard stays unchanged.")
+        clipboardHistoryCleared = text("Clipboard history was deleted.")
+        clipboardHistoryClearFailed = text("Clipboard history could not be deleted.")
+        saveShortcut = text("Save")
+        cancel = text("Cancel")
+        defaultPasteTitle = text("Default paste")
+        pastePlain = text("Without formatting")
+        pasteFormatted = text("With formatting")
         mouseWheelTitle = text("Reverse wheel direction")
         mouseWheelCaption = text("Keep trackpad scrolling unchanged")
         wheelStepTitle = text("Fixed wheel step size")
@@ -739,9 +1108,10 @@ private struct SettingsViewCopy {
         launchAtLogin = text("Start at login")
         launchAtLoginCaption = text("Keep TidyTap ready after you sign in")
         versionFormat = text("Version %@")
+        checkForUpdates = text("Check for Updates…")
         mousePermissionsTitle = text("PERMISSIONS FOR INPUT FEATURES")
         accessibilityPermissionTitle = text("Accessibility")
-        accessibilityPermissionCaption = text("Required for mouse features and Finder cut/paste")
+        accessibilityPermissionCaption = text("Required for mouse, Finder cut/paste, and clipboard history")
         permissionAllowed = text("Allowed")
         permissionMissing = text("Missing")
         permissionNotChecked = text("Not checked")
@@ -886,24 +1256,16 @@ private final class SettingsDocumentView: NSView {
 @MainActor
 @available(macOS 26.0, *)
 private final class GlassCardView: NSGlassEffectView {
-    init(content: NSView, cornerRadius: CGFloat, tintColor: NSColor?) {
+    init(content: NSView, cornerRadius: CGFloat) {
         super.init(frame: .zero)
         style = .regular
         self.cornerRadius = cornerRadius
-        self.tintColor = tintColor ?? NSColor.controlBackgroundColor.withAlphaComponent(0.055)
         translatesAutoresizingMaskIntoConstraints = false
         contentView = content
-        wantsLayer = true
-        layer?.borderWidth = 0.5
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
-    }
-
-    override func updateLayer() {
-        super.updateLayer()
-        layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.45).cgColor
     }
 }
 

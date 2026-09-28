@@ -1,5 +1,7 @@
 import Darwin
+import AppKit
 import Foundation
+import Security
 
 enum TidyTapProduct {
     static let appBundleIdentifier = "com.sharknia.TidyTap"
@@ -10,6 +12,36 @@ enum TidyTapProduct {
     static let legacyHelperExecutablePath =
         "Contents/Library/LoginItems/TidyTapHelper.app/Contents/MacOS/TidyTapHelper"
     static let workerLaunchNonceEnvironmentKey = "TIDYTAP_WORKER_LAUNCH_NONCE"
+    static let backgroundUpdateEnvironmentKey = "TIDYTAP_BACKGROUND_UPDATE_HOST"
+    static let installedAppURL = URL(fileURLWithPath: "/Applications/TidyTap.app", isDirectory: true)
+
+    static func isInstalledCopy(_ appURL: URL, allowDevelopment: Bool = false) -> Bool {
+        allowDevelopment || appURL.standardizedFileURL.resolvingSymlinksInPath() ==
+            installedAppURL.standardizedFileURL.resolvingSymlinksInPath()
+    }
+
+    /// Ignore ad-hoc development copies when arbitrating production processes.
+    /// Released older copies share the installed app's designated requirement.
+    static func isSameSignedApp(_ app: NSRunningApplication) -> Bool {
+        guard app.bundleIdentifier == appBundleIdentifier else { return false }
+        var installedCode: SecStaticCode?
+        guard SecStaticCodeCreateWithPath(installedAppURL as CFURL, SecCSFlags(), &installedCode) == errSecSuccess,
+              let installedCode else { return false }
+        var requirement: SecRequirement?
+        guard SecCodeCopyDesignatedRequirement(installedCode, SecCSFlags(), &requirement) == errSecSuccess,
+              let requirement else { return false }
+        var runningCode: SecCode?
+        let attributes = [kSecGuestAttributePid as String: NSNumber(value: app.processIdentifier)] as CFDictionary
+        guard SecCodeCopyGuestWithAttributes(nil, attributes, SecCSFlags(), &runningCode) == errSecSuccess,
+              let runningCode else { return false }
+        return SecCodeCheckValidity(runningCode, SecCSFlags(), requirement) == errSecSuccess
+    }
+
+    static func appLockURL(preferencesSuite: String = appBundleIdentifier) -> URL {
+        workerLockURL(preferencesSuite: preferencesSuite)
+            .deletingLastPathComponent()
+            .appendingPathComponent("app.lock")
+    }
 
     static func workerLockURL(
         preferencesSuite: String = appBundleIdentifier
@@ -18,6 +50,20 @@ enum TidyTapProduct {
             .appendingPathComponent(preferencesSuite, isDirectory: true)
             .appendingPathComponent("worker.lock")
     }
+
+    static func clipboardHistoryDirectory(preferencesSuite: String = appBundleIdentifier) -> URL {
+        workerLockURL(preferencesSuite: preferencesSuite)
+            .deletingLastPathComponent()
+            .appendingPathComponent("clipboard-history", isDirectory: true)
+    }
+}
+
+/// Confirmed local retention and size bounds. Deletion controls are decided separately.
+enum TidyTapClipboardPolicy {
+    static let retention: TimeInterval = 7 * 24 * 60 * 60
+    static let maximumEntries = 100
+    static let maximumBytes = 50 * 1024 * 1024
+    static let maximumItemBytes = 10 * 1024 * 1024
 }
 
 /// Written only after the worker owns `worker.lock`. A launcher must still

@@ -259,13 +259,17 @@ final class SettingsCoordinator {
         let incompatibleFinderCutPaste = requested.finderCutPasteEnabled
             ? echoed?.finderCutPasteEnabled != true
             : echoed?.finderCutPasteEnabled == true
+        let incompatibleClipboardHistory = requested.clipboardHistoryEnabled
+            ? echoed?.clipboardHistoryEnabled != true || echoed?.clipboardHistoryShortcut != requested.clipboardHistoryShortcut
+            : echoed?.clipboardHistoryEnabled == true
         let incompatible = status.outcome == .applied &&
-            (incompatibleFixedWheelStep || incompatibleFinderCutPaste)
+            (incompatibleFixedWheelStep || incompatibleFinderCutPaste || incompatibleClipboardHistory)
         var effective = echoed
         if incompatible, effective == nil {
             effective = settingsBeforeLatestRequest ?? requested
             effective?.fixedMouseWheelStepEnabled = false
             effective?.finderCutPasteEnabled = false
+            effective?.clipboardHistoryEnabled = false
         }
         // An inactive size is only a remembered preference. An active size is
         // worker evidence: keep it even when it disagrees with the request.
@@ -278,7 +282,9 @@ final class SettingsCoordinator {
             outcome: incompatible ? .failed : status.outcome,
             failedComponent: incompatible ? .eventTap : status.failedComponent,
             errorCode: incompatible
-                ? (incompatibleFinderCutPaste ? "eventTap.incompatibleFinderCutPaste" : "eventTap.incompatibleFixedWheelStep")
+                ? (incompatibleClipboardHistory ? "eventTap.incompatibleClipboardHistory"
+                    : incompatibleFinderCutPaste ? "eventTap.incompatibleFinderCutPaste"
+                    : "eventTap.incompatibleFixedWheelStep")
                 : status.errorCode,
             effectiveSettings: effective
         )

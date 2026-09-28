@@ -1,3 +1,4 @@
+import AppKit
 import TidyTapInputEngine
 import Foundation
 import CoreGraphics
@@ -257,7 +258,10 @@ final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
         runtimeSink = sink
         controller = EventTapController(
             permissions: permissionChecker,
-            backend: backend ?? CGEventTapBackend(feedbackHandler: FinderFeedbackAppHost.present),
+            backend: backend ?? CGEventTapBackend(
+                feedbackHandler: FinderFeedbackAppHost.present,
+                clipboardShortcutHandler: ClipboardHistoryAppHost.present
+            ),
             sideButtons: sideButtons,
             statusObserver: { status in sink.handler?(status) }
         )
@@ -269,6 +273,7 @@ final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
         sideButtonNavigation: Bool,
         fixedMouseWheelStepEnabled: Bool,
         finderCutPasteEnabled: Bool = false,
+        clipboardShortcut: TidyTapClipboardShortcut? = nil,
         mouseWheelStepLines: Int,
         requestID: UUID
     ) throws -> TidyTapInputFeatureApplyResult {
@@ -287,7 +292,10 @@ final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
             sideButtonNavigation: sideButtonNavigation,
             fixedMouseWheelStepEnabled: fixedMouseWheelStepEnabled,
             mouseWheelStepLines: mouseWheelStepLines,
-            finderCutPasteEnabled: finderCutPasteEnabled
+            finderCutPasteEnabled: finderCutPasteEnabled,
+            clipboardShortcut: clipboardShortcut.map {
+                ClipboardShortcut(keyCode: $0.keyCode, modifiers: $0.modifiers)
+            }
         )
         switch controller.start(configuration: configuration) {
         case .stopped, .drainingButtonPresses, .running:
@@ -321,6 +329,9 @@ final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
             sideButtonNavigation: configuration.sideButtonNavigation,
             fixedMouseWheelStepEnabled: configuration.fixedMouseWheelStepEnabled,
             finderCutPasteEnabled: configuration.finderCutPasteEnabled,
+            clipboardShortcut: configuration.clipboardShortcut.map {
+                TidyTapClipboardShortcut(keyCode: $0.keyCode, modifiers: $0.modifiers)
+            },
             mouseWheelStepLines: rememberedMouseWheelStepLines
         )
     }
@@ -349,5 +360,111 @@ final class InputFeaturesAdapter: TidyTapInputFeaturesApplying {
         case .failed(let error):
             runtimeStatusHandler?(requestID, nil, .engine(error))
         }
+    }
+}
+
+@MainActor
+final class HelperClipboardCaptureHost {
+    enum ReadState {
+        case allowed
+        case denied
+        case ask
+        case unspecified
+    }
+
+    private let directory: URL
+    private let pasteboard: NSPasteboard
+    private let onCaptured: () -> Void
+    private let readState: () -> ReadState
+    private let probeRead: () -> Void
+    private var service: ClipboardCaptureService?
+    private var didProbeRead = false
+    var onFailure: ((String) -> Void)?
+
+    init(
+        directory: URL,
+        pasteboard: NSPasteboard = .general,
+        onCaptured: @escaping () -> Void = {},
+        readState: (() -> ReadState)? = nil,
+        probeRead: (() -> Void)? = nil
+    ) {
+        self.directory = directory
+        self.pasteboard = pasteboard
+        self.onCaptured = onCaptured
+        self.readState = readState ?? {
+            if #available(macOS 26.0, *) {
+                switch pasteboard.accessBehavior {
+                case .alwaysAllow: return .allowed
+                case .alwaysDeny: return .denied
+                case .ask: return .ask
+                case .default: return .unspecified
+                @unknown default: return .unspecified
+                }
+            }
+            return .allowed
+        }
+        self.probeRead = probeRead ?? { _ = pasteboard.pasteboardItems }
+    }
+
+    func prepare(enabled: Bool) throws {
+        guard enabled else { return }
+        if readState() == .unspecified, !didProbeRead {
+            didProbeRead = true
+            probeRead()
+        }
+        switch readState() {
+        case .denied:
+            throw ClipboardCaptureService.CaptureError.readDenied
+        case .ask:
+            throw ClipboardCaptureService.CaptureError.continuousAccessRequired
+        case .allowed, .unspecified:
+            break
+        }
+        if service == nil {
+            let store = try ClipboardHistoryStore(
+                directory: directory,
+                retention: TidyTapClipboardPolicy.retention,
+                maximumEntries: TidyTapClipboardPolicy.maximumEntries,
+                maximumBytes: TidyTapClipboardPolicy.maximumBytes,
+                maximumItemBytes: TidyTapClipboardPolicy.maximumItemBytes
+            )
+            service = ClipboardCaptureService(
+                store: store,
+                pasteboard: pasteboard,
+                canRead: { [readState] in
+                    switch readState() {
+                    case .allowed, .unspecified: true
+                    case .denied, .ask: false
+                    }
+                },
+                onCaptured: { [onCaptured] _ in onCaptured() },
+                onFailure: { [weak self] error in
+                    self?.stop()
+                    let code: String
+                    if error is ClipboardCaptureService.CaptureError {
+                        code = self?.readState() == .ask
+                            ? "clipboardHistory.continuousAccessRequired"
+                            : "clipboardHistory.readDenied"
+                    } else {
+                        code = "clipboardHistory.storageFailed"
+                    }
+                    self?.onFailure?(code)
+                }
+            )
+        }
+    }
+
+    func apply(enabled: Bool) throws {
+        guard enabled else { stop(); return }
+        try prepare(enabled: true)
+        service?.start()
+    }
+
+    func stop() {
+        service?.stop()
+    }
+
+    func captureLatestIfChanged() {
+        service?.poll()
     }
 }

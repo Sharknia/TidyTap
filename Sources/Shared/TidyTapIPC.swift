@@ -19,6 +19,21 @@ enum TidyTapIPC {
     static let permissionResult = Notification.Name("com.sharknia.TidyTap.permissionResult")
     static let finderFeedback = Notification.Name("com.sharknia.TidyTap.finderFeedback")
     static let finderFeedbackReady = Notification.Name("com.sharknia.TidyTap.finderFeedbackReady")
+    static let clipboardHistoryToggle = Notification.Name("com.sharknia.TidyTap.clipboardHistoryToggle")
+    static let clipboardHistoryChanged = Notification.Name("com.sharknia.TidyTap.clipboardHistoryChanged")
+    static let clipboardHistoryPaste = Notification.Name("com.sharknia.TidyTap.clipboardHistoryPaste")
+    static let clipboardHistoryPasteResult = Notification.Name("com.sharknia.TidyTap.clipboardHistoryPasteResult")
+    static let prepareForUpdate = Notification.Name("com.sharknia.TidyTap.prepareForUpdate")
+    static let clipboardTargetPIDEnvironmentKey = "TIDYTAP_CLIPBOARD_TARGET_PID"
+    static let clipboardSessionEnvironmentKey = "TIDYTAP_CLIPBOARD_SESSION"
+    static let clipboardHistoryModeEnvironmentKey = "TIDYTAP_CLIPBOARD_HISTORY_MODE"
+    static let clipboardDisplayIDEnvironmentKey = "TIDYTAP_CLIPBOARD_DISPLAY_ID"
+    static let clipboardTargetPIDUserInfoKey = "targetPID"
+    static let clipboardSessionUserInfoKey = "sessionID"
+    static let clipboardDisplayIDUserInfoKey = "displayID"
+    static let clipboardEntryUserInfoKey = "entryID"
+    static let clipboardFormattedUserInfoKey = "formatted"
+    static let clipboardPasteErrorUserInfoKey = "error"
     static let applyRequestIDUserInfoKey = "applyRequestID"
     static let finderFeedbackModeEnvironmentKey = "TIDYTAP_FINDER_FEEDBACK_MODE"
     static let finderFeedbackKindEnvironmentKey = "TIDYTAP_FINDER_FEEDBACK_KIND"
@@ -40,6 +55,15 @@ enum TidyTapIPC {
 
     static func postSettingsDidChange(requestID: UUID) {
         post(settingsDidChange, requestID: requestID)
+    }
+
+    static func postPrepareForUpdate() {
+        DistributedNotificationCenter.default().postNotificationName(
+            prepareForUpdate,
+            object: TidyTapProduct.appBundleIdentifier,
+            userInfo: nil,
+            deliverImmediately: true
+        )
     }
 
     static func postApplyResult(_ status: TidyTapApplyStatus) {
@@ -68,6 +92,96 @@ enum TidyTapIPC {
             userInfo: finderFeedbackUserInfo(payload),
             deliverImmediately: true
         )
+    }
+
+    static func postClipboardHistoryToggle(targetPID: pid_t, sessionID: UUID, displayID: UInt32?) {
+        var info: [String: Any] = [
+            clipboardTargetPIDUserInfoKey: targetPID,
+            clipboardSessionUserInfoKey: sessionID.uuidString
+        ]
+        if let displayID { info[clipboardDisplayIDUserInfoKey] = displayID }
+        DistributedNotificationCenter.default().postNotificationName(
+            clipboardHistoryToggle,
+            object: TidyTapProduct.appBundleIdentifier,
+            userInfo: info,
+            deliverImmediately: true
+        )
+    }
+
+    static func postClipboardHistoryPaste(sessionID: UUID, entryID: UUID, formatted: Bool) {
+        DistributedNotificationCenter.default().postNotificationName(
+            clipboardHistoryPaste,
+            object: TidyTapProduct.appBundleIdentifier,
+            userInfo: [
+                clipboardSessionUserInfoKey: sessionID.uuidString,
+                clipboardEntryUserInfoKey: entryID.uuidString,
+                clipboardFormattedUserInfoKey: formatted
+            ],
+            deliverImmediately: true
+        )
+    }
+
+    static func clipboardPasteRequest(in notification: Notification) -> (sessionID: UUID, entryID: UUID, formatted: Bool)? {
+        guard let info = notification.userInfo,
+              let session = info[clipboardSessionUserInfoKey] as? String,
+              let sessionID = UUID(uuidString: session),
+              let entry = info[clipboardEntryUserInfoKey] as? String,
+              let entryID = UUID(uuidString: entry),
+              let formatted = info[clipboardFormattedUserInfoKey] as? Bool else { return nil }
+        return (sessionID, entryID, formatted)
+    }
+
+    static func postClipboardHistoryPasteResult(sessionID: UUID, error: String?) {
+        DistributedNotificationCenter.default().postNotificationName(
+            clipboardHistoryPasteResult,
+            object: TidyTapProduct.appBundleIdentifier,
+            userInfo: [
+                clipboardSessionUserInfoKey: sessionID.uuidString,
+                clipboardPasteErrorUserInfoKey: error ?? ""
+            ],
+            deliverImmediately: true
+        )
+    }
+
+    static func clipboardPasteResult(in notification: Notification) -> (sessionID: UUID, error: String?)? {
+        guard let info = notification.userInfo,
+              let session = info[clipboardSessionUserInfoKey] as? String,
+              let sessionID = UUID(uuidString: session),
+              let error = info[clipboardPasteErrorUserInfoKey] as? String else { return nil }
+        return (sessionID, error.isEmpty ? nil : error)
+    }
+
+    static func postClipboardHistoryChanged() {
+        DistributedNotificationCenter.default().postNotificationName(
+            clipboardHistoryChanged,
+            object: TidyTapProduct.appBundleIdentifier,
+            userInfo: nil,
+            deliverImmediately: true
+        )
+    }
+
+    static func clipboardTargetPID(in notification: Notification) -> pid_t? {
+        (notification.userInfo?[clipboardTargetPIDUserInfoKey] as? NSNumber)?.int32Value
+    }
+
+    static func clipboardTargetPID(in environment: [String: String]) -> pid_t? {
+        environment[clipboardTargetPIDEnvironmentKey].flatMap(Int32.init)
+    }
+
+    static func clipboardSessionID(in notification: Notification) -> UUID? {
+        (notification.userInfo?[clipboardSessionUserInfoKey] as? String).flatMap(UUID.init(uuidString:))
+    }
+
+    static func clipboardSessionID(in environment: [String: String]) -> UUID? {
+        environment[clipboardSessionEnvironmentKey].flatMap(UUID.init(uuidString:))
+    }
+
+    static func clipboardDisplayID(in notification: Notification) -> UInt32? {
+        (notification.userInfo?[clipboardDisplayIDUserInfoKey] as? NSNumber)?.uint32Value
+    }
+
+    static func clipboardDisplayID(in environment: [String: String]) -> UInt32? {
+        environment[clipboardDisplayIDEnvironmentKey].flatMap(UInt32.init)
     }
 
     static func finderFeedback(in notification: Notification) -> TidyTapFinderFeedbackPayload? {

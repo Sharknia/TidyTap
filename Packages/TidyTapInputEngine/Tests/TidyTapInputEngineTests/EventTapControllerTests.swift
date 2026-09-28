@@ -1,3 +1,4 @@
+import CoreGraphics
 import XCTest
 @testable import TidyTapInputEngine
 
@@ -51,6 +52,51 @@ private final class FakeEventTapBackend: EventTapBackend, @unchecked Sendable {
 }
 
 final class EventTapControllerTests: XCTestCase {
+    func testClipboardShortcutAloneNeedsInputPermissionAndInstallsTheExistingTap() {
+        let shortcut = ClipboardShortcut(keyCode: 8, modifiers: CGEventFlags.maskAlternate.rawValue)
+        let configuration = EventTapConfiguration(
+            reverseMouseScroll: false,
+            sideButtonNavigation: false,
+            clipboardShortcut: shortcut
+        )
+        XCTAssertTrue(configuration.isEnabled)
+        XCTAssertFalse(configuration.needsScrollProcessing)
+
+        let (denied, _, deniedBackend, _) = makeController(accessibility: true, inputMonitoring: false)
+        XCTAssertEqual(denied.start(configuration: configuration), .permissionDenied([.inputMonitoring]))
+        XCTAssertEqual(deniedBackend.installCount, 0)
+
+        let (allowed, _, allowedBackend, _) = makeController(accessibility: true, inputMonitoring: true)
+        XCTAssertEqual(allowed.start(configuration: configuration), .running(configuration))
+        XCTAssertEqual(allowedBackend.installCount, 1)
+        XCTAssertEqual(allowedBackend.installedConfigurations.last?.clipboardShortcut, shortcut)
+    }
+
+    func testClipboardShortcutSharesTapWithExistingInputFeatures() {
+        let (controller, _, backend, _) = makeController(accessibility: true, inputMonitoring: true)
+        let shortcut = ClipboardShortcut(keyCode: 8, modifiers: CGEventFlags.maskAlternate.rawValue)
+        let combined = EventTapConfiguration(
+            reverseMouseScroll: true,
+            sideButtonNavigation: true,
+            fixedMouseWheelStepEnabled: true,
+            finderCutPasteEnabled: true,
+            clipboardShortcut: shortcut
+        )
+        XCTAssertEqual(controller.start(configuration: combined), .running(combined))
+        XCTAssertEqual(backend.installedConfigurations, [combined])
+        XCTAssertEqual(backend.captureSideButtonsValues, [true])
+
+        let withoutClipboard = EventTapConfiguration(
+            reverseMouseScroll: true,
+            sideButtonNavigation: true,
+            fixedMouseWheelStepEnabled: true,
+            finderCutPasteEnabled: true
+        )
+        XCTAssertEqual(controller.start(configuration: withoutClipboard), .running(withoutClipboard))
+        XCTAssertEqual(backend.installedConfigurations.last, withoutClipboard)
+        XCTAssertEqual(backend.installCount, 2)
+    }
+
     func testConfigurationClampsStepAndDerivesScrollProcessing() {
         let low = EventTapConfiguration(
             reverseMouseScroll: false,
