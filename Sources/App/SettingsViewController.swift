@@ -816,10 +816,13 @@ final class SettingsViewController: NSViewController {
         if let captureClipboardShortcut { return captureClipboardShortcut() }
         let alert = NSAlert()
         alert.messageText = copy.recordShortcutTitle
-        alert.informativeText = copy.recordShortcutCaption + "\n\n" + copy.clipboardStorageNotice
+        alert.informativeText = copy.clipboardStorageNotice
         let recorder = ClipboardShortcutRecorder(
             prompt: copy.recordShortcutCaption,
-            invalidPrompt: copy.invalidShortcutCaption
+            inactivePrompt: copy.startShortcutPrompt,
+            invalidPrompt: copy.invalidShortcutCaption,
+            startTitle: copy.startShortcutRecording,
+            retryTitle: copy.retryShortcutRecording
         )
         alert.accessoryView = recorder
         alert.addButton(withTitle: copy.saveShortcut)
@@ -828,7 +831,7 @@ final class SettingsViewController: NSViewController {
         recorder.onShortcut = { [weak alert] shortcut in
             alert?.buttons.first?.isEnabled = shortcut != nil
         }
-        alert.window.initialFirstResponder = recorder
+        alert.window.initialFirstResponder = recorder.startButton
         return alert.runModal() == .alertFirstButtonReturn ? recorder.shortcut : nil
     }
 
@@ -877,27 +880,78 @@ final class SettingsViewController: NSViewController {
 }
 
 @MainActor
-private final class ClipboardShortcutRecorder: NSView {
+final class ClipboardShortcutRecorder: NSView {
+    let startButton: NSButton
     private let label: NSTextField
+    private let prompt: String
+    private let inactivePrompt: String
     private let invalidPrompt: String
+    private let startTitle: String
+    private let retryTitle: String
+    private(set) var isCapturing = false
     private(set) var shortcut: TidyTapClipboardShortcut?
     var onShortcut: ((TidyTapClipboardShortcut?) -> Void)?
+    var statusText: String { label.stringValue }
 
-    init(prompt: String, invalidPrompt: String) {
+    init(prompt: String, inactivePrompt: String, invalidPrompt: String,
+         startTitle: String, retryTitle: String) {
+        self.prompt = prompt
+        self.inactivePrompt = inactivePrompt
         self.invalidPrompt = invalidPrompt
-        label = NSTextField(labelWithString: prompt)
-        super.init(frame: NSRect(x: 0, y: 0, width: 380, height: 48))
-        label.frame = NSRect(x: 4, y: 10, width: 372, height: 28)
+        self.startTitle = startTitle
+        self.retryTitle = retryTitle
+        label = NSTextField(labelWithString: inactivePrompt)
+        startButton = NSButton(title: startTitle, target: nil, action: nil)
+        super.init(frame: NSRect(x: 0, y: 0, width: 380, height: 88))
+        label.frame = NSRect(x: 4, y: 48, width: 372, height: 28)
         label.alignment = .center
         label.font = .systemFont(ofSize: 15, weight: .medium)
         addSubview(label)
-        setAccessibilityLabel(prompt)
+        startButton.frame = NSRect(x: 120, y: 8, width: 140, height: 32)
+        startButton.bezelStyle = .rounded
+        startButton.target = self
+        startButton.action = #selector(beginCapture(_:))
+        addSubview(startButton)
+        setAccessibilityLabel(inactivePrompt)
     }
 
     required init?(coder: NSCoder) { nil }
     override var acceptsFirstResponder: Bool { true }
 
+    deinit { NotificationCenter.default.removeObserver(self) }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        NotificationCenter.default.removeObserver(self, name: NSWindow.didResignKeyNotification, object: nil)
+        if let window {
+            NotificationCenter.default.addObserver(self, selector: #selector(windowDidResignKey(_:)),
+                                                   name: NSWindow.didResignKeyNotification, object: window)
+        }
+    }
+
+    @objc private func beginCapture(_ sender: NSButton) {
+        shortcut = nil
+        onShortcut?(nil)
+        isCapturing = window?.makeFirstResponder(self) == true
+        label.stringValue = isCapturing ? prompt : inactivePrompt
+        startButton.title = startTitle
+    }
+
+    @objc private func windowDidResignKey(_ notification: Notification) {
+        guard isCapturing else { return }
+        isCapturing = false
+        label.stringValue = inactivePrompt
+        startButton.title = startTitle
+    }
+
+    override func flagsChanged(with event: NSEvent) {
+        guard isCapturing else { return }
+        let symbols = modifierSymbols(event.modifierFlags)
+        label.stringValue = symbols.isEmpty ? prompt : symbols + "…"
+    }
+
     override func keyDown(with event: NSEvent) {
+        guard isCapturing else { return }
         if event.keyCode == 53 {
             super.keyDown(with: event)
             return
@@ -917,16 +971,22 @@ private final class ClipboardShortcutRecorder: NSView {
         candidate.displayKey = candidate.displayName
         shortcut = candidate.isValid ? candidate : nil
         if let shortcut {
-            var title = ""
-            if flags.contains(.control) { title += "⌃" }
-            if flags.contains(.option) { title += "⌥" }
-            if flags.contains(.shift) { title += "⇧" }
-            if flags.contains(.command) { title += "⌘" }
-            label.stringValue = title + shortcut.displayName
+            label.stringValue = modifierSymbols(flags) + shortcut.displayName
+            startButton.title = retryTitle
+            isCapturing = false
         } else {
             label.stringValue = invalidPrompt
         }
         onShortcut?(shortcut)
+    }
+
+    private func modifierSymbols(_ flags: NSEvent.ModifierFlags) -> String {
+        var symbols = ""
+        if flags.contains(.control) { symbols += "⌃" }
+        if flags.contains(.option) { symbols += "⌥" }
+        if flags.contains(.shift) { symbols += "⇧" }
+        if flags.contains(.command) { symbols += "⌘" }
+        return symbols
     }
 }
 
@@ -947,6 +1007,9 @@ private struct SettingsViewCopy {
     let changeShortcut: String
     let recordShortcutTitle: String
     let recordShortcutCaption: String
+    let startShortcutPrompt: String
+    let startShortcutRecording: String
+    let retryShortcutRecording: String
     let clipboardStorageNotice: String
     let invalidShortcutCaption: String
     let clipboardReadDenied: String
@@ -1016,6 +1079,9 @@ private struct SettingsViewCopy {
         changeShortcut = text("Change shortcut")
         recordShortcutTitle = text("Record shortcut")
         recordShortcutCaption = text("Press the keys you want to use.")
+        startShortcutPrompt = text("Click Start Recording to choose a shortcut.")
+        startShortcutRecording = text("Start Recording")
+        retryShortcutRecording = text("Record Again")
         clipboardStorageNotice = text("TidyTap may read the current clipboard once to check access, without saving it. New copies are saved on this Mac for up to 7 days (100 items, 50 MiB total, 10 MiB each). Turning history off stops collecting new copies; saved items remain until they expire.")
         invalidShortcutCaption = text("Use Command, Option, or Control with a key.")
         clipboardReadDenied = text("Clipboard access is denied. Allow TidyTap to read the clipboard, then turn history on again.")

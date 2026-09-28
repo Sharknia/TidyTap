@@ -4,6 +4,52 @@ import XCTest
 
 @MainActor
 final class SettingsViewControllerTests: XCTestCase {
+    func testShortcutRecorderRequiresStartAndCanRestartAfterLosingFocus() throws {
+        let recorder = ClipboardShortcutRecorder(
+            prompt: "Press", inactivePrompt: "Click Start", invalidPrompt: "Invalid",
+            startTitle: "Start", retryTitle: "Again"
+        )
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 380, height: 88),
+            styleMask: [.titled], backing: .buffered, defer: false
+        )
+        window.contentView = recorder
+        let key = try XCTUnwrap(NSEvent.keyEvent(
+            with: .keyDown, location: .zero, modifierFlags: [.option], timestamp: 0,
+            windowNumber: window.windowNumber, context: nil,
+            characters: "c", charactersIgnoringModifiers: "c", isARepeat: false, keyCode: 8
+        ))
+        recorder.keyDown(with: key)
+        XCTAssertNil(recorder.shortcut)
+        XCTAssertEqual(recorder.statusText, "Click Start")
+
+        recorder.startButton.performClick(nil)
+        XCTAssertTrue(recorder.isCapturing)
+        let modifiers = try XCTUnwrap(NSEvent.keyEvent(
+            with: .flagsChanged, location: .zero, modifierFlags: [.option], timestamp: 0,
+            windowNumber: window.windowNumber, context: nil,
+            characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 58
+        ))
+        recorder.flagsChanged(with: modifiers)
+        XCTAssertEqual(recorder.statusText, "⌥…")
+        recorder.keyDown(with: key)
+        XCTAssertEqual(recorder.statusText, "⌥C")
+        XCTAssertEqual(recorder.shortcut?.keyCode, 8)
+        XCTAssertFalse(recorder.isCapturing)
+        XCTAssertEqual(recorder.startButton.title, "Again")
+
+        recorder.startButton.performClick(nil)
+        XCTAssertNil(recorder.shortcut)
+        NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: window)
+        XCTAssertFalse(recorder.isCapturing)
+        XCTAssertEqual(recorder.statusText, "Click Start")
+        recorder.keyDown(with: key)
+        XCTAssertNil(recorder.shortcut)
+        recorder.startButton.performClick(nil)
+        recorder.keyDown(with: key)
+        XCTAssertEqual(recorder.shortcut?.keyCode, 8)
+    }
+
     func testClipboardEnterPastesOnlyAfterReleaseAndNeverRepeats() {
         var state = ClipboardPasteKeyState()
         let down = state.handle(type: .keyDown, keyCode: 36, isRepeat: false, shiftHeld: true)
