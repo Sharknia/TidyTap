@@ -79,7 +79,7 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
 
     override init() {
         panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 720, height: 420),
+            contentRect: NSRect(x: 0, y: 0, width: 800, height: 460),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered, defer: false
         )
@@ -112,9 +112,13 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
         self.latestCopyTooLarge = latestCopyTooLarge
         self.entries = entries.sorted { $0.copiedAt > $1.copiedAt }
         if !panel.isVisible {
+            let containsImage = entries.contains {
+                if case .image = $0.content { return true }
+                return false
+            }
             panel.setContentSize(NSSize(
-                width: 720,
-                height: min(420, max(260, 170 + CGFloat(min(entries.count, 5)) * 50))
+                width: 800,
+                height: min(460, max(containsImage ? 380 : 260, 160 + CGFloat(min(entries.count, 7)) * 42))
             ))
         }
         applyFilter(selection: latestCopyTooLarge ? .none : .first)
@@ -160,8 +164,8 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
         })
         if let screen = focusedScreen ?? NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) {
             panel.setContentSize(NSSize(
-                width: min(720, max(480, screen.visibleFrame.width - 24)),
-                height: min(panel.contentView?.bounds.height ?? 420, screen.visibleFrame.height - 24)
+                width: min(800, max(480, screen.visibleFrame.width - 24)),
+                height: min(panel.contentView?.bounds.height ?? 460, screen.visibleFrame.height - 24)
             ))
             panel.setFrameOrigin(NSPoint(
                 x: screen.visibleFrame.midX - panel.frame.width / 2,
@@ -199,7 +203,7 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
         if cell.textField == nil {
             let icon = NSImageView()
             icon.translatesAutoresizingMaskIntoConstraints = false
-            icon.imageScaling = .scaleProportionallyUpOrDown
+            icon.imageScaling = .scaleProportionallyDown
             icon.setAccessibilityElement(false)
             cell.addSubview(icon)
             let label = NSTextField(labelWithString: "")
@@ -211,20 +215,21 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
             NSLayoutConstraint.activate([
                 icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 12),
                 icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-                icon.widthAnchor.constraint(equalToConstant: 28),
-                icon.heightAnchor.constraint(equalToConstant: 28),
-                label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 10),
+                icon.widthAnchor.constraint(equalToConstant: 26),
+                icon.heightAnchor.constraint(equalToConstant: 26),
+                label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 8),
                 label.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -12),
                 label.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
             ])
-            label.font = .systemFont(ofSize: 14, weight: .medium)
+            label.font = .systemFont(ofSize: 13, weight: .medium)
             cell.imageView = icon
             cell.textField = label
             cell.identifier = identifier
         }
         switch filtered[row].content {
         case .text(let plain, _, _):
-            cell.imageView?.image = NSImage(systemSymbolName: "doc.text", accessibilityDescription: nil)
+            cell.imageView?.image = NSImage(systemSymbolName: "doc.text", accessibilityDescription: nil)?
+                .withSymbolConfiguration(.init(pointSize: 16, weight: .regular))
             let summary = plain.prefix(Self.textRowCharacterLimit)
             let singleLine = String(summary).replacingOccurrences(of: "\n", with: " ")
             cell.textField?.stringValue = summary.endIndex == plain.endIndex ? singleLine : singleLine + "…"
@@ -291,7 +296,7 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
         tableView.addTableColumn(column)
         tableView.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
         tableView.headerView = nil
-        tableView.rowHeight = 44
+        tableView.rowHeight = 38
         tableView.selectionHighlightStyle = .regular
         tableView.backgroundColor = .clear
         tableView.delegate = self
@@ -310,7 +315,7 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
         textPreview.isEditable = false
         textPreview.isSelectable = true
         textPreview.drawsBackground = false
-        textPreview.font = .systemFont(ofSize: 15)
+        textPreview.font = .systemFont(ofSize: 14)
         textPreview.textContainerInset = NSSize(width: 8, height: 8)
         textPreview.setAccessibilityLabel(String(localized: "Copied text preview"))
         textScroll.documentView = textPreview
@@ -322,6 +327,8 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
         root.addSubview(textScroll)
 
         imagePreview.imageScaling = .scaleProportionallyUpOrDown
+        imagePreview.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        imagePreview.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
         imagePreview.setAccessibilityLabel(String(localized: "Copied image preview"))
         imagePreview.translatesAutoresizingMaskIntoConstraints = false
         imagePreview.isHidden = true
@@ -366,7 +373,7 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
             listScroll.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 14),
             listScroll.topAnchor.constraint(equalTo: searchSeparator.bottomAnchor, constant: 8),
             listScroll.bottomAnchor.constraint(equalTo: footerSeparator.topAnchor, constant: -8),
-            listScroll.widthAnchor.constraint(equalTo: root.widthAnchor, multiplier: 0.36),
+            listScroll.widthAnchor.constraint(equalTo: root.widthAnchor, multiplier: 0.38),
             columnSeparator.leadingAnchor.constraint(equalTo: listScroll.trailingAnchor, constant: 10),
             columnSeparator.topAnchor.constraint(equalTo: searchSeparator.bottomAnchor),
             columnSeparator.bottomAnchor.constraint(equalTo: footerSeparator.topAnchor),

@@ -199,8 +199,8 @@ final class ClipboardHistoryAppHost: NSObject {
     }
 
     private func paste(session: PasteSession, entryID: UUID, formatted: Bool) -> String? {
-        guard CGPreflightPostEventAccess(),
-              NSWorkspace.shared.frontmostApplication?.processIdentifier == session.targetPID,
+        guard CGPreflightPostEventAccess() else { return "eventUnavailable" }
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == session.targetPID,
               NSRunningApplication(processIdentifier: session.targetPID)?.isTerminated == false else {
             return "targetUnavailable"
         }

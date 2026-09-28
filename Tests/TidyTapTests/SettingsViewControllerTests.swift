@@ -67,6 +67,16 @@ final class SettingsViewControllerTests: XCTestCase {
         XCTAssertNil(state.handle(type: .keyUp, keyCode: 36, isRepeat: false, shiftHeld: false).reverseStyle)
     }
 
+    func testClipboardPasteFailureCopyDistinguishesReasons() {
+        let reasons = [
+            "entryUnavailable", "eventUnavailable", "pasteboardWriteFailed",
+            "helperTimeout", "targetUnavailable", "focusChanged"
+        ]
+        let messages = reasons.map { TidyTapStrings.clipboardPasteFailureMessage(for: $0) }
+        XCTAssertEqual(Set(messages).count, reasons.count)
+        XCTAssertFalse(messages.contains(TidyTapStrings.clipboardPasteFailureMessage(for: nil)))
+    }
+
     func testClipboardPanelSelectsNewestAndFiltersTextWithoutOpeningAWindow() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("tidytap-panel-\(UUID())")
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -118,7 +128,7 @@ final class SettingsViewControllerTests: XCTestCase {
             .compactMap { $0.documentView as? NSTextView }.first)
         XCTAssertTrue(preview.string.contains("10 MiB"))
         root.layoutSubtreeIfNeeded()
-        XCTAssertEqual(root.bounds.width, 720, accuracy: 1)
+        XCTAssertEqual(root.bounds.width, 800, accuracy: 1)
         let bitmap = try XCTUnwrap(root.bitmapImageRepForCachingDisplay(in: root.bounds))
         root.cacheDisplay(in: root.bounds, to: bitmap)
         let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
@@ -312,15 +322,17 @@ final class SettingsViewControllerTests: XCTestCase {
         let search = try XCTUnwrap(view.subviews.compactMap { $0 as? NSSearchField }.first)
         XCTAssertGreaterThanOrEqual(view.bounds.maxY - search.frame.maxY, view.safeAreaInsets.top + 8)
         XCTAssertTrue(panel.panel.standardWindowButton(.closeButton)?.isHidden == true)
-        XCTAssertLessThanOrEqual(view.bounds.height, 280, "short history uses a compact panel")
+        XCTAssertEqual(view.bounds.height, 380, accuracy: 1,
+                       "a mixed history reserves preview space before the image is selected")
         let listScroll = try XCTUnwrap(view.subviews.compactMap { $0 as? NSScrollView }
             .first { $0.documentView is NSTableView })
         XCTAssertTrue(listScroll.autohidesScrollers)
         XCTAssertFalse(listScroll.drawsBackground)
         let list = try XCTUnwrap(listScroll.documentView as? NSTableView)
+        XCTAssertEqual(list.rowHeight, 38)
         let imageCell = try XCTUnwrap(list.view(atColumn: 0, row: 1, makeIfNecessary: true) as? NSTableCellView)
         XCTAssertNotNil(imageCell.imageView?.image)
-        XCTAssertGreaterThan(imageCell.imageView?.frame.width ?? 0, 0)
+        XCTAssertEqual(imageCell.imageView?.frame.width ?? 0, 26, accuracy: 1)
         let bitmap = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
         view.cacheDisplay(in: view.bounds, to: bitmap)
         let data = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
@@ -337,6 +349,20 @@ final class SettingsViewControllerTests: XCTestCase {
         panel.search("없는 기록")
         XCTAssertTrue(view.subviews.compactMap { $0 as? NSTextField }
             .contains { !$0.isHidden && $0.stringValue == String(localized: "No search results") })
+
+        for title in ["회의 링크", "API 응답 예시", "오류 메시지 기록", "디자인 피드백", "테스트 결과", "후속 작업 체크리스트"] {
+            _ = try store.add(.text(plain: title, rtf: nil, html: nil))
+        }
+        _ = try store.add(.text(plain: "새로운 메모\n검색과 선택을 빠르게 확인합니다.", rtf: nil, html: nil))
+        panel.search("")
+        panel.updateEntries(try store.entries())
+        view.layoutSubtreeIfNeeded()
+        XCTAssertEqual(view.bounds.height, 454, accuracy: 1)
+        XCTAssertEqual(list.numberOfRows, 9)
+        let denseBitmap = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+        view.cacheDisplay(in: view.bounds, to: denseBitmap)
+        let denseData = try XCTUnwrap(denseBitmap.representation(using: .png, properties: [:]))
+        try denseData.write(to: FileManager.default.temporaryDirectory.appendingPathComponent("tidytap-clipboard-panel-dense.png"))
     }
 
     func testClipboardPanelTypographyStaysWithinItsRegions() throws {
@@ -362,6 +388,7 @@ final class SettingsViewControllerTests: XCTestCase {
         let panel = ClipboardHistoryPanelController()
         panel.updateEntries(try store.entries())
         let view = try XCTUnwrap(panel.panel.contentView)
+        XCTAssertLessThanOrEqual(view.bounds.height, 300, "text-only history stays compact")
         let search = try XCTUnwrap(view.subviews.compactMap { $0 as? NSSearchField }.first)
         let list = try XCTUnwrap(view.subviews.compactMap { $0 as? NSScrollView }
             .compactMap { $0.documentView as? NSTableView }.first)
@@ -389,7 +416,7 @@ final class SettingsViewControllerTests: XCTestCase {
         }
         view.layoutSubtreeIfNeeded()
 
-        XCTAssertEqual(view.bounds.width, 720, accuracy: 1)
+        XCTAssertEqual(view.bounds.width, 800, accuracy: 1)
         XCTAssertGreaterThanOrEqual(view.bounds.maxY - search.frame.maxY, view.safeAreaInsets.top + 8)
         XCTAssertLessThanOrEqual(footer.frame.maxX, delete.frame.minX - 8)
         for row in 0..<list.numberOfRows {
@@ -417,6 +444,58 @@ final class SettingsViewControllerTests: XCTestCase {
         XCTAssertTrue(preview.string.hasPrefix("https://example.test/"))
         XCTAssertFalse(try XCTUnwrap(preview.enclosingScrollView).hasHorizontalScroller)
         try snapshot("tidytap-clipboard-panel-long-url-narrow.png")
+    }
+
+    func testLargeImagePreviewDoesNotResizeHistoryWindow() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("tidytap-image-panel-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ClipboardHistoryStore(
+            directory: directory, retention: 600,
+            maximumEntries: 10, maximumBytes: 2_000_000, maximumItemBytes: 1_500_000
+        )
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(
+            bitmapDataPlanes: nil, pixelsWide: 1600, pixelsHigh: 900,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true,
+            isPlanar: false, colorSpaceName: .deviceRGB,
+            bytesPerRow: 0, bitsPerPixel: 0
+        ))
+        let context = try XCTUnwrap(NSGraphicsContext(bitmapImageRep: bitmap))
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        NSColor.systemOrange.setFill()
+        NSRect(x: 0, y: 0, width: 1600, height: 900).fill()
+        context.flushGraphics()
+        NSGraphicsContext.restoreGraphicsState()
+        let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+        XCTAssertEqual(NSImage(data: png)?.size.width ?? 0, 1600, accuracy: 1)
+        _ = try store.add(.image(data: png, type: .png))
+        _ = try store.add(.text(plain: "Text selected first", rtf: nil, html: nil))
+
+        let panel = ClipboardHistoryPanelController()
+        panel.updateEntries(try store.entries())
+        let root = try XCTUnwrap(panel.panel.contentView)
+        root.layoutSubtreeIfNeeded()
+        let initialSize = panel.panel.frame.size
+        XCTAssertGreaterThanOrEqual(initialSize.height, 380)
+        let list = try XCTUnwrap(root.subviews.compactMap { $0 as? NSScrollView }
+            .compactMap { $0.documentView as? NSTableView }.first)
+        list.selectRowIndexes(IndexSet(integer: 1), byExtendingSelection: false)
+        root.layoutSubtreeIfNeeded()
+
+        XCTAssertEqual(panel.panel.frame.width, initialSize.width, accuracy: 1)
+        XCTAssertEqual(panel.panel.frame.height, initialSize.height, accuracy: 1)
+        let preview = try XCTUnwrap(root.subviews.compactMap { $0 as? NSImageView }.first)
+        XCTAssertFalse(preview.isHidden)
+        XCTAssertLessThanOrEqual(preview.frame.width, root.bounds.width)
+        XCTAssertLessThanOrEqual(preview.frame.height, root.bounds.height)
+        let sourceSize = try XCTUnwrap(NSImage(data: png)).size
+        let scale = min(preview.bounds.width / sourceSize.width, preview.bounds.height / sourceSize.height)
+        XCTAssertGreaterThan(sourceSize.width * scale / preview.bounds.width, 0.9,
+                             "landscape image fills the preview width without cropping")
+        let rendered = try XCTUnwrap(root.bitmapImageRepForCachingDisplay(in: root.bounds))
+        root.cacheDisplay(in: root.bounds, to: rendered)
+        let data = try XCTUnwrap(rendered.representation(using: .png, properties: [:]))
+        try data.write(to: FileManager.default.temporaryDirectory.appendingPathComponent("tidytap-clipboard-panel-large-image.png"))
     }
 
     func testMousePermissionBlockIsBelowEveryMouseFeatureRow() throws {

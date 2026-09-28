@@ -433,29 +433,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
     }
 
     private func showClipboardError(reason: String? = nil) {
+        NSLog("TidyTap clipboard paste failed: %@", reason ?? "unknown")
         let alert = NSAlert()
         alert.messageText = String(localized: "Could not paste the selected item")
-        alert.informativeText = switch reason {
-        case "entryUnavailable": String(localized: "The selected history item is no longer available. Reopen history and try again.")
-        case "eventUnavailable": String(localized: "TidyTap could not send the paste shortcut. Check Accessibility permission and try again.")
-        case "pasteboardWriteFailed": String(localized: "TidyTap could not write the selected item to the clipboard. Try again.")
-        case "helperTimeout": String(localized: "TidyTap Helper did not respond. Reopen history and try again.")
-        default: String(localized: "Return to the original input field and try again.")
-        }
-        alert.runModal()
+        alert.informativeText = TidyTapStrings.clipboardPasteFailureMessage(for: reason)
+        presentClipboardAlert(alert)
     }
 
     private func showClipboardOpenError() {
         let alert = NSAlert()
         alert.messageText = String(localized: "Could not open clipboard history")
         alert.informativeText = String(localized: "Check available storage and try again.")
-        alert.runModal()
+        presentClipboardAlert(alert)
     }
 
     private func showClipboardDeleteError() {
         let alert = NSAlert()
         alert.messageText = String(localized: "Could not delete the selected item")
         alert.informativeText = String(localized: "Check available storage and try again.")
+        presentClipboardAlert(alert)
+    }
+
+    private func presentClipboardAlert(_ alert: NSAlert) {
+        alert.window.level = .statusBar
+        alert.window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        NSApp.activate(ignoringOtherApps: true)
+        alert.window.orderFrontRegardless()
         alert.runModal()
     }
 
