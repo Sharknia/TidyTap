@@ -10,6 +10,19 @@ enum TidyTapProduct {
     static let legacyHelperExecutablePath =
         "Contents/Library/LoginItems/TidyTapHelper.app/Contents/MacOS/TidyTapHelper"
     static let workerLaunchNonceEnvironmentKey = "TIDYTAP_WORKER_LAUNCH_NONCE"
+    static let backgroundUpdateEnvironmentKey = "TIDYTAP_BACKGROUND_UPDATE_HOST"
+    static let installedAppURL = URL(fileURLWithPath: "/Applications/TidyTap.app", isDirectory: true)
+
+    static func isInstalledCopy(_ appURL: URL, allowDevelopment: Bool = false) -> Bool {
+        allowDevelopment || appURL.standardizedFileURL.resolvingSymlinksInPath() ==
+            installedAppURL.standardizedFileURL.resolvingSymlinksInPath()
+    }
+
+    static func appLockURL(preferencesSuite: String = appBundleIdentifier) -> URL {
+        workerLockURL(preferencesSuite: preferencesSuite)
+            .deletingLastPathComponent()
+            .appendingPathComponent("app.lock")
+    }
 
     static func workerLockURL(
         preferencesSuite: String = appBundleIdentifier

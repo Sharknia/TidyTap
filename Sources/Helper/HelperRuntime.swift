@@ -5,13 +5,43 @@ import TidyTapInputEngine
 /// A background-only helper. It owns the process lifetime and applies the
 /// complete persisted snapshot at launch and after each change notification.
 @MainActor
-final class HelperRuntime {
+final class HelperRuntime: NSObject {
     private var lifecycle: HelperLifecycle?
     private var clipboardProbeHotkey: ClipboardProbeHotkey?
     private var clipboardCaptureHost: HelperClipboardCaptureHost?
     private let launchSmoke = TidyTapLaunchSmoke.current()
+    private var markReadiness: ((TidyTapWorkerLockOwner.Readiness) -> Bool)?
+
+    @objc private func prepareForUpdate(_ notification: Notification) {
+        guard markReadiness?(.stopping) == true else { return }
+        stop()
+        CFRunLoopStop(CFRunLoopGetMain())
+    }
+
+    @objc private func otherTidyTapDidLaunch(_ notification: Notification) {
+        guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+              app.bundleIdentifier == TidyTapProduct.appBundleIdentifier,
+              let url = app.bundleURL,
+              !TidyTapProduct.isInstalledCopy(url) else { return }
+        stop()
+        CFRunLoopStop(CFRunLoopGetMain())
+    }
+
+    private func startBackgroundUpdateHost() {
+        let appURL = Bundle.main.bundleURL
+        guard !NSRunningApplication.runningApplications(withBundleIdentifier: TidyTapProduct.appBundleIdentifier)
+            .contains(where: { $0.bundleURL?.standardizedFileURL.resolvingSymlinksInPath() ==
+                appURL.standardizedFileURL.resolvingSymlinksInPath() }) else { return }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = false
+        configuration.addsToRecentItems = false
+        configuration.allowsRunningApplicationSubstitution = false
+        configuration.environment = [TidyTapProduct.backgroundUpdateEnvironmentKey: "1"]
+        NSWorkspace.shared.openApplication(at: appURL, configuration: configuration) { _, _ in }
+    }
 
     func start(setReadiness: @escaping (TidyTapWorkerLockOwner.Readiness) -> Bool = { _ in true }) {
+        markReadiness = setReadiness
         if ProcessInfo.processInfo.environment["TIDYTAP_CLIPBOARD_G1_PROBE"] == "1" {
             guard let launchSmoke else { exit(1) }
             do {
@@ -175,10 +205,32 @@ final class HelperRuntime {
         )
         self.lifecycle = lifecycle
         lifecycle.start()
+        let updateStopProbe = launchSmoke != nil &&
+            ProcessInfo.processInfo.environment["TIDYTAP_UPDATE_STOP_PROBE"] == "1"
+        if launchSmoke == nil || updateStopProbe {
+            DistributedNotificationCenter.default().addObserver(
+                self,
+                selector: #selector(prepareForUpdate(_:)),
+                name: TidyTapIPC.prepareForUpdate,
+                object: launchSmoke?.preferencesSuite ?? TidyTapProduct.appBundleIdentifier,
+                suspensionBehavior: .deliverImmediately
+            )
+        }
+        if launchSmoke == nil {
+            NSWorkspace.shared.notificationCenter.addObserver(
+                self,
+                selector: #selector(otherTidyTapDidLaunch(_:)),
+                name: NSWorkspace.didLaunchApplicationNotification,
+                object: nil
+            )
+            startBackgroundUpdateHost()
+        }
         launchSmoke?.report("helper-delegate-started")
     }
 
     func stop() {
+        DistributedNotificationCenter.default().removeObserver(self)
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
         clipboardProbeHotkey?.stop()
         clipboardCaptureHost?.stop()
         lifecycle?.stop()

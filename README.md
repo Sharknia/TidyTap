@@ -50,7 +50,7 @@ Enable "Start at login" to use your settings after signing in. There is no Intel
 
 macOS requires Accessibility access to handle scrolling, side buttons, and Finder shortcuts. Caps Lock switching alone needs no permission. You do not need to add TidyTap separately to Input Monitoring.
 
-TidyTap does not record or transmit keystrokes or mouse activity. It processes input on your Mac and keeps settings and restoration backups there too. It has no analytics or automatic update checks.
+TidyTap does not record or transmit keystrokes or mouse activity. It processes input on your Mac and keeps settings and restoration backups there too. There is no analytics. Updater-enabled versions check a public GitHub feed for new releases; input and clipboard history are never sent with that request.
 
 You can change the permission in System Settings → Privacy & Security → Accessibility.
 
@@ -68,7 +68,7 @@ Compatibility depends on how your mouse reports input. See [compatibility notes]
 <details>
 <summary>How do I update? Can I install with Homebrew?</summary>
 
-There is no automatic updater or official Homebrew installation. Stop TidyTap using the steps below, download the latest DMG, and replace the app in Applications. Reopen it and turn on your preferred features.
+Version 0.1.4 and earlier need one manual DMG replacement. Updater-enabled versions check for new releases while running and offer **Check for Updates** in Settings; Sparkle can then install a signed update in-app after you click Install. There is no official Homebrew installation.
 
 </details>
 

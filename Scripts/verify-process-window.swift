@@ -6,7 +6,8 @@ import Foundation
 guard CommandLine.arguments.count == 4,
       let processID = Int(CommandLine.arguments[1]),
       let expectedContentWidth = Double(CommandLine.arguments[2]),
-      let expectedContentHeight = Double(CommandLine.arguments[3]) else {
+      let expectedContentHeight = Double(CommandLine.arguments[3]),
+      expectedContentWidth > 0, expectedContentHeight > 0 else {
     fputs("usage: verify-process-window <pid> <content-width> <content-height>\n", stderr)
     exit(2)
 }
@@ -60,10 +61,11 @@ guard normalWindows.count == 1,
     exit(1)
 }
 
-// On this macOS 26 build the transparent settings window reports a 560x760
-// NSWindow frame while CGWindowList reports its visible bounds as 550x746.
-// Keep the window-count check exact and allow only this small visual inset.
-let widthMatches = width >= expectedContentWidth - 12 && width <= expectedContentWidth + 4
+// The window server may report a uniformly scaled preview of a 560x760
+// AppKit window (for example 504x685 at 90%). Keep the one-window check exact
+// and compare height after normalizing by the observed width scale.
+let windowScale = width / expectedContentWidth
+let widthMatches = windowScale >= 0.88 && windowScale <= 1.02
 // CGWindow reports the frame including the title bar; the requested AppKit
 // content height is therefore the lower bound rather than the exact frame.
 // Settings uses a scrollable document and clamps the window to its screen's
@@ -73,7 +75,7 @@ let candidateContentHeights = NSScreen.screens.map { screen in
     min(expectedContentHeight, max(1, screen.visibleFrame.height - 24))
 }
 let heightMatches = (candidateContentHeights.isEmpty ? [expectedContentHeight] : candidateContentHeights)
-    .contains { height >= $0 - 16 && height <= $0 + 64 }
+    .contains { height / windowScale >= $0 - 16 && height / windowScale <= $0 + 64 }
 guard widthMatches && heightMatches else {
     fputs(
         "Unexpected normal window frame: \(Int(width))x\(Int(height)); " +

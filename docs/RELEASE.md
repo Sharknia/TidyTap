@@ -51,12 +51,14 @@ The supplied file is read in place; it is never copied or printed. This mode
 requires a valid `TIDYTAP_DEVELOPMENT_TEAM` and matching
 `TIDYTAP_DEVELOPER_ID_APPLICATION` identity already available in Keychain. It
 passes that config to `xcodebuild -xcconfig` while keeping the Release target's
-`Config/Signing.xcconfig` settings, so the app and plain `TidyTapHelper` retain
-the Release signing identifiers, hardened runtime, and timestamping. The
-script does not ad-hoc re-sign either executable in this mode.
+`Config/Signing.xcconfig` settings, then exports the archive with Developer ID
+so Sparkle's nested services are re-signed. The app and plain `TidyTapHelper`
+retain the Release signing identifiers, hardened runtime, and timestamping.
+The script does not ad-hoc re-sign either executable in this mode.
 
 Before publishing a local candidate, it verifies the configured Developer ID
-certificate chain and team on the app, plain worker, and signed DMG; verifies
+certificate chain and team on the app, plain worker, Sparkle framework and its
+nested services, and signed DMG; verifies
 the app resource seal; mounts the DMG read-only; copies its app to an isolated
 temporary location; and repeats the app, worker, and seal checks there. It
 writes and verifies a SHA-256 sidecar. The output is commit-specific and never
@@ -123,8 +125,10 @@ Then run the one-shot release workflow:
 Scripts/package-release-dmg.sh
 ```
 
-It archives the Release scheme, verifies the outer app and embedded
-`Contents/MacOS/TidyTapHelper` independently against the configured Developer ID team,
+It archives and exports the Release scheme with Developer ID signing, then
+verifies the outer app, embedded
+`Contents/MacOS/TidyTapHelper`, Sparkle framework, and nested updater services
+independently against the configured Developer ID team,
 creates the DMG, then signs the **DMG container itself** with that identity and
 a secure timestamp. It verifies the DMG's signature, Developer ID authority,
 Team ID, and timestamp before submitting that exact DMG to notarytool. It then
@@ -143,6 +147,43 @@ prints local config values, keychain credentials, or notarization secrets.
 The workflow fails before archiving if any of the local config, Team ID,
 Developer ID identity, or usable notarytool profile is absent. It does not
 upload to GitHub or install the app.
+
+## In-app updates from the next release onward
+
+The app embeds Sparkle 2 and reads the public feed at
+`https://raw.githubusercontent.com/Sharknia/TidyTap/main/appcast.xml`.
+It checks automatically while the app is running, and Settings has a manual
+**Check for Updates** button. An installed version from before this integration
+cannot gain that ability without one manual DMG replacement. The update source
+must be a newer release with a strictly increasing `CFBundleVersion`.
+The app checks once a day by default while running. Installation requires a
+user click, so a background replacement does not leave the input Helper stopped
+without an app relaunch.
+Only `/Applications/TidyTap.app` may run as a production copy; an app opened
+from a DMG or another folder asks the user to open the installed copy. Before
+Sparkle installs an update, the app asks its Helper to exit and waits for its
+process lock to clear. The relaunched app starts the current embedded Helper.
+
+The Sparkle EdDSA private key is stored only in the release Mac's login Keychain
+under account `com.sharknia.TidyTap`; `SUPublicEDKey` in `Resources/AppInfo.plist`
+is the corresponding public key. Back up the private key securely outside this
+repository before relying on unattended updates. Never commit or print an
+exported private key.
+
+After a verified, notarized DMG has been prepared, create a signed feed candidate:
+
+```sh
+Scripts/prepare-update-feed.sh build/artifacts/TidyTap-<version>/TidyTap-<version>.dmg v<version>
+```
+
+This only writes `appcast.xml` beside the DMG. Review its version, download URL,
+signature, and minimum macOS version. Publish the exact DMG in its GitHub Release
+first; then replace the repository-root `appcast.xml` with the reviewed candidate
+and publish that feed on `main`. Do not point the public feed at an asset that is
+not downloadable yet. Verify an installed older updater-enabled build can check,
+download, replace, and relaunch before calling the release complete. Check that
+the embedded Helper is refreshed and Accessibility/Input Monitoring permissions
+continue to work. A signed build and valid feed alone do not prove that flow.
 
 For a no-network regression check of the release ordering and fail-closed
 publication boundary, run:

@@ -23,6 +23,7 @@ enum TidyTapIPC {
     static let clipboardHistoryChanged = Notification.Name("com.sharknia.TidyTap.clipboardHistoryChanged")
     static let clipboardHistoryPaste = Notification.Name("com.sharknia.TidyTap.clipboardHistoryPaste")
     static let clipboardHistoryPasteResult = Notification.Name("com.sharknia.TidyTap.clipboardHistoryPasteResult")
+    static let prepareForUpdate = Notification.Name("com.sharknia.TidyTap.prepareForUpdate")
     static let clipboardTargetPIDEnvironmentKey = "TIDYTAP_CLIPBOARD_TARGET_PID"
     static let clipboardSessionEnvironmentKey = "TIDYTAP_CLIPBOARD_SESSION"
     static let clipboardHistoryModeEnvironmentKey = "TIDYTAP_CLIPBOARD_HISTORY_MODE"
@@ -54,6 +55,15 @@ enum TidyTapIPC {
 
     static func postSettingsDidChange(requestID: UUID) {
         post(settingsDidChange, requestID: requestID)
+    }
+
+    static func postPrepareForUpdate() {
+        DistributedNotificationCenter.default().postNotificationName(
+            prepareForUpdate,
+            object: TidyTapProduct.appBundleIdentifier,
+            userInfo: nil,
+            deliverImmediately: true
+        )
     }
 
     static func postApplyResult(_ status: TidyTapApplyStatus) {

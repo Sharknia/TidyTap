@@ -6,6 +6,14 @@ import ServiceManagement
 
 @MainActor
 final class TidyTapSettingsTests: XCTestCase {
+    func testOnlyInstalledAppRunsOutsideIsolatedDevelopment() {
+        let installed = TidyTapProduct.installedAppURL
+        let copy = URL(fileURLWithPath: "/tmp/TidyTap.app", isDirectory: true)
+        XCTAssertTrue(TidyTapProduct.isInstalledCopy(installed))
+        XCTAssertFalse(TidyTapProduct.isInstalledCopy(copy))
+        XCTAssertTrue(TidyTapProduct.isInstalledCopy(copy, allowDevelopment: true))
+    }
+
     func testLaunchSmokeRequiresFlagAndScopedPreferencesSuite() {
         let suite = "\(TidyTapLaunchSmoke.suitePrefix)UnitTest"
 

@@ -43,6 +43,7 @@ final class SettingsViewController: NSViewController {
     var onPermissionSettingsRequest: ((TidyTapPermission) -> Void)?
     var captureClipboardShortcut: (() -> TidyTapClipboardShortcut?)?
     var onClearClipboardHistory: (() -> Void)?
+    var onCheckForUpdates: (() -> Void)?
 
     private(set) var settings: TidyTapSettings
     private(set) var permissionState: TidyTapFeaturePermissionState
@@ -635,6 +636,12 @@ final class SettingsViewController: NSViewController {
         version.font = .systemFont(ofSize: 12)
         version.textColor = .secondaryLabelColor
         footer.addArrangedSubview(version)
+        let checkUpdates = NSButton(title: copy.checkForUpdates, target: self, action: #selector(checkForUpdates(_:)))
+        checkUpdates.identifier = NSUserInterfaceItemIdentifier("settings.checkForUpdates")
+        checkUpdates.isBordered = false
+        checkUpdates.font = .systemFont(ofSize: 12)
+        checkUpdates.isEnabled = onCheckForUpdates != nil
+        footer.addArrangedSubview(checkUpdates)
         footer.addArrangedSubview(NSView())
         footer.addArrangedSubview(linkButton(title: TidyTapStrings.email, url: TidyTapStrings.emailURL))
         let dot = NSTextField(labelWithString: "·")
@@ -729,6 +736,10 @@ final class SettingsViewController: NSViewController {
 
     private func versionText() -> String {
         String(format: copy.versionFormat, displayVersion)
+    }
+
+    @objc private func checkForUpdates(_ sender: NSButton) {
+        onCheckForUpdates?()
     }
 
     private func linkButton(title: String, url: URL) -> NSButton {
@@ -962,6 +973,7 @@ private struct SettingsViewCopy {
     let launchAtLogin: String
     let launchAtLoginCaption: String
     let versionFormat: String
+    let checkForUpdates: String
     let mousePermissionsTitle: String
     let accessibilityPermissionTitle: String
     let accessibilityPermissionCaption: String
@@ -1032,6 +1044,7 @@ private struct SettingsViewCopy {
         launchAtLogin = text("Start at login")
         launchAtLoginCaption = text("Keep TidyTap ready after you sign in")
         versionFormat = text("Version %@")
+        checkForUpdates = text("Check for Updates…")
         mousePermissionsTitle = text("PERMISSIONS FOR INPUT FEATURES")
         accessibilityPermissionTitle = text("Accessibility")
         accessibilityPermissionCaption = text("Required for mouse, Finder cut/paste, and clipboard history")

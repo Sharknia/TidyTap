@@ -1,6 +1,11 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Another TidyTap is running" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Another TidyTap is running" } }, "ko" : { "stringUnit" : { "state" : "translated", "value" : "다른 TidyTap이 실행 중입니다" } } } },
+    "Move TidyTap to Applications and open it from there." : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Move TidyTap to Applications and open it from there." } }, "ko" : { "stringUnit" : { "state" : "translated", "value" : "TidyTap을 응용 프로그램 폴더로 옮긴 뒤 거기에서 실행하세요." } } } },
+    "Open the installed TidyTap" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Open the installed TidyTap" } }, "ko" : { "stringUnit" : { "state" : "translated", "value" : "설치된 TidyTap을 실행하세요" } } } },
+    "Quit the other copy, then open TidyTap again." : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Quit the other copy, then open TidyTap again." } }, "ko" : { "stringUnit" : { "state" : "translated", "value" : "다른 복사본을 종료한 뒤 TidyTap을 다시 실행하세요." } } } },
+    "Check for Updates…" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Check for Updates…" } }, "ko" : { "stringUnit" : { "state" : "translated", "value" : "업데이트 확인…" } } } },
     "Clear all history" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Clear all history" } }, "ko" : { "stringUnit" : { "state" : "translated", "value" : "기록 전체 삭제" } } } },
     "Clipboard history was deleted." : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Clipboard history was deleted." } }, "ko" : { "stringUnit" : { "state" : "translated", "value" : "클립보드 기록을 모두 삭제했습니다." } } } },
     "Clipboard history could not be deleted." : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Clipboard history could not be deleted." } }, "ko" : { "stringUnit" : { "state" : "translated", "value" : "클립보드 기록을 삭제하지 못했습니다." } } } },

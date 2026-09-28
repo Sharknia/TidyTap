@@ -1,4 +1,5 @@
 import AppKit
+import Sparkle
 import TidyTapInputEngine
 
 private struct ClipboardPasteTarget {
@@ -7,7 +8,7 @@ private struct ClipboardPasteTarget {
 }
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
     private var windowController: NSWindowController?
     private var settingsCoordinator: SettingsCoordinator?
     private let launchSmoke = TidyTapLaunchSmoke.current()
@@ -19,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var clipboardHistoryPanel: ClipboardHistoryPanelController?
     private var clipboardPasteTarget: ClipboardPasteTarget?
     private var pendingClipboardPasteSessionID: UUID?
+    private var updaterController: SPUStandardUpdaterController?
 
     init(
         permissionSettingsOpener: TidyTapPermissionSettingsOpening = SystemPermissionSettingsOpener(),
@@ -30,6 +32,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if launchSmoke == nil {
+            NSWorkspace.shared.notificationCenter.addObserver(
+                self,
+                selector: #selector(otherTidyTapDidLaunch(_:)),
+                name: NSWorkspace.didLaunchApplicationNotification,
+                object: nil
+            )
+        }
+        let environment = ProcessInfo.processInfo.environment
+        let isTransientHost = initialFinderFeedback != nil ||
+            environment[TidyTapIPC.clipboardHistoryModeEnvironmentKey] == "1"
+        if launchSmoke == nil && !isTransientHost {
+            updaterController = SPUStandardUpdaterController(
+                startingUpdater: true, updaterDelegate: self, userDriverDelegate: nil
+            )
+        }
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(clipboardHistoryToggle(_:)),
@@ -71,6 +89,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 sessionID: TidyTapIPC.clipboardSessionID(in: ProcessInfo.processInfo.environment),
                 displayID: TidyTapIPC.clipboardDisplayID(in: ProcessInfo.processInfo.environment)
             )
+            TidyTapIPC.postFinderFeedbackReady()
+            return
+        }
+        if ProcessInfo.processInfo.environment[TidyTapProduct.backgroundUpdateEnvironmentKey] == "1" {
+            NSApp.setActivationPolicy(.accessory)
+            try? HelperLauncher().ensureHelperRunning()
             TidyTapIPC.postFinderFeedbackReady()
             return
         }
@@ -136,6 +160,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         controller.onClearClipboardHistory = { [weak self, weak controller] in
             self?.clearClipboardHistory(settingsController: controller)
+        }
+        if let updaterController {
+            controller.onCheckForUpdates = { updaterController.checkForUpdates(nil) }
         }
         let window = NSWindow(contentViewController: controller)
         window.title = TidyTapStrings.appName
@@ -226,6 +253,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     deinit {
         DistributedNotificationCenter.default().removeObserver(self)
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
+    }
+
+    @objc private func otherTidyTapDidLaunch(_ notification: Notification) {
+        guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
+              app.bundleIdentifier == TidyTapProduct.appBundleIdentifier,
+              app.processIdentifier != getpid() else { return }
+        // A same-version second process exits on app.lock. Wait for that exit
+        // before treating a still-running copy as an older installation.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            if !app.isTerminated { NSApp.terminate(nil) }
+        }
+    }
+
+    func updater(_ updater: SPUUpdater, willInstallUpdate item: SUAppcastItem) {
+        TidyTapIPC.postPrepareForUpdate()
+        let runtime = SystemTidyTapWorkerRuntime()
+        for _ in 0..<40 {
+            if case .free = try? runtime.inspectLock() { return }
+            usleep(50_000)
+        }
     }
 
     @objc private func clipboardHistoryToggle(_ notification: Notification) {

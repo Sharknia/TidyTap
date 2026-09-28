@@ -133,7 +133,32 @@ run_step \
     -archivePath "$archive_path" \
     archive
 
-app_path="$archive_path/Products/Applications/TidyTap.app"
+export_options="$candidate_dir/ExportOptions.plist"
+/usr/bin/python3 - "$export_options" "$team_id" "$identity" <<'PY'
+import plistlib
+import sys
+
+with open(sys.argv[1], "wb") as output:
+    plistlib.dump({
+        "method": "developer-id",
+        "destination": "export",
+        "signingStyle": "manual",
+        "teamID": sys.argv[2],
+        "signingCertificate": sys.argv[3],
+    }, output)
+PY
+export_path="$candidate_dir/export"
+run_step \
+  "Release Developer ID export" \
+  "Xcode must re-sign Sparkle's nested updater services for distribution." \
+  xcodebuild \
+    -quiet \
+    -exportArchive \
+    -archivePath "$archive_path" \
+    -exportPath "$export_path" \
+    -exportOptionsPlist "$export_options"
+
+app_path="$export_path/TidyTap.app"
 helper_path="$app_path/Contents/MacOS/TidyTapHelper"
 if [[ ! -d "$app_path" || ! -x "$helper_path" ]]; then
   print -u2 -- "Release archive did not contain TidyTap.app with its embedded TidyTapHelper executable."
@@ -160,6 +185,23 @@ verify_developer_id_signature() {
 # Verify both independently. --deep alone can hide an incorrectly signed helper.
 verify_developer_id_signature "$helper_path" "Release helper"
 verify_developer_id_signature "$app_path" "Release app"
+sparkle_framework="$app_path/Contents/Frameworks/Sparkle.framework"
+if [[ ! -d "$sparkle_framework" ]]; then
+  print -u2 -- "Release app is missing Sparkle.framework."
+  exit 1
+fi
+verify_developer_id_signature "$sparkle_framework" "Release Sparkle framework"
+for component in \
+  "$sparkle_framework/Versions/B/Autoupdate" \
+  "$sparkle_framework/Versions/B/Updater.app" \
+  "$sparkle_framework/Versions/B/XPCServices/Downloader.xpc" \
+  "$sparkle_framework/Versions/B/XPCServices/Installer.xpc"; do
+  verify_developer_id_signature "$component" "Release Sparkle component"
+done
+run_step \
+  "Release app nested-code verification" \
+  "Check Developer ID signing of Sparkle's bundled services." \
+  /usr/bin/codesign --verify --deep --strict --verbose=2 "$app_path"
 
 version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app_path/Contents/Info.plist")
 if [[ -z "$version" ]]; then
