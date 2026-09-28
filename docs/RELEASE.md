@@ -170,7 +170,8 @@ is the corresponding public key. Back up the private key securely outside this
 repository before relying on unattended updates. Never commit or print an
 exported private key.
 
-After a verified, notarized DMG has been prepared, create a signed feed candidate:
+After a verified, notarized DMG has been prepared, create an appcast candidate
+containing its EdDSA archive signature:
 
 ```sh
 Scripts/prepare-update-feed.sh build/artifacts/TidyTap-<version>/TidyTap-<version>.dmg v<version>

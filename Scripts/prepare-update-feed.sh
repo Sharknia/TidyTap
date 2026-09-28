@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Prepare a signed Sparkle appcast beside a verified release DMG. Publishing
+# Prepare a Sparkle appcast with a signed DMG entry. Publishing
 # the DMG and then this feed is a separate, explicit release operation.
 set -euo pipefail
 
@@ -56,4 +56,4 @@ fi
 /usr/bin/grep -Fq 'sparkle:edSignature=' "$candidate_dir/appcast.xml"
 /usr/bin/grep -Fq "releases/download/$tag/" "$candidate_dir/appcast.xml"
 mv "$candidate_dir/appcast.xml" "$output"
-print -- "Prepared signed appcast candidate: $output"
+print -- "Prepared appcast candidate with a signed update: $output"
