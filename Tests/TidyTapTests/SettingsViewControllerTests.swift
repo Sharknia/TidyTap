@@ -306,6 +306,7 @@ final class SettingsViewControllerTests: XCTestCase {
         ))
         let panel = ClipboardHistoryPanelController()
         panel.updateEntries(try store.entries())
+        XCTAssertNil(panel.panel.appearance, "history follows the system appearance")
         let view = try XCTUnwrap(panel.panel.contentView)
         view.layoutSubtreeIfNeeded()
         let search = try XCTUnwrap(view.subviews.compactMap { $0 as? NSSearchField }.first)
@@ -463,6 +464,7 @@ final class SettingsViewControllerTests: XCTestCase {
         ] {
             let glass = try XCTUnwrap(findView(identifier: identifier, in: controller.view) as? NSGlassEffectView)
             let content = try XCTUnwrap(glass.contentView)
+            XCTAssertNil(glass.tintColor, "system Liquid Glass preference owns the section appearance")
             XCTAssertGreaterThan(glass.frame.width, 0)
             XCTAssertGreaterThan(glass.frame.height, 0)
             XCTAssertEqual(content.bounds.size, glass.bounds.size)

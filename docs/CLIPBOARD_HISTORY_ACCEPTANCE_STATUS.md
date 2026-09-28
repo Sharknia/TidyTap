@@ -40,3 +40,9 @@
 한글·영문 URL·이모지가 섞인 긴 기록에서 [기본 글꼴](images/clipboard-history-type-system-synthetic.png), [큰 글꼴과 480pt 창](images/clipboard-history-type-large-narrow-synthetic.png)을 비교했다. 큰 글꼴에서 하단 안내가 삭제 버튼을 침범하고 좁은 창에서 목록 제목이 말줄임 없이 잘리는 문제를 발견해, 안내 문구·레이블 압축·목록 열 너비를 수정했다. 화면 경계와 열 너비를 검사하는 테스트가 통과했다. 이 수동 글꼴 확대는 macOS 접근성 설정 자체의 동작을 검증한 것은 아니다.
 
 이 Mac에 설치된 D2 Coding으로 만든 [비교 화면](images/clipboard-history-type-d2-synthetic.png)에서는 고정폭 글꼴의 제목 잘림과 본문 밀도가 증가했다. 현재 패널은 시스템 글꼴을 유지한다. [공식 SIL OFL 1.1](https://github.com/naver/d2-coding-font/blob/master/LICENSE.md)에 따라 향후 원본 폰트를 앱에 포함해 배포한다면 저작권 표시와 라이선스를 함께 제공해야 한다. 이번 빌드에는 폰트를 포함하지 않는다.
+
+## 시스템 Liquid Glass 조절 대응 — 2026-09-28
+
+설정 화면은 macOS 26 이상에서 기본 `NSGlassEffectView(.regular)`를 사용하고, 이전 지원 OS에서는 일반 표면으로 돌아간다. 수동 틴트·테두리를 제거해 시스템 재질을 우선했다. 클립보드 패널은 외관 강제를 해제했고, Finder 피드백은 비상호작용 안내이므로 기존 시스템 `NSVisualEffectView(.popover)`를 유지한다. 현재 macOS 26.5의 AppKit 테스트에서 글래스 카드·패널 기본 외관 경로를 확인했다.
+
+[Apple WWDC26 설명](https://developer.apple.com/videos/play/wwdc2026/102/)에 따르면 macOS 27의 Liquid Glass 투명도·틴트 슬라이더는 기본 글래스를 쓰는 앱에 재컴파일 없이 자동 반영된다. 이 Mac은 macOS 26.5.2·SDK 26.5이므로 **27의 슬라이더 실제 반응은 아직 검증하지 못했다**. 앱 안의 별도 조절 슬라이더는 만들지 않았다.

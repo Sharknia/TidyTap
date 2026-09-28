@@ -322,8 +322,7 @@ final class SettingsViewController: NSViewController {
 
         let iconGlass = surface(
             content: iconContent,
-            cornerRadius: 16,
-            tintColor: NSColor.systemTeal.withAlphaComponent(0.09)
+            cornerRadius: 16
         )
         NSLayoutConstraint.activate([
             iconGlass.widthAnchor.constraint(equalToConstant: 58),
@@ -559,13 +558,12 @@ final class SettingsViewController: NSViewController {
 
     private func surface(
         content: NSView,
-        cornerRadius: CGFloat,
-        tintColor: NSColor? = nil
+        cornerRadius: CGFloat
     ) -> NSView {
         switch renderingMode {
         case .native:
             if #available(macOS 26.0, *) {
-                return GlassCardView(content: content, cornerRadius: cornerRadius, tintColor: tintColor)
+                return GlassCardView(content: content, cornerRadius: cornerRadius)
             }
             return SemanticSurfaceView(content: content, cornerRadius: cornerRadius)
         case .offscreenSemanticFallback:
@@ -1258,24 +1256,16 @@ private final class SettingsDocumentView: NSView {
 @MainActor
 @available(macOS 26.0, *)
 private final class GlassCardView: NSGlassEffectView {
-    init(content: NSView, cornerRadius: CGFloat, tintColor: NSColor?) {
+    init(content: NSView, cornerRadius: CGFloat) {
         super.init(frame: .zero)
         style = .regular
         self.cornerRadius = cornerRadius
-        self.tintColor = tintColor ?? NSColor.controlBackgroundColor.withAlphaComponent(0.055)
         translatesAutoresizingMaskIntoConstraints = false
         contentView = content
-        wantsLayer = true
-        layer?.borderWidth = 0.5
     }
 
     required init?(coder: NSCoder) {
         fatalError("init(coder:) has not been implemented")
-    }
-
-    override func updateLayer() {
-        super.updateLayer()
-        layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.45).cgColor
     }
 }
 

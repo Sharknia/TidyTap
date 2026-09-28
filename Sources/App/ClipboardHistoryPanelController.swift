@@ -87,7 +87,6 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
         panel.title = String(localized: "Clipboard history")
         panel.titleVisibility = .hidden
         panel.titlebarAppearsTransparent = true
-        panel.appearance = NSAppearance(named: .darkAqua)
         panel.isMovableByWindowBackground = true
         for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
             panel.standardWindowButton(button)?.isHidden = true

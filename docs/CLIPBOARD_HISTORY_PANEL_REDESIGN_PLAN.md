@@ -3,7 +3,7 @@
 - 작성일: 2026-09-28
 - 범위: 히스토리 **패널의 화면 구성과 사용성**. [MVP URS](CLIPBOARD_HISTORY_URS.md)의 수집·검색·붙여넣기 동작과 설정 정책은 유지한다.
 - 선택한 방향: 검색 상단, 왼쪽 목록, 오른쪽 미리보기, 아래 짧은 붙여넣기 안내로 구성된 **단일 패널**. 아래 두 이미지는 별도 디자인안이 아니라 텍스트/이미지 선택 상태다.
-- 제외: 다크·라이트 모드별 디자인 및 전환 검증은 추후 작업으로 둔다. 이번 시안은 어두운 외관만 나타낸다.
+- 제외: 다크·라이트 모드별 맞춤 디자인은 추후 작업으로 둔다. 이번 시안은 어두운 외관만 나타내며 실제 패널은 시스템 외관을 상속한다.
 - 상태: 계획. 아래의 디자인·실사용 수용 기준은 아직 검증되지 않았다.
 
 ## 예상 화면
@@ -21,6 +21,8 @@
 사용자 화면에서는 제목 표시줄의 빈 영역과 신호등 버튼, 검색 포커스 테두리의 제목 표시줄 침범, 대비가 강한 두 직사각형과 상시 보이는 스크롤바, 짧은 항목 하나에 비해 큰 빈 공간이 확인됐다. [현행 패널 코드](../Sources/App/ClipboardHistoryPanelController.swift)는 `fullSizeContentView`인 760×520 패널에 검색창을 루트 상단 24pt로 고정하고, 목록·미리보기에 각각 스크롤 뷰를 배치한다. 우선 이 레이아웃과 창 크기·재질을 바로잡는다. 복사/붙여넣기 오류나 중복 실행 문제를 이번 시각 변경으로 해결했다고 간주하지 않는다.
 
 Apple의 [macOS 27 AppKit 세션](https://developer.apple.com/videos/play/wwdc2026/289/), [Liquid Glass 도입 가이드](https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass), [재질 HIG](https://developer.apple.com/design/human-interface-guidelines/materials), [패널 HIG](https://developer.apple.com/design/human-interface-guidelines/panels)를 적용 기준으로 삼는다. 특히 Liquid Glass는 조작·탐색 계층에 절제해 사용하고, 기록 목록과 미리보기에는 가독성 높은 표준 재질을 쓴다. 제목 표시줄과 검색창은 안전 영역/레이아웃 가이드로 분리한다. macOS 27의 새 효과나 모서리 API를 구현 전제로 두지 않는다. 현재 개발 환경은 macOS 26.5.2·SDK 26.5이고 앱의 최소 지원 버전은 macOS 15.1이므로, 27 전용 API는 SDK와 실제 OS를 확보한 뒤 별도 검토한다.
+
+macOS 27의 [시스템 Liquid Glass 조절 슬라이더](https://developer.apple.com/videos/play/wwdc2026/102/)는 앱의 별도 설정으로 복제하지 않는다. 기본 `NSGlassEffectView`는 슬라이더 설정을 자동 상속한다. 기존 설정 화면의 수동 틴트·테두리를 제거하고, 히스토리 패널은 시스템 외관을 상속한다. macOS 26에서는 기본 AppKit 글래스를 사용하고, 기존 최소 지원 버전에서는 표준 표면으로 돌아간다. 27에서의 실제 슬라이더 반응은 해당 OS·SDK가 준비된 뒤 확인한다.
 
 ## 화면 계약
 
