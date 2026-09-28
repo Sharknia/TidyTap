@@ -146,8 +146,8 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
         } else {
             panel.center()
         }
-        NSApp.activate(ignoringOtherApps: true)
         panel.orderFrontRegardless()
+        NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
         panel.makeFirstResponder(searchField)
     }

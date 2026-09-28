@@ -232,6 +232,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
     /// Reopen the settings surface when the Dock icon or a status-item menu
     /// asks the already-running application to open.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if clipboardHistoryPanel?.isVisible == true { return true }
         startSettingsSession()
         return true
     }
@@ -338,6 +339,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
             clipboardPasteTarget = ClipboardPasteTarget(application: application, sessionID: sessionID)
             let panel = clipboardHistoryPanel ?? ClipboardHistoryPanelController()
             clipboardHistoryPanel = panel
+            // Activating the history panel also raises other windows owned by
+            // this app. Keep Settings out of the way until explicitly reopened.
+            windowController?.window?.orderOut(nil)
             panel.show(
                 entries: entries,
                 displayID: displayID,
