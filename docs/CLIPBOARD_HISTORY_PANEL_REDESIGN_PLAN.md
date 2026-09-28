@@ -20,7 +20,7 @@
 
 사용자 화면에서는 제목 표시줄의 빈 영역과 신호등 버튼, 검색 포커스 테두리의 제목 표시줄 침범, 대비가 강한 두 직사각형과 상시 보이는 스크롤바, 짧은 항목 하나에 비해 큰 빈 공간이 확인됐다. 초기 패널은 `fullSizeContentView`인 760×520 창에 검색창을 루트 상단 24pt로 고정하고, 목록·미리보기에 각각 불투명 스크롤 뷰를 배치했다. [패널 코드](../Sources/App/ClipboardHistoryPanelController.swift)에서 이 레이아웃과 창 크기·재질을 바로잡는다. 복사/붙여넣기 오류나 중복 실행 문제를 시각 변경만으로 해결했다고 간주하지 않는다.
 
-Apple의 [macOS 27 AppKit 세션](https://developer.apple.com/videos/play/wwdc2026/289/), [Liquid Glass 도입 가이드](https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass), [재질 HIG](https://developer.apple.com/design/human-interface-guidelines/materials), [패널 HIG](https://developer.apple.com/design/human-interface-guidelines/panels)를 적용 기준으로 삼는다. 특히 Liquid Glass는 조작·탐색 계층에 절제해 사용하고, 기록 목록과 미리보기에는 가독성 높은 표준 재질을 쓴다. 제목 표시줄과 검색창은 안전 영역/레이아웃 가이드로 분리한다. macOS 27의 새 효과나 모서리 API를 구현 전제로 두지 않는다. 현재 개발 환경은 macOS 26.5.2·SDK 26.5이고 앱의 최소 지원 버전은 macOS 15.1이므로, 27 전용 API는 SDK와 실제 OS를 확보한 뒤 별도 검토한다.
+Apple의 [macOS 27 AppKit 세션](https://developer.apple.com/videos/play/wwdc2026/289/), [Liquid Glass 도입 가이드](https://developer.apple.com/documentation/technologyoverviews/adopting-liquid-glass), [재질 HIG](https://developer.apple.com/design/human-interface-guidelines/materials), [패널 HIG](https://developer.apple.com/design/human-interface-guidelines/panels)를 적용 기준으로 삼는다. 특히 Liquid Glass는 조작·탐색 계층에 절제해 사용하고, 기록 목록과 미리보기에는 가독성 높은 표준 재질을 쓴다. 이 패널은 창 버튼을 숨긴 투명 제목 표시줄 안에 검색창을 배치하되, 포커스 링이 창 모서리와 겹치지 않는 안쪽 여백을 둔다. macOS 27의 새 효과나 모서리 API를 구현 전제로 두지 않는다. 현재 개발 환경은 macOS 26.5.2·SDK 26.5이고 앱의 최소 지원 버전은 macOS 15.1이므로, 27 전용 API는 SDK와 실제 OS를 확보한 뒤 별도 검토한다.
 
 macOS 27의 [시스템 Liquid Glass 조절 슬라이더](https://developer.apple.com/videos/play/wwdc2026/102/)는 앱의 별도 설정으로 복제하지 않는다. 기본 `NSGlassEffectView`는 슬라이더 설정을 자동 상속한다. 기존 설정 화면의 수동 틴트·테두리를 제거하고, 히스토리 패널은 시스템 외관을 상속한다. macOS 26에서는 기본 AppKit 글래스를 사용하고, 기존 최소 지원 버전에서는 표준 표면으로 돌아간다. 27에서의 실제 슬라이더 반응은 해당 OS·SDK가 준비된 뒤 확인한다.
 
@@ -39,7 +39,7 @@ macOS 27의 [시스템 Liquid Glass 조절 슬라이더](https://developer.apple
 ## 작업 순서
 
 1. **기준 화면 확보:** 실제 사용자 기록과 클립보드를 읽지 않는 기존 [오프스크린 렌더 테스트](../Tests/TidyTapTests/SettingsViewControllerTests.swift)로 텍스트·이미지의 전/후 화면을 남긴다. 0개, 1개, 여러 개, 긴 텍스트, 이미지, 검색 결과 없음도 시험 데이터로 확인한다.
-2. **창과 초점 수정:** 제목 표시줄·창 버튼 정책을 정리하고 검색창을 안전 영역 안에 배치한다. `⌥C` 호출 시 히스토리 패널만 보이는지, 검색 포커스 링이 잘리지 않는지 먼저 통과시킨다. 패널 크기와 작은 화면에서의 위치를 조정한다.
+2. **창과 초점 수정:** 제목 표시줄·창 버튼 정책을 정리하고 검색창을 투명 제목 표시줄 안쪽에 충분히 띄워 배치한다. `⌥C` 호출 시 히스토리 패널만 보이는지, 검색 포커스 링이 잘리지 않는지 먼저 통과시킨다. 패널 크기와 작은 화면에서의 위치를 조정한다.
 3. **콘텐츠 재배치:** 하나의 차분한 콘텐츠 표면 위에 목록과 미리보기를 구분한다. 행 높이·여백·선택 강조·이미지 썸네일·빈 상태·스크롤바를 다듬는다. 재질은 콘텐츠를 가리지 않는 범위에서 시스템 제공 뷰를 우선 사용한다.
 4. **조작 회귀:** 검색, 한글 조합, ↑/↓, 한 번 클릭, Enter/Shift+Enter, 두 번 클릭, Esc, 호출 키 재입력, 삭제의 기존 동작을 유지한다. 열기·탐색·취소만으로 클립보드가 바뀌지 않는지도 확인한다.
 5. **시각·접근성 검증:** 선택한 어두운 외관에서 투명도 줄이기·대비 증가, 짧고 긴 데이터, 이미지, 좁은 디스플레이와 전체 화면을 캡처해 시안과 비교한다. 키보드만으로 조작 가능한지와 VoiceOver 레이블을 확인하고, 실제 앱에서 입력 위치 복귀·한 번 붙여넣기를 재검증한다. 결과를 [수용 기준 현황](CLIPBOARD_HISTORY_ACCEPTANCE_STATUS.md)에 통과·실패·미실행으로 기록한다.

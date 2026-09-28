@@ -213,7 +213,7 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
             label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             cell.addSubview(label)
             NSLayoutConstraint.activate([
-                icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 12),
+                icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8),
                 icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
                 icon.widthAnchor.constraint(equalToConstant: 26),
                 icon.heightAnchor.constraint(equalToConstant: 26),
@@ -362,24 +362,24 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
         root.addSubview(deleteButton)
 
         NSLayoutConstraint.activate([
-            searchField.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 18),
-            searchField.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -18),
-            searchField.topAnchor.constraint(equalTo: root.safeAreaLayoutGuide.topAnchor, constant: 12),
+            searchField.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 12),
+            searchField.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -12),
+            searchField.topAnchor.constraint(equalTo: root.topAnchor, constant: 16),
             searchField.heightAnchor.constraint(equalToConstant: 32),
             searchSeparator.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             searchSeparator.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-            searchSeparator.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 12),
+            searchSeparator.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 10),
             searchSeparator.heightAnchor.constraint(equalToConstant: 1),
-            listScroll.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 14),
-            listScroll.topAnchor.constraint(equalTo: searchSeparator.bottomAnchor, constant: 8),
-            listScroll.bottomAnchor.constraint(equalTo: footerSeparator.topAnchor, constant: -8),
+            listScroll.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 10),
+            listScroll.topAnchor.constraint(equalTo: searchSeparator.bottomAnchor, constant: 6),
+            listScroll.bottomAnchor.constraint(equalTo: footerSeparator.topAnchor, constant: -6),
             listScroll.widthAnchor.constraint(equalTo: root.widthAnchor, multiplier: 0.38),
             columnSeparator.leadingAnchor.constraint(equalTo: listScroll.trailingAnchor, constant: 10),
             columnSeparator.topAnchor.constraint(equalTo: searchSeparator.bottomAnchor),
             columnSeparator.bottomAnchor.constraint(equalTo: footerSeparator.topAnchor),
             columnSeparator.widthAnchor.constraint(equalToConstant: 1),
             textScroll.leadingAnchor.constraint(equalTo: columnSeparator.trailingAnchor, constant: 12),
-            textScroll.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -18),
+            textScroll.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -12),
             textScroll.topAnchor.constraint(equalTo: listScroll.topAnchor),
             textScroll.bottomAnchor.constraint(equalTo: listScroll.bottomAnchor),
             imagePreview.leadingAnchor.constraint(equalTo: textScroll.leadingAnchor),
@@ -393,11 +393,11 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
             footerSeparator.trailingAnchor.constraint(equalTo: root.trailingAnchor),
             footerSeparator.topAnchor.constraint(equalTo: footer.topAnchor, constant: -10),
             footerSeparator.heightAnchor.constraint(equalToConstant: 1),
-            footer.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 18),
+            footer.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 12),
             footer.trailingAnchor.constraint(lessThanOrEqualTo: deleteButton.leadingAnchor, constant: -12),
             footer.bottomAnchor.constraint(equalTo: root.safeAreaLayoutGuide.bottomAnchor, constant: -12),
             footer.heightAnchor.constraint(equalToConstant: 18),
-            deleteButton.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -18),
+            deleteButton.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -12),
             deleteButton.centerYAnchor.constraint(equalTo: footer.centerYAnchor)
         ])
     }

@@ -320,12 +320,14 @@ final class SettingsViewControllerTests: XCTestCase {
         let view = try XCTUnwrap(panel.panel.contentView)
         view.layoutSubtreeIfNeeded()
         let search = try XCTUnwrap(view.subviews.compactMap { $0 as? NSSearchField }.first)
-        XCTAssertGreaterThanOrEqual(view.bounds.maxY - search.frame.maxY, view.safeAreaInsets.top + 8)
+        XCTAssertGreaterThanOrEqual(view.bounds.maxY - search.frame.maxY, 14)
+        XCTAssertLessThanOrEqual(view.bounds.maxY - search.frame.maxY, 24)
         XCTAssertTrue(panel.panel.standardWindowButton(.closeButton)?.isHidden == true)
         XCTAssertEqual(view.bounds.height, 380, accuracy: 1,
                        "a mixed history reserves preview space before the image is selected")
         let listScroll = try XCTUnwrap(view.subviews.compactMap { $0 as? NSScrollView }
             .first { $0.documentView is NSTableView })
+        XCTAssertLessThanOrEqual(listScroll.frame.minX, 12)
         XCTAssertTrue(listScroll.autohidesScrollers)
         XCTAssertFalse(listScroll.drawsBackground)
         let list = try XCTUnwrap(listScroll.documentView as? NSTableView)
@@ -417,7 +419,8 @@ final class SettingsViewControllerTests: XCTestCase {
         view.layoutSubtreeIfNeeded()
 
         XCTAssertEqual(view.bounds.width, 800, accuracy: 1)
-        XCTAssertGreaterThanOrEqual(view.bounds.maxY - search.frame.maxY, view.safeAreaInsets.top + 8)
+        XCTAssertGreaterThanOrEqual(view.bounds.maxY - search.frame.maxY, 14)
+        XCTAssertLessThanOrEqual(view.bounds.maxY - search.frame.maxY, 24)
         XCTAssertLessThanOrEqual(footer.frame.maxX, delete.frame.minX - 8)
         for row in 0..<list.numberOfRows {
             let cell = try XCTUnwrap(list.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView)
