@@ -1,6 +1,16 @@
-<?xml version="1.0" encoding="utf-8"?>
-<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
-  <channel>
-    <title>TidyTap Updates</title>
-  </channel>
+<?xml version="1.0" encoding="utf-8" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>TidyTap Updates</title>
+        <item>
+            <title>0.2.0</title>
+            <pubDate>Mon, 28 Sep 2026 18:24:29 +0900</pubDate>
+            <link>https://github.com/Sharknia/TidyTap/releases/tag/v0.2.0</link>
+            <sparkle:version>6</sparkle:version>
+            <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.1</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://github.com/Sharknia/TidyTap/releases/download/v0.2.0/TidyTap-0.2.0.dmg" length="3451068" type="application/octet-stream" sparkle:edSignature="cQGI6XICU0SyGpkFEFQdiSgZ7uiZnO1y71Zdt79ro1z4umT5GaRP75E986jiwy1+uQ2wOXaNUNVaoA++Muq6CA=="/>
+        </item>
+    </channel>
 </rss>
