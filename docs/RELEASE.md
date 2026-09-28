@@ -156,7 +156,7 @@ The committed feed is an empty template until a verified release asset exists.
 Publish the DMG first, then its signed appcast item on `main`. A preview build
 can exercise the check UI, but an end-to-end download/install/relaunch cannot
 be claimed until a newer signed, notarized release and its appcast item exist.
-Version 0.2.0 uses build 6; later releases must increase `CFBundleVersion`.
+Version 0.2.1 uses build 7; later releases must increase `CFBundleVersion`.
 It checks automatically while the app is running, and Settings has a manual
 **Check for Updates** button. An installed version from before this integration
 cannot gain that ability without one manual DMG replacement. The update source

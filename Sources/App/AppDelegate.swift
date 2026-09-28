@@ -41,14 +41,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
                 object: nil
             )
         }
-        let environment = ProcessInfo.processInfo.environment
-        let isTransientHost = initialFinderFeedback != nil ||
-            environment[TidyTapIPC.clipboardHistoryModeEnvironmentKey] == "1"
-        if launchSmoke == nil && !isTransientHost {
-            updaterController = SPUStandardUpdaterController(
-                startingUpdater: true, updaterDelegate: self, userDriverDelegate: nil
-            )
-        }
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(clipboardHistoryToggle(_:)),
@@ -114,6 +106,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
     }
 
     private func startSettingsSession() {
+        // A clipboard-only launch can later become a settings session when
+        // LaunchServices reopens this same process. Start Sparkle at that point.
+        if launchSmoke == nil && updaterController == nil {
+            updaterController = SPUStandardUpdaterController(
+                startingUpdater: true, updaterDelegate: self, userDriverDelegate: nil
+            )
+        }
         pruneClipboardHistoryIfPresent()
         guard settingsCoordinator == nil else {
             showSettingsWindow()
