@@ -1,6 +1,13 @@
 import AppKit
 import TidyTapInputEngine
 
+private final class ClipboardHistoryRowView: NSTableRowView {
+    override func drawSelection(in dirtyRect: NSRect) {
+        NSColor.controlAccentColor.withAlphaComponent(0.24).setFill()
+        NSBezierPath(roundedRect: bounds.insetBy(dx: 3, dy: 2), xRadius: 8, yRadius: 8).fill()
+    }
+}
+
 struct ClipboardPasteKeyState {
     private var pendingReverseStyle: Bool?
 
@@ -49,10 +56,12 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
 
     let panel: NSPanel
     private let searchField = NSSearchField()
+    private let listScroll = NSScrollView()
     private let tableView = NSTableView()
     private let textPreview = NSTextView()
     private let textScroll = NSScrollView()
     private let imagePreview = NSImageView()
+    private let emptyStateLabel = NSTextField(labelWithString: "")
     private let footer = NSTextField(labelWithString: "")
     private let deleteButton = NSButton()
     private var entries = [ClipboardHistoryEntry]()
@@ -70,13 +79,19 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
 
     override init() {
         panel = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 760, height: 520),
+            contentRect: NSRect(x: 0, y: 0, width: 720, height: 420),
             styleMask: [.titled, .closable, .fullSizeContentView],
             backing: .buffered, defer: false
         )
         super.init()
         panel.title = String(localized: "Clipboard history")
         panel.titleVisibility = .hidden
+        panel.titlebarAppearsTransparent = true
+        panel.appearance = NSAppearance(named: .darkAqua)
+        panel.isMovableByWindowBackground = true
+        for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+            panel.standardWindowButton(button)?.isHidden = true
+        }
         panel.level = .statusBar
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.hidesOnDeactivate = false
@@ -97,6 +112,12 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
     func updateEntries(_ entries: [ClipboardHistoryEntry], latestCopyTooLarge: Bool = false) {
         self.latestCopyTooLarge = latestCopyTooLarge
         self.entries = entries.sorted { $0.copiedAt > $1.copiedAt }
+        if !panel.isVisible {
+            panel.setContentSize(NSSize(
+                width: 720,
+                height: min(420, max(260, 170 + CGFloat(min(entries.count, 5)) * 50))
+            ))
+        }
         applyFilter(selection: latestCopyTooLarge ? .none : .first)
     }
 
@@ -139,6 +160,10 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
             return ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == displayID
         })
         if let screen = focusedScreen ?? NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) {
+            panel.setContentSize(NSSize(
+                width: min(720, max(480, screen.visibleFrame.width - 24)),
+                height: min(panel.contentView?.bounds.height ?? 420, screen.visibleFrame.height - 24)
+            ))
             panel.setFrameOrigin(NSPoint(
                 x: screen.visibleFrame.midX - panel.frame.width / 2,
                 y: screen.visibleFrame.midY - panel.frame.height / 2
@@ -181,16 +206,19 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
             let label = NSTextField(labelWithString: "")
             label.translatesAutoresizingMaskIntoConstraints = false
             label.lineBreakMode = .byTruncatingTail
+            label.usesSingleLineMode = true
+            label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             cell.addSubview(label)
             NSLayoutConstraint.activate([
                 icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 12),
                 icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-                icon.widthAnchor.constraint(equalToConstant: 30),
-                icon.heightAnchor.constraint(equalToConstant: 30),
+                icon.widthAnchor.constraint(equalToConstant: 28),
+                icon.heightAnchor.constraint(equalToConstant: 28),
                 label.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 10),
                 label.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -12),
                 label.centerYAnchor.constraint(equalTo: cell.centerYAnchor)
             ])
+            label.font = .systemFont(ofSize: 14, weight: .medium)
             cell.imageView = icon
             cell.textField = label
             cell.identifier = identifier
@@ -212,6 +240,10 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
         updatePreview()
     }
 
+    func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
+        ClipboardHistoryRowView()
+    }
+
     func controlTextDidChange(_ obj: Notification) {
         applyFilter(selection: defaultSearchSelection(), debounce: true)
     }
@@ -225,12 +257,29 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
         close(restorePreviousApp: false)
     }
 
+    func windowDidResize(_ notification: Notification) {
+        panel.contentView?.layoutSubtreeIfNeeded()
+        let width = listScroll.contentSize.width
+        if width > 0 { tableView.tableColumns.first?.width = width }
+    }
+
     private func buildContent() {
         let root = NSVisualEffectView()
-        root.material = .popover
-        root.blendingMode = .behindWindow
+        root.material = .underWindowBackground
+        root.blendingMode = .withinWindow
         root.state = .active
         panel.contentView = root
+
+        func separator() -> NSBox {
+            let view = NSBox()
+            view.boxType = .separator
+            view.translatesAutoresizingMaskIntoConstraints = false
+            root.addSubview(view)
+            return view
+        }
+        let searchSeparator = separator()
+        let columnSeparator = separator()
+        let footerSeparator = separator()
 
         searchField.placeholderString = String(localized: "Search copied text…")
         searchField.delegate = self
@@ -243,16 +292,18 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
         tableView.addTableColumn(column)
         tableView.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
         tableView.headerView = nil
-        tableView.rowHeight = 46
+        tableView.rowHeight = 44
         tableView.selectionHighlightStyle = .regular
+        tableView.backgroundColor = .clear
         tableView.delegate = self
         tableView.dataSource = self
         tableView.target = self
         tableView.doubleAction = #selector(doubleClick(_:))
         tableView.setAccessibilityLabel(String(localized: "Clipboard entries"))
-        let listScroll = NSScrollView()
         listScroll.documentView = tableView
         listScroll.hasVerticalScroller = true
+        listScroll.autohidesScrollers = true
+        listScroll.drawsBackground = false
         listScroll.borderType = .noBorder
         listScroll.translatesAutoresizingMaskIntoConstraints = false
         root.addSubview(listScroll)
@@ -260,10 +311,13 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
         textPreview.isEditable = false
         textPreview.isSelectable = true
         textPreview.drawsBackground = false
-        textPreview.font = .systemFont(ofSize: 14)
+        textPreview.font = .systemFont(ofSize: 15)
+        textPreview.textContainerInset = NSSize(width: 8, height: 8)
         textPreview.setAccessibilityLabel(String(localized: "Copied text preview"))
         textScroll.documentView = textPreview
         textScroll.hasVerticalScroller = true
+        textScroll.autohidesScrollers = true
+        textScroll.drawsBackground = false
         textScroll.borderType = .noBorder
         textScroll.translatesAutoresizingMaskIntoConstraints = false
         root.addSubview(textScroll)
@@ -274,40 +328,70 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
         imagePreview.isHidden = true
         root.addSubview(imagePreview)
 
-        footer.font = .systemFont(ofSize: 12)
+        emptyStateLabel.alignment = .center
+        emptyStateLabel.font = .systemFont(ofSize: 13)
+        emptyStateLabel.textColor = .secondaryLabelColor
+        emptyStateLabel.lineBreakMode = .byWordWrapping
+        emptyStateLabel.maximumNumberOfLines = 0
+        emptyStateLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        emptyStateLabel.translatesAutoresizingMaskIntoConstraints = false
+        root.addSubview(emptyStateLabel)
+
+        footer.font = .systemFont(ofSize: 11)
         footer.textColor = .secondaryLabelColor
+        footer.lineBreakMode = .byTruncatingTail
+        footer.usesSingleLineMode = true
+        footer.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         footer.translatesAutoresizingMaskIntoConstraints = false
         root.addSubview(footer)
 
         deleteButton.title = String(localized: "Delete")
-        deleteButton.bezelStyle = .rounded
+        deleteButton.isBordered = false
+        deleteButton.font = .systemFont(ofSize: 11)
+        deleteButton.contentTintColor = .secondaryLabelColor
+        deleteButton.setContentCompressionResistancePriority(.required, for: .horizontal)
         deleteButton.target = self
         deleteButton.action = #selector(deleteSelected(_:))
         deleteButton.translatesAutoresizingMaskIntoConstraints = false
         root.addSubview(deleteButton)
 
         NSLayoutConstraint.activate([
-            searchField.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
-            searchField.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
-            searchField.topAnchor.constraint(equalTo: root.topAnchor, constant: 24),
+            searchField.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 18),
+            searchField.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -18),
+            searchField.topAnchor.constraint(equalTo: root.safeAreaLayoutGuide.topAnchor, constant: 12),
             searchField.heightAnchor.constraint(equalToConstant: 32),
-            listScroll.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
-            listScroll.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 16),
-            listScroll.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -12),
+            searchSeparator.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            searchSeparator.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            searchSeparator.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 12),
+            searchSeparator.heightAnchor.constraint(equalToConstant: 1),
+            listScroll.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 14),
+            listScroll.topAnchor.constraint(equalTo: searchSeparator.bottomAnchor, constant: 8),
+            listScroll.bottomAnchor.constraint(equalTo: footerSeparator.topAnchor, constant: -8),
             listScroll.widthAnchor.constraint(equalTo: root.widthAnchor, multiplier: 0.36),
-            textScroll.leadingAnchor.constraint(equalTo: listScroll.trailingAnchor, constant: 16),
-            textScroll.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
+            columnSeparator.leadingAnchor.constraint(equalTo: listScroll.trailingAnchor, constant: 10),
+            columnSeparator.topAnchor.constraint(equalTo: searchSeparator.bottomAnchor),
+            columnSeparator.bottomAnchor.constraint(equalTo: footerSeparator.topAnchor),
+            columnSeparator.widthAnchor.constraint(equalToConstant: 1),
+            textScroll.leadingAnchor.constraint(equalTo: columnSeparator.trailingAnchor, constant: 12),
+            textScroll.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -18),
             textScroll.topAnchor.constraint(equalTo: listScroll.topAnchor),
             textScroll.bottomAnchor.constraint(equalTo: listScroll.bottomAnchor),
             imagePreview.leadingAnchor.constraint(equalTo: textScroll.leadingAnchor),
             imagePreview.trailingAnchor.constraint(equalTo: textScroll.trailingAnchor),
             imagePreview.topAnchor.constraint(equalTo: textScroll.topAnchor),
             imagePreview.bottomAnchor.constraint(equalTo: textScroll.bottomAnchor),
-            footer.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 20),
+            emptyStateLabel.centerXAnchor.constraint(equalTo: textScroll.centerXAnchor),
+            emptyStateLabel.centerYAnchor.constraint(equalTo: textScroll.centerYAnchor),
+            emptyStateLabel.widthAnchor.constraint(equalTo: textScroll.widthAnchor, constant: -32),
+            footerSeparator.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            footerSeparator.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            footerSeparator.topAnchor.constraint(equalTo: footer.topAnchor, constant: -10),
+            footerSeparator.heightAnchor.constraint(equalToConstant: 1),
+            footer.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 18),
             footer.trailingAnchor.constraint(lessThanOrEqualTo: deleteButton.leadingAnchor, constant: -12),
-            footer.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -16),
-            footer.heightAnchor.constraint(equalToConstant: 20),
-            deleteButton.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -20),
+            footer.bottomAnchor.constraint(equalTo: root.safeAreaLayoutGuide.bottomAnchor, constant: -12),
+            footer.heightAnchor.constraint(equalToConstant: 18),
+            deleteButton.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -18),
             deleteButton.centerYAnchor.constraint(equalTo: footer.centerYAnchor)
         ])
     }
@@ -386,7 +470,7 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
             deleteButton.isEnabled = false
             footer.stringValue = ""
             imagePreview.isHidden = true
-            textScroll.isHidden = false
+            textScroll.isHidden = true
             textPreview.string = isFiltering
                 ? String(localized: "Searching copied text…")
                 : latestCopyTooLarge && searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -394,14 +478,17 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
                     : entries.isEmpty
                         ? String(localized: "No copied items yet")
                         : String(localized: "No search results")
+            emptyStateLabel.stringValue = textPreview.string
+            emptyStateLabel.isHidden = false
             return
         }
         deleteButton.isEnabled = true
+        emptyStateLabel.isHidden = true
         switch filtered[tableView.selectedRow].content {
         case .text(let plain, _, _):
             footer.stringValue = pasteFormattedByDefault
-                ? String(localized: "Paste with formatting ↵  ·  Paste without formatting ⇧↵")
-                : String(localized: "Paste without formatting ↵  ·  Paste with formatting ⇧↵")
+                ? String(localized: "Paste formatted ↵  ·  Plain ⇧↵")
+                : String(localized: "Paste plain ↵  ·  Formatted ⇧↵")
             imagePreview.isHidden = true
             textScroll.isHidden = false
             let preview = plain.prefix(Self.textPreviewCharacterLimit)
