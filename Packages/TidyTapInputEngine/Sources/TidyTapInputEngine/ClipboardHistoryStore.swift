@@ -111,6 +111,16 @@ public final class ClipboardHistoryStore {
             try FileManager.default.removeItem(at: item.url)
         }
         items.removeAll { now.timeIntervalSince($0.entry.copiedAt) >= retention }
+        var seen = Set<ClipboardCapturedContent>()
+        var unique = [(entry: ClipboardHistoryEntry, url: URL, bytes: Int)]()
+        for item in items {
+            if seen.insert(item.entry.content).inserted {
+                unique.append(item)
+            } else {
+                try FileManager.default.removeItem(at: item.url)
+            }
+        }
+        items = unique
         var total = items.reduce(0) { $0 + $1.bytes }
         while items.count > maximumEntries || total > maximumBytes {
             let oldest = items.removeLast()

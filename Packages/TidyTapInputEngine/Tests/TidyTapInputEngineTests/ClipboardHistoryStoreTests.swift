@@ -4,6 +4,31 @@ import XCTest
 
 @MainActor
 final class ClipboardHistoryStoreTests: XCTestCase {
+    func testRepeatedCopiesKeepOnlyNewestExactContent() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("tidytap-dedupe-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let now = Date(timeIntervalSince1970: 100_000)
+        let store = try ClipboardHistoryStore(
+            directory: directory, retention: 600,
+            maximumEntries: 10, maximumBytes: 4096, maximumItemBytes: 2048
+        )
+        let plain = ClipboardCapturedContent.text(plain: "same", rtf: nil, html: nil)
+        let first = try store.add(plain, copiedAt: now.addingTimeInterval(-5))
+        let rich = try store.add(.text(plain: "same", rtf: Data("bold".utf8), html: nil),
+                                 copiedAt: now.addingTimeInterval(-4))
+        let latestPlain = try store.add(plain, copiedAt: now.addingTimeInterval(-3))
+        let image = ClipboardCapturedContent.image(data: Data([1, 2, 3]), type: .png)
+        let firstImage = try store.add(image, copiedAt: now.addingTimeInterval(-2))
+        let latestImage = try store.add(image, copiedAt: now.addingTimeInterval(-1))
+
+        let entries = try store.entries(now: now)
+        XCTAssertEqual(entries.map(\.id), [latestImage.id, latestPlain.id, rich.id])
+        XCTAssertFalse(entries.contains(first))
+        XCTAssertFalse(entries.contains(firstImage))
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension == "clip" }.count, 3)
+    }
+
     func testRecordsSurviveReopenAndOldestItemsCanBeRemoved() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("tidytap-store-\(UUID())")
         defer { try? FileManager.default.removeItem(at: directory) }

@@ -1,6 +1,6 @@
 import AppKit
 
-public enum ClipboardImageType: String, Codable, Equatable {
+public enum ClipboardImageType: String, Codable, Hashable {
     case png
     case tiff
 
@@ -12,7 +12,7 @@ public enum ClipboardImageType: String, Codable, Equatable {
     }
 }
 
-public enum ClipboardCapturedContent: Codable, Equatable {
+public enum ClipboardCapturedContent: Codable, Hashable {
     case text(plain: String, rtf: Data?, html: Data?)
     case image(data: Data, type: ClipboardImageType)
 }
