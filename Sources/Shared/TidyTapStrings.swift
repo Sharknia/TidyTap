@@ -29,6 +29,17 @@ enum TidyTapStrings {
     static let applyingChanges = String(localized: "Applying changes…", bundle: .main)
     static let changesApplied = String(localized: "Changes applied.", bundle: .main)
     static let changesCouldNotBeApplied = String(localized: "Changes could not be applied.", bundle: .main)
+    static func clipboardPasteFailureMessage(for reason: String?, bundle: Bundle = .main) -> String {
+        return switch reason {
+        case "entryUnavailable": String(localized: "The selected history item is no longer available. Reopen history and try again.", bundle: bundle)
+        case "eventUnavailable": String(localized: "TidyTap could not send the paste shortcut. Check Accessibility permission and try again.", bundle: bundle)
+        case "pasteboardWriteFailed": String(localized: "TidyTap could not write the selected item to the clipboard. Try again.", bundle: bundle)
+        case "helperTimeout": String(localized: "TidyTap Helper did not respond. Reopen history and try again.", bundle: bundle)
+        case "targetUnavailable": String(localized: "The original app is no longer active. Reopen history from the input field and try again.", bundle: bundle)
+        case "focusChanged": String(localized: "The original input field could not be confirmed or its focus changed. Reopen history from the field you want to paste into.", bundle: bundle)
+        default: String(localized: "Return to the original input field and try again.", bundle: bundle)
+        }
+    }
     static func capsLockApplyMessage(for status: TidyTapApplyStatus, bundle: Bundle = .main) -> String? {
         guard status.outcome == .failed || status.outcome == .recoveryRequired else { return nil }
 

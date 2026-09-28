@@ -10,25 +10,38 @@ public protocol InputPermissionChecking: Sendable {
     var inputMonitoringAllowed: Bool { get }
 }
 
+public struct ClipboardShortcut: Equatable, Sendable {
+    public let keyCode: Int64
+    public let modifiers: UInt64
+
+    public init(keyCode: Int64, modifiers: UInt64) {
+        self.keyCode = keyCode
+        self.modifiers = modifiers
+    }
+}
+
 public struct EventTapConfiguration: Equatable, Sendable {
     public let reverseMouseScroll: Bool
     public let sideButtonNavigation: Bool
     public let fixedMouseWheelStepEnabled: Bool
     public let mouseWheelStepLines: Int
     public let finderCutPasteEnabled: Bool
+    public let clipboardShortcut: ClipboardShortcut?
 
     public init(
         reverseMouseScroll: Bool,
         sideButtonNavigation: Bool,
         fixedMouseWheelStepEnabled: Bool = false,
         mouseWheelStepLines: Int = 3,
-        finderCutPasteEnabled: Bool = false
+        finderCutPasteEnabled: Bool = false,
+        clipboardShortcut: ClipboardShortcut? = nil
     ) {
         self.reverseMouseScroll = reverseMouseScroll
         self.sideButtonNavigation = sideButtonNavigation
         self.fixedMouseWheelStepEnabled = fixedMouseWheelStepEnabled
         self.mouseWheelStepLines = min(max(mouseWheelStepLines, 1), 10)
         self.finderCutPasteEnabled = finderCutPasteEnabled
+        self.clipboardShortcut = clipboardShortcut
     }
 
     public var needsScrollProcessing: Bool {
@@ -36,7 +49,7 @@ public struct EventTapConfiguration: Equatable, Sendable {
     }
 
     public var isEnabled: Bool {
-        needsScrollProcessing || sideButtonNavigation || finderCutPasteEnabled
+        needsScrollProcessing || sideButtonNavigation || finderCutPasteEnabled || clipboardShortcut != nil
     }
 
     public var requiredPermissions: Set<InputPermission> {
@@ -48,6 +61,9 @@ public struct EventTapConfiguration: Equatable, Sendable {
             result.insert(.accessibility)
         }
         if finderCutPasteEnabled {
+            result.formUnion([.accessibility, .inputMonitoring])
+        }
+        if clipboardShortcut != nil {
             result.formUnion([.accessibility, .inputMonitoring])
         }
         return result
@@ -473,7 +489,8 @@ public final class EventTapController: @unchecked Sendable {
             sideButtonNavigation: requested.sideButtonNavigation && !missing.contains(.accessibility),
             fixedMouseWheelStepEnabled: requested.fixedMouseWheelStepEnabled && missing.isDisjoint(with: [.accessibility, .inputMonitoring]),
             mouseWheelStepLines: requested.mouseWheelStepLines,
-            finderCutPasteEnabled: requested.finderCutPasteEnabled && missing.isDisjoint(with: [.accessibility, .inputMonitoring])
+            finderCutPasteEnabled: requested.finderCutPasteEnabled && missing.isDisjoint(with: [.accessibility, .inputMonitoring]),
+            clipboardShortcut: missing.isDisjoint(with: [.accessibility, .inputMonitoring]) ? requested.clipboardShortcut : nil
         )
     }
 

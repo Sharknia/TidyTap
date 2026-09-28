@@ -8,11 +8,16 @@ protocol TidyTapCapsFeatureApplying: AnyObject {
     func currentCapsLockEnabled() throws -> Bool
 }
 
+private enum TidyTapClipboardSettingsError: Error {
+    case invalidShortcut
+}
+
 struct TidyTapInputFeatureConfiguration: Equatable {
     var reverseMouseWheel: Bool
     var sideButtonNavigation: Bool
     var fixedMouseWheelStepEnabled: Bool
     var finderCutPasteEnabled: Bool
+    var clipboardShortcut: TidyTapClipboardShortcut?
     /// This remains the user's remembered value even when the fixed-step
     /// capability is effectively off (for example after permission loss).
     var mouseWheelStepLines: Int
@@ -22,12 +27,14 @@ struct TidyTapInputFeatureConfiguration: Equatable {
         sideButtonNavigation: Bool,
         fixedMouseWheelStepEnabled: Bool = false,
         finderCutPasteEnabled: Bool = false,
+        clipboardShortcut: TidyTapClipboardShortcut? = nil,
         mouseWheelStepLines: Int = TidyTapSettings.defaultMouseWheelStepLines
     ) {
         self.reverseMouseWheel = reverseMouseWheel
         self.sideButtonNavigation = sideButtonNavigation
         self.fixedMouseWheelStepEnabled = fixedMouseWheelStepEnabled
         self.finderCutPasteEnabled = finderCutPasteEnabled
+        self.clipboardShortcut = clipboardShortcut
         self.mouseWheelStepLines = mouseWheelStepLines
     }
 
@@ -36,6 +43,7 @@ struct TidyTapInputFeatureConfiguration: Equatable {
         sideButtonNavigation: false,
         fixedMouseWheelStepEnabled: false,
         finderCutPasteEnabled: false,
+        clipboardShortcut: nil,
         mouseWheelStepLines: TidyTapSettings.defaultMouseWheelStepLines
     )
 }
@@ -46,6 +54,7 @@ protocol TidyTapInputFeaturesApplying: AnyObject {
         sideButtonNavigation: Bool,
         fixedMouseWheelStepEnabled: Bool,
         finderCutPasteEnabled: Bool,
+        clipboardShortcut: TidyTapClipboardShortcut?,
         mouseWheelStepLines: Int,
         requestID: UUID
     ) throws -> TidyTapInputFeatureApplyResult
@@ -85,6 +94,7 @@ final class ApplyCoordinator {
     private let inputFeatures: TidyTapInputFeaturesApplying
     private let menuBar: TidyTapMenuBarApplying
     private let terminator: TidyTapTerminating
+    private let clipboardPreflight: (Bool) throws -> Void
     private var activeRequest: TidyTapSettingsRequest?
     private var lastReportedStatus: TidyTapApplyStatus?
 
@@ -93,18 +103,47 @@ final class ApplyCoordinator {
         capsFeature: TidyTapCapsFeatureApplying,
         inputFeatures: TidyTapInputFeaturesApplying,
         menuBar: TidyTapMenuBarApplying,
-        terminator: TidyTapTerminating
+        terminator: TidyTapTerminating,
+        clipboardPreflight: @escaping (Bool) throws -> Void = { _ in }
     ) {
         self.preferences = preferences
         self.capsFeature = capsFeature
         self.inputFeatures = inputFeatures
         self.menuBar = menuBar
         self.terminator = terminator
+        self.clipboardPreflight = clipboardPreflight
     }
 
     @discardableResult
     func applyLatestSettings() -> TidyTapApplyStatus {
         apply(preferences.readRequest())
+    }
+
+    func reportClipboardCaptureFailure(code: String) {
+        guard let activeRequest, activeRequest.settings.clipboardHistoryEnabled else { return }
+        var disabled = activeRequest.settings
+        disabled.clipboardHistoryEnabled = false
+        do {
+            try preferences.write(settings: disabled, applyRequestID: activeRequest.applyRequestID)
+        } catch {
+            report(TidyTapApplyStatus(
+                applyRequestID: activeRequest.applyRequestID,
+                outcome: .recoveryRequired,
+                failedComponent: .eventTap,
+                errorCode: "clipboardHistory.storageRecoveryRequired",
+                effectiveSettings: activeRequest.settings
+            ))
+            return
+        }
+        let applied = applyLatestSettings()
+        guard applied.effectiveSettings?.clipboardHistoryEnabled == false else { return }
+        report(TidyTapApplyStatus(
+            applyRequestID: activeRequest.applyRequestID,
+            outcome: .failed,
+            failedComponent: .eventTap,
+            errorCode: code,
+            effectiveSettings: applied.effectiveSettings
+        ))
     }
 
     /// Runtime permission revocation/recovery happens outside a settings write;
@@ -128,6 +167,7 @@ final class ApplyCoordinator {
                 sideButtonNavigation: inputConfiguration.sideButtonNavigation,
                 fixedMouseWheelStepEnabled: inputConfiguration.fixedMouseWheelStepEnabled,
                 finderCutPasteEnabled: inputConfiguration.finderCutPasteEnabled,
+                clipboardShortcut: inputConfiguration.clipboardShortcut,
                 mouseWheelStepLines: activeRequest.settings.mouseWheelStepLines,
                 requestID: requestID
             )
@@ -144,6 +184,12 @@ final class ApplyCoordinator {
         effective.sideButtonNavigation = normalizedInputConfiguration.sideButtonNavigation
         effective.fixedMouseWheelStepEnabled = normalizedInputConfiguration.fixedMouseWheelStepEnabled
         effective.finderCutPasteEnabled = normalizedInputConfiguration.finderCutPasteEnabled
+        effective.clipboardHistoryEnabled = normalizedInputConfiguration.clipboardShortcut != nil
+        if let shortcut = normalizedInputConfiguration.clipboardShortcut {
+            effective.clipboardHistoryShortcut = shortcut.preservingDisplayKey(
+                from: activeRequest.settings.clipboardHistoryShortcut
+            )
+        }
         let status: TidyTapApplyStatus
         if let runtimeResult {
             switch runtimeResult {
@@ -267,6 +313,35 @@ final class ApplyCoordinator {
     private func apply(_ settings: TidyTapSettings, requestID: UUID) -> ApplyAttempt {
         var touchedComponents = [TidyTapApplyComponent]()
 
+        if settings.clipboardHistoryEnabled && settings.clipboardHistoryShortcut?.isValid != true {
+            return ApplyAttempt(
+                status: failure(requestID, component: .eventTap, error: TidyTapClipboardSettingsError.invalidShortcut),
+                touchedComponents: []
+            )
+        }
+        do {
+            try clipboardPreflight(settings.clipboardHistoryEnabled)
+        } catch {
+            let code: String
+            if let access = error as? ClipboardCaptureService.CaptureError {
+                switch access {
+                case .readDenied: code = "clipboardHistory.readDenied"
+                case .continuousAccessRequired: code = "clipboardHistory.continuousAccessRequired"
+                }
+            } else {
+                code = "clipboardHistory.storageFailed"
+            }
+            return ApplyAttempt(
+                status: TidyTapApplyStatus(
+                    applyRequestID: requestID,
+                    outcome: .failed,
+                    failedComponent: .eventTap,
+                    errorCode: code
+                ),
+                touchedComponents: []
+            )
+        }
+
         touchedComponents.append(.capsLock)
         do {
             try capsFeature.apply(capsLockEnabled: settings.capsLockInputSourceSwitching)
@@ -284,6 +359,7 @@ final class ApplyCoordinator {
                 sideButtonNavigation: settings.sideButtonNavigation,
                 fixedMouseWheelStepEnabled: settings.fixedMouseWheelStepEnabled,
                 finderCutPasteEnabled: settings.finderCutPasteEnabled,
+                clipboardShortcut: settings.clipboardHistoryEnabled ? settings.clipboardHistoryShortcut : nil,
                 mouseWheelStepLines: settings.mouseWheelStepLines,
                 requestID: requestID
             )
@@ -348,6 +424,7 @@ final class ApplyCoordinator {
                     sideButtonNavigation: state.input.sideButtonNavigation,
                     fixedMouseWheelStepEnabled: state.input.fixedMouseWheelStepEnabled,
                     finderCutPasteEnabled: state.input.finderCutPasteEnabled,
+                    clipboardShortcut: state.input.clipboardShortcut,
                     mouseWheelStepLines: state.input.mouseWheelStepLines,
                     requestID: requestID
                 )
@@ -387,7 +464,10 @@ final class ApplyCoordinator {
     ) -> TidyTapApplyStatus {
         let code: String
         let outcome: TidyTapApplyOutcome
-        if case TidyTapInputFeatureAdapterError.permissionDenied(let permissions) = error {
+        if error is TidyTapClipboardSettingsError {
+            code = "eventTap.invalidClipboardShortcut"
+            outcome = .failed
+        } else if case TidyTapInputFeatureAdapterError.permissionDenied(let permissions) = error {
             code = permissionCode(prefix: "\(component.rawValue).permissionDenied", permissions: permissions)
             outcome = .failed
         } else if case TidyTapInputFeatureAdapterError.eventTapFailed = error {
@@ -431,6 +511,10 @@ final class ApplyCoordinator {
         effective.sideButtonNavigation = input.sideButtonNavigation
         effective.fixedMouseWheelStepEnabled = input.fixedMouseWheelStepEnabled
         effective.finderCutPasteEnabled = input.finderCutPasteEnabled
+        effective.clipboardHistoryEnabled = input.clipboardShortcut != nil
+        if let shortcut = input.clipboardShortcut {
+            effective.clipboardHistoryShortcut = shortcut.preservingDisplayKey(from: requested.clipboardHistoryShortcut)
+        }
         return effective
     }
 
@@ -470,6 +554,12 @@ final class ApplyCoordinator {
         result.sideButtonNavigation = state.input.sideButtonNavigation
         result.fixedMouseWheelStepEnabled = state.input.fixedMouseWheelStepEnabled
         result.finderCutPasteEnabled = state.input.finderCutPasteEnabled
+        result.clipboardHistoryEnabled = state.input.clipboardShortcut != nil
+        if let shortcut = state.input.clipboardShortcut {
+            result.clipboardHistoryShortcut = shortcut
+                .preservingDisplayKey(from: activeRequest?.settings.clipboardHistoryShortcut)
+                .preservingDisplayKey(from: base.clipboardHistoryShortcut)
+        }
         result.mouseWheelStepLines = state.input.mouseWheelStepLines
         return result
     }

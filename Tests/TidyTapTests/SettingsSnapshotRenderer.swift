@@ -17,8 +17,21 @@ enum SettingsSnapshotRenderer {
         normal.capsLockInputSourceSwitching = true
         normal.fixedMouseWheelStepEnabled = true
         normal.mouseWheelStepLines = 7
+        var clipboard = TidyTapSettings.defaults
+        clipboard.clipboardHistoryEnabled = true
+        clipboard.clipboardHistoryShortcut = .init(
+            keyCode: 8, modifiers: CGEventFlags.maskAlternate.rawValue, displayKey: "C"
+        )
 
         return [
+            Fixture(
+                filename: "clipboard-enabled-ko.png", language: "ko", settings: clipboard,
+                permissions: .init(accessibility: .authorized, inputMonitoring: .authorized), appearance: .aqua
+            ),
+            Fixture(
+                filename: "clipboard-enabled-en-dark.png", language: "en", settings: clipboard,
+                permissions: .init(accessibility: .authorized, inputMonitoring: .authorized), appearance: .darkAqua
+            ),
             Fixture(filename: "caps-read-failure-ko.png", language: "ko", settings: .defaults,
                 permissions: .init(accessibility: .authorized, inputMonitoring: .authorized), appearance: .aqua,
                 applyStatus: .init(applyRequestID: UUID(), outcome: .failed, failedComponent: .capsLock,

@@ -6,11 +6,17 @@ import Foundation
 final class HelperLifecycle: NSObject {
     private let coordinator: ApplyCoordinator
     private let permissionCoordinator: HelperPermissionCoordinator
+    private let afterApply: (TidyTapApplyStatus) -> Void
     private var isObservingSettings = false
 
-    init(coordinator: ApplyCoordinator, permissionCoordinator: HelperPermissionCoordinator) {
+    init(
+        coordinator: ApplyCoordinator,
+        permissionCoordinator: HelperPermissionCoordinator,
+        afterApply: @escaping (TidyTapApplyStatus) -> Void = { _ in }
+    ) {
         self.coordinator = coordinator
         self.permissionCoordinator = permissionCoordinator
+        self.afterApply = afterApply
     }
 
     func start() {
@@ -32,10 +38,11 @@ final class HelperLifecycle: NSObject {
         isObservingSettings = true
         let permissionResult = permissionCoordinator.handleLatestRequest()
         let startupResult = coordinator.applyLatestSettings()
-        _ = permissionCoordinator.restoreOutstandingPermissionFailure(
+        let preserved = permissionCoordinator.restoreOutstandingPermissionFailure(
             after: permissionResult,
             startupApply: startupResult
         )
+        afterApply(preserved ?? startupResult)
     }
 
     func stop() {
@@ -46,7 +53,7 @@ final class HelperLifecycle: NSObject {
     }
 
     @objc private func settingsDidChange(_ notification: Notification) {
-        _ = coordinator.applyLatestSettings()
+        afterApply(coordinator.applyLatestSettings())
     }
 
     @objc private func permissionRequestDidArrive(_ notification: Notification) {
