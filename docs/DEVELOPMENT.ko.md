@@ -46,7 +46,7 @@ Scripts/launch-smoke.sh
 - 이전 실기기 확인은 Apple M3 Pro MacBook Pro의 macOS 26.5.2 환경에서 수행했습니다. Finder 개별 결과는 [Finder 검증 기록](FINDER_CUT_PASTE_VALIDATION.md)에 있습니다.
 - macOS 15.1 실제 실행, 물리 Caps Lock·마우스 동작, 권한 변경, 로그인·보조 프로그램 수명, 제거 순서는 남아 있습니다. 클립보드 히스토리의 [수용 기준 현황](CLIPBOARD_HISTORY_ACCEPTANCE_STATUS.md)은 별도이며 코드 테스트 통과를 실제 사용 검증 완료로 취급하지 않습니다.
 
-프로젝트 버전: `0.2.0`(빌드 6). 공개된 버전과 서명된 다운로드 파일은 [GitHub Releases](https://github.com/Sharknia/TidyTap/releases)에서 확인하세요.
+프로젝트 버전: `0.2.1`(빌드 7). 공개된 버전과 서명된 다운로드 파일은 [GitHub Releases](https://github.com/Sharknia/TidyTap/releases)에서 확인하세요.
 
 [MVP 작업 계획](MVP_PLAN.md)과 [English README](../README.md)도 참고하세요.
 
