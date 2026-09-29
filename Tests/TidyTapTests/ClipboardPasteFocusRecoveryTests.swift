@@ -9,28 +9,34 @@ final class ClipboardPasteFocusRecoveryTests: XCTestCase {
         var scheduled: [@MainActor () -> Void] = []
         var scheduledDelays: [TimeInterval] = []
         var observations: [Focus] = []
+        var uptime: TimeInterval = 10
+        var onInspect: (() -> Void)?
         var targetAppAlive = true
         var targetFrontmost = true
         var pasteboardWrites = 0
         var pasteKeyPosts = 0
         var outcomes: [Outcome] = []
-        lazy var recovery = ClipboardPasteFocusRecovery(schedule: { delay, action in
+        lazy var recovery = ClipboardPasteFocusRecovery(now: { self.uptime }, schedule: { delay, action in
             self.scheduledDelays.append(delay)
             self.scheduled.append(action)
         })
 
-        func start(id: UUID = UUID(), originalCaptured: Bool = true) {
+        func start(id: UUID = UUID(), originalCaptured: Bool = true, deadlineContinuousTime: TimeInterval? = nil) {
             recovery.start(
                 id: id,
                 originalCaptured: originalCaptured,
                 targetIsReady: { self.targetAppAlive && self.targetFrontmost },
-                inspectFocus: { self.observations.removeFirst() },
-                paste: {
+                inspectFocus: {
+                    self.onInspect?()
+                    return self.observations.removeFirst()
+                },
+                paste: { _ in
                     self.pasteboardWrites += 1
                     self.pasteKeyPosts += 1
                     return nil
                 },
-                completion: { self.outcomes.append($0) }
+                completion: { self.outcomes.append($0) },
+                deadlineContinuousTime: deadlineContinuousTime
             )
         }
 
@@ -132,7 +138,7 @@ final class ClipboardPasteFocusRecoveryTests: XCTestCase {
                 targetFrontmost = false
                 return .original
             },
-            paste: {
+            paste: { _ in
                 pasteboardWrites += 1
                 pasteKeyPosts += 1
                 return nil
@@ -156,5 +162,65 @@ final class ClipboardPasteFocusRecoveryTests: XCTestCase {
         XCTAssertTrue(fixture.scheduled.isEmpty)
         XCTAssertEqual(fixture.pasteboardWrites, 0)
         XCTAssertEqual(fixture.pasteKeyPosts, 0)
+    }
+
+    func testLateScheduledRetryExpiresBeforeInspectingOrPasting() {
+        let fixture = Fixture()
+        fixture.observations = [.noValue, .original]
+        fixture.start()
+        fixture.uptime += 2.2
+        fixture.runNextRetry()
+        XCTAssertEqual(fixture.outcomes, [.expired(retries: 1, originalMatched: false)])
+        XCTAssertEqual(fixture.observations, [.original])
+        XCTAssertEqual(fixture.pasteboardWrites, 0)
+        XCTAssertEqual(fixture.pasteKeyPosts, 0)
+    }
+
+    func testFocusQueryCompletingAfterDeadlineCannotPaste() {
+        let fixture = Fixture()
+        fixture.observations = [.original]
+        fixture.onInspect = { fixture.uptime += 0.6 }
+        fixture.start()
+        XCTAssertEqual(fixture.outcomes, [.expired(retries: 0, originalMatched: true)])
+        XCTAssertEqual(fixture.pasteboardWrites, 0)
+        XCTAssertEqual(fixture.pasteKeyPosts, 0)
+    }
+
+    func testIncomingRequestDeadlineCanEndRetryEarlierThanLocalLimit() {
+        let fixture = Fixture()
+        fixture.observations = [.noValue, .original]
+        fixture.start(deadlineContinuousTime: fixture.uptime + 0.1)
+        fixture.uptime += 0.11
+        fixture.runNextRetry()
+        XCTAssertEqual(fixture.outcomes, [.expired(retries: 1, originalMatched: false)])
+        XCTAssertEqual(fixture.pasteboardWrites, 0)
+        XCTAssertEqual(fixture.pasteKeyPosts, 0)
+    }
+
+    func testPasteReceivesEarlierOfAppAndHelperDeadlines() {
+        var time: TimeInterval = 10
+        var receivedDeadline: TimeInterval?
+        let recovery = ClipboardPasteFocusRecovery(now: { time }, schedule: { _, _ in
+            XCTFail("The original focus is already present")
+        })
+        recovery.start(
+            id: UUID(), originalCaptured: true,
+            targetIsReady: { true }, inspectFocus: { .original },
+            paste: { deadline in
+                receivedDeadline = deadline
+                return nil
+            }, completion: { _ in }, deadlineContinuousTime: 10.2
+        )
+        XCTAssertEqual(receivedDeadline, 10.2)
+        time = 20
+        recovery.start(
+            id: UUID(), originalCaptured: true,
+            targetIsReady: { true }, inspectFocus: { .original },
+            paste: { deadline in
+                receivedDeadline = deadline
+                return nil
+            }, completion: { _ in }, deadlineContinuousTime: 20.9
+        )
+        XCTAssertEqual(receivedDeadline, 20.5)
     }
 }

@@ -180,32 +180,44 @@ final class ClipboardHistoryAppHost: NSObject {
                 guard let originalElement = session.focusedElement else { return .different }
                 return CFEqual(currentElement, originalElement) ? .original : .different
             },
-            paste: {
-                self.postPaste(session: session, entryID: request.entryID, formatted: request.formatted)
+            paste: { deadline in
+                self.postPaste(
+                    session: session, entryID: request.entryID,
+                    formatted: request.formatted, deadlineContinuousTime: deadline
+                )
             },
             completion: { outcome in
                 let sessionLabel = session.id.uuidString.prefix(8)
                 switch outcome {
                 case .pasted(let error, let retries):
-                    TidyTapClipboardPasteLog.append(
+                    TidyTapIPC.postClipboardHistoryPasteResult(sessionID: session.id, error: error)
+                    TidyTapClipboardPasteLog.record(
                         "helperResult session=\(sessionLabel) reason=\(error ?? "pasteEventPosted") " +
                         "focusRetries=\(retries) originalMatched=true currentAX=\(lastFocusError ?? 0)"
                     )
-                    TidyTapIPC.postClipboardHistoryPasteResult(sessionID: session.id, error: error)
                 case .failed(let reason, let retries, let axError, let originalMatched):
-                    TidyTapClipboardPasteLog.append(
+                    TidyTapIPC.postClipboardHistoryPasteResult(sessionID: session.id, error: reason)
+                    TidyTapClipboardPasteLog.record(
                         "helperResult session=\(sessionLabel) reason=\(reason) " +
                         "focusRetries=\(retries) originalMatched=\(originalMatched) " +
                         "captureAX=\(session.focusCaptureError) originalPresent=\(session.focusedElement != nil) " +
-                        "originalRoleAX=\(self.roleError(for: session.focusedElement)) " +
-                        "currentAX=\(axError ?? lastFocusError ?? 0)"
+                        "currentAX=\(axError.map(String.init) ?? lastFocusError.map(String.init) ?? "none")"
                     )
-                    TidyTapIPC.postClipboardHistoryPasteResult(sessionID: session.id, error: reason)
+                case .expired(let retries, let originalMatched):
+                    TidyTapIPC.postClipboardHistoryPasteResult(
+                        sessionID: session.id, error: "focusDeadlineExceeded"
+                    )
+                    TidyTapClipboardPasteLog.record(
+                        "helperResult session=\(sessionLabel) reason=focusDeadlineExceeded " +
+                        "focusRetries=\(retries) originalMatched=\(originalMatched) " +
+                        "captureAX=\(session.focusCaptureError) currentAX=\(lastFocusError.map(String.init) ?? "none")"
+                    )
                 case .superseded:
-                    TidyTapClipboardPasteLog.append("helperResult session=\(sessionLabel) reason=superseded")
                     TidyTapIPC.postClipboardHistoryPasteResult(sessionID: session.id, error: "superseded")
+                    TidyTapClipboardPasteLog.record("helperResult session=\(sessionLabel) reason=superseded")
                 }
-            }
+            },
+            deadlineContinuousTime: request.deadlineContinuousTime
         )
     }
 
@@ -217,12 +229,6 @@ final class ClipboardHistoryAppHost: NSObject {
               let value, CFGetTypeID(value) == AXUIElementGetTypeID() else { return (nil, error) }
         let element = value as! AXUIElement
         return (element, error)
-    }
-
-    private func roleError(for element: AXUIElement?) -> Int32 {
-        guard let element else { return AXError.noValue.rawValue }
-        var value: CFTypeRef?
-        return AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &value).rawValue
     }
 
     private func focusedDisplayID(for processID: pid_t) -> CGDirectDisplayID? {
@@ -258,7 +264,10 @@ final class ClipboardHistoryAppHost: NSObject {
             NSRunningApplication(processIdentifier: pid)?.isTerminated == false
     }
 
-    private func postPaste(session: PasteSession, entryID: UUID, formatted: Bool) -> String? {
+    private func postPaste(
+        session: PasteSession, entryID: UUID, formatted: Bool, deadlineContinuousTime: TimeInterval
+    ) -> String? {
+        guard TidyTapContinuousClock.now() < deadlineContinuousTime else { return "focusDeadlineExceeded" }
         guard CGPreflightPostEventAccess() else { return "eventUnavailable" }
         let suite = TidyTapLaunchSmoke.current()?.preferencesSuite ?? TidyTapProduct.appBundleIdentifier
         guard let store = try? ClipboardHistoryStore(
@@ -275,6 +284,20 @@ final class ClipboardHistoryAppHost: NSObject {
             return "eventUnavailable"
         }
         guard targetIsReady(for: session.targetPID) else { return "targetUnavailable" }
+        guard TidyTapContinuousClock.now() < deadlineContinuousTime else { return "focusDeadlineExceeded" }
+        let current = focusedElement(for: session.targetPID)
+        let matched = current.element.flatMap { focused in
+            session.focusedElement.map { CFEqual(focused, $0) }
+        } ?? false
+        guard current.error == .success, matched else {
+            TidyTapClipboardPasteLog.record(
+                "commitFocus session=\(session.id.uuidString.prefix(8)) " +
+                "currentAX=\(current.error.rawValue) originalMatched=false"
+            )
+            return "focusChanged"
+        }
+        guard targetIsReady(for: session.targetPID) else { return "targetUnavailable" }
+        guard TidyTapContinuousClock.now() < deadlineContinuousTime else { return "focusDeadlineExceeded" }
         guard ClipboardPasteboardWriter.write(
             entry.content,
             style: formatted ? .formatted : .plain,

@@ -303,7 +303,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
     @objc private func clipboardHistoryPasteResult(_ notification: Notification) {
         guard let result = TidyTapIPC.clipboardPasteResult(in: notification),
               result.sessionID == pendingClipboardPasteSessionID else { return }
-        TidyTapClipboardPasteLog.append(
+        TidyTapClipboardPasteLog.record(
             "appResult session=\(result.sessionID.uuidString.prefix(8)) " +
             "reason=\(result.error ?? "pasteEventPosted")"
         )
@@ -381,13 +381,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
                 pasteFormattedByDefault: preferences.readRequest().settings.pasteFormattedTextByDefault,
                 latestCopyTooLarge: latestCopyTooLarge,
                 onPaste: { [weak self, weak panel] entry, style in
-                    let sourceIndex = entries.firstIndex(where: { $0.id == entry.id }) ?? -1
                     guard let self, let target = self.clipboardPasteTarget else { return }
                     let query = panel?.searchQuery ?? ""
+                    let source = panel?.sourcePosition(for: entry.id)
                     self.pendingClipboardPasteDiagnostic = ClipboardPasteDiagnostic(
                         sessionID: target.sessionID, targetPID: targetPID,
                         entry: entry, query: query,
-                        sourceIndex: sourceIndex, sourceCount: entries.count,
+                        sourceIndex: source?.index ?? -1, sourceCount: source?.count ?? 0,
                         resultCount: panel?.visibleCount ?? 0
                     )
                     self.paste(entry, style: style)
@@ -395,6 +395,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
                 onDelete: { [weak self, weak panel] id, row in
                     do {
                         try store.delete(id)
+                        TidyTapClipboardPasteLog.clear()
                         panel?.refreshAfterDeleting(try store.entries(), previousRow: row)
                     } catch {
                         self?.showClipboardDeleteError()
@@ -422,6 +423,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
             return
         }
         clipboardPasteTarget = nil
+        pendingClipboardPasteSessionID = target.sessionID
+        pendingClipboardPasteEntryID = entry.id
         clipboardProbeReport("paste requested")
         let activated = target.application.activate(options: [])
         clipboardProbeReport("activation=\(activated)")
@@ -435,6 +438,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
         target: ClipboardPasteTarget,
         attemptsRemaining: Int
     ) {
+        guard pendingClipboardPasteSessionID == target.sessionID else { return }
         guard !target.application.isTerminated else {
             showClipboardError(reason: "targetUnavailable")
             return
@@ -454,13 +458,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
             }
             return
         }
-        pendingClipboardPasteSessionID = target.sessionID
-        pendingClipboardPasteEntryID = entry.id
         pendingClipboardPasteDiagnostic?.dispatched = true
         TidyTapIPC.postClipboardHistoryPaste(
             sessionID: target.sessionID,
             entryID: entry.id,
-            formatted: style == .formatted
+            formatted: style == .formatted,
+            deadlineContinuousTime: TidyTapContinuousClock.now() + 1.5
         )
         clipboardProbeReport("paste sent to helper")
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
@@ -499,8 +502,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
     }
 
     private func showClipboardError(reason: String? = nil) {
+        pendingClipboardPasteSessionID = nil
+        pendingClipboardPasteEntryID = nil
         NSLog("TidyTap clipboard paste failed: %@", reason ?? "unknown")
-        TidyTapClipboardPasteLog.append("appFailure reason=\(reason ?? "unknown")")
+        TidyTapClipboardPasteLog.record("appFailure reason=\(reason ?? "unknown")")
         logPendingClipboardSelection(outcome: reason ?? "unknown")
         let alert = NSAlert()
         alert.messageText = String(localized: "Could not paste the selected item")
@@ -512,7 +517,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
         guard let diagnostic = pendingClipboardPasteDiagnostic else { return }
         pendingClipboardPasteDiagnostic = nil
         let session = diagnostic.sessionID.uuidString.prefix(8)
-        TidyTapClipboardPasteLog.append(
+        TidyTapClipboardPasteLog.record(
             "selectionContext session=\(session) targetPID=\(diagnostic.targetPID) " +
             "itemID=\(diagnostic.entry.id.uuidString.prefix(8)) " +
             "sourceIndex=\(diagnostic.sourceIndex) sourceCount=\(diagnostic.sourceCount) " +
@@ -523,7 +528,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
         let queryData = Data(diagnostic.query.utf8)
         let queryHash = SHA256.hash(data: queryData).map { String(format: "%02x", $0) }.joined()
         let queryPreview = String(reflecting: String(diagnostic.query.prefix(120)))
-        TidyTapClipboardPasteLog.append(
+        TidyTapClipboardPasteLog.record(
             "selectionSearch session=\(session) outcome=\(outcome) " +
             "sourceIndex=\(diagnostic.sourceIndex) sourceCount=\(diagnostic.sourceCount) " +
             "resultCount=\(diagnostic.resultCount) queryBytes=\(queryData.count) " +
@@ -533,14 +538,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
         case .text(let plain, let rtf, let html):
             let data = Data(plain.utf8)
             let hash = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-            TidyTapClipboardPasteLog.append(
+            TidyTapClipboardPasteLog.record(
                 "selectionItem session=\(session) itemID=\(diagnostic.entry.id.uuidString.prefix(8)) " +
                 "kind=text bytes=\(data.count) rtfBytes=\(rtf?.count ?? 0) htmlBytes=\(html?.count ?? 0) " +
                 "sha256=\(hash) preview=\(String(reflecting: String(plain.prefix(160))))"
             )
         case .image(let data, let type):
             let hash = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-            TidyTapClipboardPasteLog.append(
+            TidyTapClipboardPasteLog.record(
                 "selectionItem session=\(session) itemID=\(diagnostic.entry.id.uuidString.prefix(8)) " +
                 "kind=image type=\(type.rawValue) bytes=\(data.count) sha256=\(hash)"
             )
@@ -581,6 +586,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
                 maximumItemBytes: TidyTapClipboardPolicy.maximumItemBytes
             )
             try store.deleteAll()
+            TidyTapClipboardPasteLog.clear()
             clipboardHistoryPanel?.updateEntries([])
             settingsController?.showClipboardClearStatus(success: true)
         } catch {

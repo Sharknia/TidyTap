@@ -3,6 +3,19 @@ import AppKit
 import Foundation
 import Security
 
+/// Shared across the app and Helper, and advances while the Mac sleeps.
+enum TidyTapContinuousClock {
+    private static let secondsPerTick: Double = {
+        var info = mach_timebase_info_data_t()
+        mach_timebase_info(&info)
+        return Double(info.numer) / Double(info.denom) / 1_000_000_000
+    }()
+
+    static func now() -> TimeInterval {
+        Double(mach_continuous_time()) * secondsPerTick
+    }
+}
+
 enum TidyTapProduct {
     static let appBundleIdentifier = "com.sharknia.TidyTap"
     static let helperBundleIdentifier = "com.sharknia.TidyTap.Helper"
@@ -63,13 +76,23 @@ enum TidyTapProduct {
 enum TidyTapClipboardPasteLog {
     static let maximumFileBytes = 128 * 1024
     static let maximumLineBytes = 1_024
+    static let maximumAge: TimeInterval = 7 * 24 * 60 * 60
+    private static let queue = DispatchQueue(label: "com.sharknia.TidyTap.clipboardPasteLog", qos: .utility)
+
+    static func record(_ event: String, in directory: URL? = nil) {
+        queue.async { append(event, in: directory) }
+    }
+
+    static func clear(in directory: URL? = nil) {
+        queue.async { clearNow(in: directory) }
+    }
 
     static var directory: URL {
         FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Logs/TidyTap", isDirectory: true)
     }
 
-    static func append(_ event: String, in directory: URL? = nil) {
+    static func append(_ event: String, in directory: URL? = nil, now: Date = Date()) {
         let directory = directory ?? self.directory
         let files = FileManager.default
         do {
@@ -88,12 +111,14 @@ enum TidyTapClipboardPasteLog {
         defer { flock(lockFD, LOCK_UN) }
         guard fchmod(lockFD, 0o600) == 0 else { return }
 
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        pruneExpiredFiles(in: directory, before: now.addingTimeInterval(-maximumAge), formatter: formatter)
+
         let sanitized = event.replacingOccurrences(of: "\n", with: " ")
             .replacingOccurrences(of: "\r", with: " ")
             .replacingOccurrences(of: "\t", with: " ")
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        let prefix = "\(formatter.string(from: Date())) pid=\(getpid()) "
+        let prefix = "\(formatter.string(from: now)) pid=\(getpid()) "
         let available = max(0, maximumLineBytes - prefix.utf8.count - 4)
         let truncated = String(decoding: sanitized.utf8.prefix(available), as: UTF8.self)
         let line = Data((prefix + truncated + "\n").utf8)
@@ -124,6 +149,44 @@ enum TidyTapClipboardPasteLog {
                 let written = Darwin.write(logFD, base.advanced(by: offset), bytes.count - offset)
                 guard written > 0 else { return }
                 offset += written
+            }
+        }
+    }
+
+    static func clearNow(in directory: URL? = nil) {
+        let directory = directory ?? self.directory
+        let lockPath = directory.appendingPathComponent("clipboard-paste.lock").path
+        let lockFD = open(lockPath, O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, 0o600)
+        guard lockFD >= 0 else { return }
+        defer { close(lockFD) }
+        // Only the utility queue calls this in production; deletion can wait for
+        // a different process to finish a short append without blocking input.
+        guard flock(lockFD, LOCK_EX) == 0 else { return }
+        defer { flock(lockFD, LOCK_UN) }
+        for name in ["clipboard-paste.log", "clipboard-paste.log.1"] {
+            _ = unlink(directory.appendingPathComponent(name).path)
+        }
+    }
+
+    private static func pruneExpiredFiles(
+        in directory: URL, before cutoff: Date, formatter: ISO8601DateFormatter
+    ) {
+        for name in ["clipboard-paste.log", "clipboard-paste.log.1"] {
+            let path = directory.appendingPathComponent(name).path
+            let fd = open(path, O_RDONLY | O_CLOEXEC | O_NOFOLLOW)
+            guard fd >= 0 else { continue }
+            var info = stat()
+            var bytes = [UInt8](repeating: 0, count: 24)
+            let count = bytes.withUnsafeMutableBytes { buffer in
+                pread(fd, buffer.baseAddress, buffer.count, 0)
+            }
+            let hasInfo = fstat(fd, &info) == 0
+            close(fd)
+            let date = count == bytes.count
+                ? formatter.date(from: String(decoding: bytes, as: UTF8.self)) : nil
+            let expired = date.map { $0 < cutoff } ?? true
+            if !hasInfo || info.st_size > maximumFileBytes || expired {
+                _ = unlink(path)
             }
         }
     }

@@ -13,6 +13,7 @@ final class ClipboardPasteFocusRecovery {
     enum Outcome: Equatable {
         case pasted(error: String?, retries: Int)
         case failed(reason: String, retries: Int, axError: Int32?, originalMatched: Bool)
+        case expired(retries: Int, originalMatched: Bool)
         case superseded
     }
 
@@ -20,26 +21,31 @@ final class ClipboardPasteFocusRecovery {
 
     static let retryInterval: TimeInterval = 0.03
     static let maximumRetries = 5
+    static let maximumElapsedTime: TimeInterval = 0.5
 
     private struct Request {
         let id: UUID
         let originalCaptured: Bool
         let targetIsReady: () -> Bool
         let inspectFocus: () -> FocusObservation
-        let paste: () -> String?
+        let paste: (TimeInterval) -> String?
         let completion: (Outcome) -> Void
+        let deadlineContinuousTime: TimeInterval
         var retries = 0
     }
 
     private let schedule: Scheduler
+    private let now: () -> TimeInterval
     private var active: Request?
 
-    init(schedule: @escaping Scheduler = { delay, action in
+    init(now: @escaping () -> TimeInterval = { TidyTapContinuousClock.now() },
+         schedule: @escaping Scheduler = { delay, action in
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(delay))
             action()
         }
     }) {
+        self.now = now
         self.schedule = schedule
     }
 
@@ -48,17 +54,20 @@ final class ClipboardPasteFocusRecovery {
         originalCaptured: Bool,
         targetIsReady: @escaping () -> Bool,
         inspectFocus: @escaping () -> FocusObservation,
-        paste: @escaping () -> String?,
-        completion: @escaping (Outcome) -> Void
+        paste: @escaping (TimeInterval) -> String?,
+        completion: @escaping (Outcome) -> Void,
+        deadlineContinuousTime: TimeInterval? = nil
     ) {
         cancelActive()
+        let deadline = min(deadlineContinuousTime ?? .infinity, now() + Self.maximumElapsedTime)
         active = Request(
             id: id,
             originalCaptured: originalCaptured,
             targetIsReady: targetIsReady,
             inspectFocus: inspectFocus,
             paste: paste,
-            completion: completion
+            completion: completion,
+            deadlineContinuousTime: deadline
         )
         checkFocus(for: id)
     }
@@ -71,6 +80,10 @@ final class ClipboardPasteFocusRecovery {
 
     private func checkFocus(for id: UUID) {
         guard var request = active, request.id == id else { return }
+        guard now() < request.deadlineContinuousTime else {
+            finish(request, with: .expired(retries: request.retries, originalMatched: false))
+            return
+        }
         guard request.targetIsReady() else {
             finish(request, with: .failed(
                 reason: "targetUnavailable", retries: request.retries,
@@ -86,7 +99,14 @@ final class ClipboardPasteFocusRecovery {
             return
         }
 
-        switch request.inspectFocus() {
+        let observation = request.inspectFocus()
+        guard now() < request.deadlineContinuousTime else {
+            finish(request, with: .expired(
+                retries: request.retries, originalMatched: observation == .original
+            ))
+            return
+        }
+        switch observation {
         case .original:
             guard request.targetIsReady() else {
                 finish(request, with: .failed(
@@ -95,8 +115,12 @@ final class ClipboardPasteFocusRecovery {
                 ))
                 return
             }
+            guard now() < request.deadlineContinuousTime else {
+                finish(request, with: .expired(retries: request.retries, originalMatched: true))
+                return
+            }
             active = nil
-            let error = request.paste()
+            let error = request.paste(request.deadlineContinuousTime)
             request.completion(.pasted(error: error, retries: request.retries))
         case .different:
             finish(request, with: .failed(
