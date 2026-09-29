@@ -394,8 +394,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
                 },
                 onDelete: { [weak self, weak panel] id, row in
                     do {
+                        guard TidyTapClipboardPasteLog.clear() else {
+                            self?.showClipboardDeleteError()
+                            return
+                        }
+                        if self?.pendingClipboardPasteDiagnostic?.entry.id == id {
+                            self?.pendingClipboardPasteDiagnostic = nil
+                            self?.pendingClipboardPasteSessionID = nil
+                            self?.pendingClipboardPasteEntryID = nil
+                        }
                         try store.delete(id)
-                        TidyTapClipboardPasteLog.clear()
                         panel?.refreshAfterDeleting(try store.entries(), previousRow: row)
                     } catch {
                         self?.showClipboardDeleteError()
@@ -426,19 +434,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
         pendingClipboardPasteSessionID = target.sessionID
         pendingClipboardPasteEntryID = entry.id
         clipboardProbeReport("paste requested")
+        let deadlineContinuousTime = TidyTapContinuousClock.now() + 1.5
         let activated = target.application.activate(options: [])
         clipboardProbeReport("activation=\(activated)")
         pendingClipboardPasteDiagnostic?.activationAccepted = activated
-        pasteWhenTargetIsActive(entry, style: style, target: target, attemptsRemaining: 15)
+        pasteWhenTargetIsActive(
+            entry, style: style, target: target, attemptsRemaining: 15,
+            deadlineContinuousTime: deadlineContinuousTime
+        )
     }
 
     private func pasteWhenTargetIsActive(
         _ entry: ClipboardHistoryEntry,
         style: ClipboardTextPasteStyle,
         target: ClipboardPasteTarget,
-        attemptsRemaining: Int
+        attemptsRemaining: Int,
+        deadlineContinuousTime: TimeInterval
     ) {
         guard pendingClipboardPasteSessionID == target.sessionID else { return }
+        guard TidyTapContinuousClock.now() < deadlineContinuousTime else {
+            showClipboardError(reason: "focusDeadlineExceeded")
+            return
+        }
         guard !target.application.isTerminated else {
             showClipboardError(reason: "targetUnavailable")
             return
@@ -453,7 +470,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in
                 self?.pasteWhenTargetIsActive(
                     entry, style: style, target: target,
-                    attemptsRemaining: attemptsRemaining - 1
+                    attemptsRemaining: attemptsRemaining - 1,
+                    deadlineContinuousTime: deadlineContinuousTime
                 )
             }
             return
@@ -463,7 +481,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
             sessionID: target.sessionID,
             entryID: entry.id,
             formatted: style == .formatted,
-            deadlineContinuousTime: TidyTapContinuousClock.now() + 1.5
+            deadlineContinuousTime: deadlineContinuousTime
         )
         clipboardProbeReport("paste sent to helper")
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
@@ -576,6 +594,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
 
     private func clearClipboardHistory(settingsController: SettingsViewController?) {
         do {
+            pendingClipboardPasteDiagnostic = nil
+            pendingClipboardPasteSessionID = nil
+            pendingClipboardPasteEntryID = nil
+            guard TidyTapClipboardPasteLog.clear() else {
+                settingsController?.showClipboardClearStatus(success: false)
+                return
+            }
             let store = try ClipboardHistoryStore(
                 directory: TidyTapProduct.clipboardHistoryDirectory(
                     preferencesSuite: launchSmoke?.preferencesSuite ?? TidyTapProduct.appBundleIdentifier
@@ -586,7 +611,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
                 maximumItemBytes: TidyTapClipboardPolicy.maximumItemBytes
             )
             try store.deleteAll()
-            TidyTapClipboardPasteLog.clear()
             clipboardHistoryPanel?.updateEntries([])
             settingsController?.showClipboardClearStatus(success: true)
         } catch {

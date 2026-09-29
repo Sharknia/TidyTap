@@ -27,10 +27,11 @@ final class ClipboardPasteFocusRecovery {
         let id: UUID
         let originalCaptured: Bool
         let targetIsReady: () -> Bool
-        let inspectFocus: () -> FocusObservation
+        let inspectFocus: (TimeInterval) -> FocusObservation
         let paste: (TimeInterval) -> String?
         let completion: (Outcome) -> Void
         let deadlineContinuousTime: TimeInterval
+        let pasteDeadlineContinuousTime: TimeInterval
         var retries = 0
     }
 
@@ -53,13 +54,14 @@ final class ClipboardPasteFocusRecovery {
         id: UUID,
         originalCaptured: Bool,
         targetIsReady: @escaping () -> Bool,
-        inspectFocus: @escaping () -> FocusObservation,
+        inspectFocus: @escaping (TimeInterval) -> FocusObservation,
         paste: @escaping (TimeInterval) -> String?,
         completion: @escaping (Outcome) -> Void,
         deadlineContinuousTime: TimeInterval? = nil
     ) {
         cancelActive()
-        let deadline = min(deadlineContinuousTime ?? .infinity, now() + Self.maximumElapsedTime)
+        let pasteDeadline = deadlineContinuousTime ?? now() + 1.5
+        let deadline = min(pasteDeadline, now() + Self.maximumElapsedTime)
         active = Request(
             id: id,
             originalCaptured: originalCaptured,
@@ -67,7 +69,8 @@ final class ClipboardPasteFocusRecovery {
             inspectFocus: inspectFocus,
             paste: paste,
             completion: completion,
-            deadlineContinuousTime: deadline
+            deadlineContinuousTime: deadline,
+            pasteDeadlineContinuousTime: pasteDeadline
         )
         checkFocus(for: id)
     }
@@ -99,7 +102,7 @@ final class ClipboardPasteFocusRecovery {
             return
         }
 
-        let observation = request.inspectFocus()
+        let observation = request.inspectFocus(request.deadlineContinuousTime)
         guard now() < request.deadlineContinuousTime else {
             finish(request, with: .expired(
                 retries: request.retries, originalMatched: observation == .original
@@ -120,7 +123,7 @@ final class ClipboardPasteFocusRecovery {
                 return
             }
             active = nil
-            let error = request.paste(request.deadlineContinuousTime)
+            let error = request.paste(request.pasteDeadlineContinuousTime)
             request.completion(.pasted(error: error, retries: request.retries))
         case .different:
             finish(request, with: .failed(
@@ -151,5 +154,21 @@ final class ClipboardPasteFocusRecovery {
     private func finish(_ request: Request, with outcome: Outcome) {
         active = nil
         request.completion(outcome)
+    }
+}
+
+/// Keeps the clipboard write and paste key together behind both focus checks.
+@MainActor
+enum ClipboardPasteCommitGate {
+    static func perform(
+        validate: () -> String?,
+        write: () -> Bool,
+        postKey: () -> Void
+    ) -> String? {
+        if let error = validate() { return error }
+        guard write() else { return "pasteboardWriteFailed" }
+        if let error = validate() { return error }
+        postKey()
+        return nil
     }
 }

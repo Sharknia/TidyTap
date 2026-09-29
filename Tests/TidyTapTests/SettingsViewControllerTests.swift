@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import TidyTapInputEngine
 import XCTest
 
@@ -112,7 +113,13 @@ final class SettingsViewControllerTests: XCTestCase {
         let contents = try String(contentsOf: active, encoding: .utf8)
         XCTAssertTrue(contents.contains("new attempt"))
         XCTAssertFalse(contents.contains("private preview from old attempt"))
-        TidyTapClipboardPasteLog.clearNow(in: directory)
+        let lockFD = open(directory.appendingPathComponent("clipboard-paste.lock").path, O_RDWR)
+        XCTAssertGreaterThanOrEqual(lockFD, 0)
+        defer { close(lockFD) }
+        XCTAssertEqual(flock(lockFD, LOCK_EX), 0)
+        TidyTapClipboardPasteLog.record("queued private preview", in: directory)
+        XCTAssertTrue(TidyTapClipboardPasteLog.clear(in: directory))
+        XCTAssertEqual(flock(lockFD, LOCK_UN), 0)
         XCTAssertFalse(FileManager.default.fileExists(atPath: active.path))
         XCTAssertFalse(FileManager.default.fileExists(
             atPath: directory.appendingPathComponent("clipboard-paste.log.1").path

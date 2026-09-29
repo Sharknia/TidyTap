@@ -80,11 +80,17 @@ enum TidyTapClipboardPasteLog {
     private static let queue = DispatchQueue(label: "com.sharknia.TidyTap.clipboardPasteLog", qos: .utility)
 
     static func record(_ event: String, in directory: URL? = nil) {
-        queue.async { append(event, in: directory) }
+        queue.async {
+            for _ in 0..<5 {
+                if append(event, in: directory) { return }
+                usleep(10_000)
+            }
+        }
     }
 
-    static func clear(in directory: URL? = nil) {
-        queue.async { clearNow(in: directory) }
+    @discardableResult
+    static func clear(in directory: URL? = nil) -> Bool {
+        queue.sync { clearNow(in: directory) }
     }
 
     static var directory: URL {
@@ -92,7 +98,8 @@ enum TidyTapClipboardPasteLog {
             .appendingPathComponent("Logs/TidyTap", isDirectory: true)
     }
 
-    static func append(_ event: String, in directory: URL? = nil, now: Date = Date()) {
+    @discardableResult
+    static func append(_ event: String, in directory: URL? = nil, now: Date = Date()) -> Bool {
         let directory = directory ?? self.directory
         let files = FileManager.default
         do {
@@ -101,15 +108,15 @@ enum TidyTapClipboardPasteLog {
                 attributes: [.posixPermissions: 0o700]
             )
             try files.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
-        } catch { return }
+        } catch { return false }
 
         let lockPath = directory.appendingPathComponent("clipboard-paste.lock").path
         let lockFD = open(lockPath, O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, 0o600)
-        guard lockFD >= 0 else { return }
+        guard lockFD >= 0 else { return false }
         defer { close(lockFD) }
-        guard flock(lockFD, LOCK_EX) == 0 else { return }
+        guard flock(lockFD, LOCK_EX | LOCK_NB) == 0 else { return false }
         defer { flock(lockFD, LOCK_UN) }
-        guard fchmod(lockFD, 0o600) == 0 else { return }
+        guard fchmod(lockFD, 0o600) == 0 else { return false }
 
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -122,16 +129,16 @@ enum TidyTapClipboardPasteLog {
         let available = max(0, maximumLineBytes - prefix.utf8.count - 4)
         let truncated = String(decoding: sanitized.utf8.prefix(available), as: UTF8.self)
         let line = Data((prefix + truncated + "\n").utf8)
-        guard line.count <= maximumLineBytes else { return }
+        guard line.count <= maximumLineBytes else { return false }
 
         let active = directory.appendingPathComponent("clipboard-paste.log")
         let previous = directory.appendingPathComponent("clipboard-paste.log.1")
         var logFD = open(active.path, O_CREAT | O_WRONLY | O_APPEND | O_CLOEXEC | O_NOFOLLOW, 0o600)
-        guard logFD >= 0 else { return }
+        guard logFD >= 0 else { return false }
         defer { if logFD >= 0 { close(logFD) } }
-        guard fchmod(logFD, 0o600) == 0 else { return }
+        guard fchmod(logFD, 0o600) == 0 else { return false }
         var info = stat()
-        guard fstat(logFD, &info) == 0 else { return }
+        guard fstat(logFD, &info) == 0 else { return false }
         if Int(info.st_size) + line.count > maximumFileBytes {
             close(logFD)
             logFD = -1
@@ -140,32 +147,32 @@ enum TidyTapClipboardPasteLog {
             } else {
                 logFD = open(active.path, O_CREAT | O_WRONLY | O_TRUNC | O_CLOEXEC | O_NOFOLLOW, 0o600)
             }
-            guard logFD >= 0, fchmod(logFD, 0o600) == 0 else { return }
+            guard logFD >= 0, fchmod(logFD, 0o600) == 0 else { return false }
         }
-        line.withUnsafeBytes { bytes in
-            guard let base = bytes.baseAddress else { return }
+        return line.withUnsafeBytes { bytes -> Bool in
+            guard let base = bytes.baseAddress else { return false }
             var offset = 0
             while offset < bytes.count {
                 let written = Darwin.write(logFD, base.advanced(by: offset), bytes.count - offset)
-                guard written > 0 else { return }
+                guard written > 0 else { return false }
                 offset += written
             }
+            return true
         }
     }
 
-    static func clearNow(in directory: URL? = nil) {
+    @discardableResult
+    static func clearNow(in directory: URL? = nil) -> Bool {
         let directory = directory ?? self.directory
-        let lockPath = directory.appendingPathComponent("clipboard-paste.lock").path
-        let lockFD = open(lockPath, O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, 0o600)
-        guard lockFD >= 0 else { return }
-        defer { close(lockFD) }
-        // Only the utility queue calls this in production; deletion can wait for
-        // a different process to finish a short append without blocking input.
-        guard flock(lockFD, LOCK_EX) == 0 else { return }
-        defer { flock(lockFD, LOCK_UN) }
+        // Unlink does not wait for a stalled writer's advisory lock. Any writer
+        // already holding the old inode can finish, but that inode stays gone.
+        var succeeded = true
         for name in ["clipboard-paste.log", "clipboard-paste.log.1"] {
-            _ = unlink(directory.appendingPathComponent(name).path)
+            if unlink(directory.appendingPathComponent(name).path) != 0 && errno != ENOENT {
+                succeeded = false
+            }
         }
+        return succeeded
     }
 
     private static func pruneExpiredFiles(

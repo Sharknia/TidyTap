@@ -26,7 +26,7 @@ final class ClipboardPasteFocusRecoveryTests: XCTestCase {
                 id: id,
                 originalCaptured: originalCaptured,
                 targetIsReady: { self.targetAppAlive && self.targetFrontmost },
-                inspectFocus: {
+                inspectFocus: { _ in
                     self.onInspect?()
                     return self.observations.removeFirst()
                 },
@@ -134,7 +134,7 @@ final class ClipboardPasteFocusRecoveryTests: XCTestCase {
         recovery.start(
             id: UUID(), originalCaptured: true,
             targetIsReady: { targetFrontmost },
-            inspectFocus: {
+            inspectFocus: { _ in
                 targetFrontmost = false
                 return .original
             },
@@ -197,7 +197,7 @@ final class ClipboardPasteFocusRecoveryTests: XCTestCase {
         XCTAssertEqual(fixture.pasteKeyPosts, 0)
     }
 
-    func testPasteReceivesEarlierOfAppAndHelperDeadlines() {
+    func testPasteKeepsAppDeadlineAfterBoundedFocusCheck() {
         var time: TimeInterval = 10
         var receivedDeadline: TimeInterval?
         let recovery = ClipboardPasteFocusRecovery(now: { time }, schedule: { _, _ in
@@ -205,7 +205,7 @@ final class ClipboardPasteFocusRecoveryTests: XCTestCase {
         })
         recovery.start(
             id: UUID(), originalCaptured: true,
-            targetIsReady: { true }, inspectFocus: { .original },
+            targetIsReady: { true }, inspectFocus: { _ in .original },
             paste: { deadline in
                 receivedDeadline = deadline
                 return nil
@@ -215,12 +215,54 @@ final class ClipboardPasteFocusRecoveryTests: XCTestCase {
         time = 20
         recovery.start(
             id: UUID(), originalCaptured: true,
-            targetIsReady: { true }, inspectFocus: { .original },
+            targetIsReady: { true }, inspectFocus: { _ in .original },
             paste: { deadline in
                 receivedDeadline = deadline
                 return nil
             }, completion: { _ in }, deadlineContinuousTime: 20.9
         )
-        XCTAssertEqual(receivedDeadline, 20.5)
+        XCTAssertEqual(receivedDeadline, 20.9)
+    }
+
+    func testCommitGateStopsKeyWhenFocusChangesDuringClipboardWrite() {
+        var originalFocused = true
+        var writes = 0
+        var keys = 0
+        let error = ClipboardPasteCommitGate.perform(
+            validate: { originalFocused ? nil : "focusChanged" },
+            write: {
+                writes += 1
+                originalFocused = false
+                return true
+            },
+            postKey: { keys += 1 }
+        )
+        XCTAssertEqual(error, "focusChanged")
+        XCTAssertEqual(writes, 1)
+        XCTAssertEqual(keys, 0)
+    }
+
+    func testCommitGateRejectsBeforeWriteAndPostsOnceOnSuccess() {
+        var writes = 0
+        var keys = 0
+        let rejected = ClipboardPasteCommitGate.perform(
+            validate: { "targetUnavailable" },
+            write: { writes += 1; return true },
+            postKey: { keys += 1 }
+        )
+        XCTAssertEqual(rejected, "targetUnavailable")
+        XCTAssertEqual(writes, 0)
+        XCTAssertEqual(keys, 0)
+
+        var validations = 0
+        let success = ClipboardPasteCommitGate.perform(
+            validate: { validations += 1; return nil },
+            write: { writes += 1; return true },
+            postKey: { keys += 1 }
+        )
+        XCTAssertNil(success)
+        XCTAssertEqual(validations, 2)
+        XCTAssertEqual(writes, 1)
+        XCTAssertEqual(keys, 1)
     }
 }
