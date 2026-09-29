@@ -103,6 +103,7 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
     }
 
     var isVisible: Bool { panel.isVisible }
+    var searchQuery: String { searchField.stringValue }
     var selectedEntry: ClipboardHistoryEntry? {
         filtered.indices.contains(tableView.selectedRow) ? filtered[tableView.selectedRow] : nil
     }

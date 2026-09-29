@@ -58,6 +58,77 @@ enum TidyTapProduct {
     }
 }
 
+/// Small, private diagnostic trail for clipboard-history paste attempts.
+/// It may contain a bounded preview of the user's search and copied text.
+enum TidyTapClipboardPasteLog {
+    static let maximumFileBytes = 128 * 1024
+    static let maximumLineBytes = 1_024
+
+    static var directory: URL {
+        FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Logs/TidyTap", isDirectory: true)
+    }
+
+    static func append(_ event: String, in directory: URL? = nil) {
+        let directory = directory ?? self.directory
+        let files = FileManager.default
+        do {
+            try files.createDirectory(
+                at: directory, withIntermediateDirectories: true,
+                attributes: [.posixPermissions: 0o700]
+            )
+            try files.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
+        } catch { return }
+
+        let lockPath = directory.appendingPathComponent("clipboard-paste.lock").path
+        let lockFD = open(lockPath, O_CREAT | O_RDWR | O_CLOEXEC | O_NOFOLLOW, 0o600)
+        guard lockFD >= 0 else { return }
+        defer { close(lockFD) }
+        guard flock(lockFD, LOCK_EX) == 0 else { return }
+        defer { flock(lockFD, LOCK_UN) }
+        guard fchmod(lockFD, 0o600) == 0 else { return }
+
+        let sanitized = event.replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "\r", with: " ")
+            .replacingOccurrences(of: "\t", with: " ")
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let prefix = "\(formatter.string(from: Date())) pid=\(getpid()) "
+        let available = max(0, maximumLineBytes - prefix.utf8.count - 4)
+        let truncated = String(decoding: sanitized.utf8.prefix(available), as: UTF8.self)
+        let line = Data((prefix + truncated + "\n").utf8)
+        guard line.count <= maximumLineBytes else { return }
+
+        let active = directory.appendingPathComponent("clipboard-paste.log")
+        let previous = directory.appendingPathComponent("clipboard-paste.log.1")
+        var logFD = open(active.path, O_CREAT | O_WRONLY | O_APPEND | O_CLOEXEC | O_NOFOLLOW, 0o600)
+        guard logFD >= 0 else { return }
+        defer { if logFD >= 0 { close(logFD) } }
+        guard fchmod(logFD, 0o600) == 0 else { return }
+        var info = stat()
+        guard fstat(logFD, &info) == 0 else { return }
+        if Int(info.st_size) + line.count > maximumFileBytes {
+            close(logFD)
+            logFD = -1
+            if info.st_size <= maximumFileBytes && rename(active.path, previous.path) == 0 {
+                logFD = open(active.path, O_CREAT | O_WRONLY | O_APPEND | O_CLOEXEC | O_NOFOLLOW, 0o600)
+            } else {
+                logFD = open(active.path, O_CREAT | O_WRONLY | O_TRUNC | O_CLOEXEC | O_NOFOLLOW, 0o600)
+            }
+            guard logFD >= 0, fchmod(logFD, 0o600) == 0 else { return }
+        }
+        line.withUnsafeBytes { bytes in
+            guard let base = bytes.baseAddress else { return }
+            var offset = 0
+            while offset < bytes.count {
+                let written = Darwin.write(logFD, base.advanced(by: offset), bytes.count - offset)
+                guard written > 0 else { return }
+                offset += written
+            }
+        }
+    }
+}
+
 /// Confirmed local retention and size bounds. Deletion controls are decided separately.
 enum TidyTapClipboardPolicy {
     static let retention: TimeInterval = 7 * 24 * 60 * 60

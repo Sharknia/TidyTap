@@ -77,6 +77,28 @@ final class SettingsViewControllerTests: XCTestCase {
         XCTAssertFalse(messages.contains(TidyTapStrings.clipboardPasteFailureMessage(for: nil)))
     }
 
+    func testClipboardPasteLogIsPrivateAndBounded() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("tidytap-paste-log-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        for index in 0..<600 {
+            TidyTapClipboardPasteLog.append("test event=\(index) " + String(repeating: "x", count: 300), in: directory)
+        }
+        TidyTapClipboardPasteLog.append("last event\nwith newline", in: directory)
+
+        let active = directory.appendingPathComponent("clipboard-paste.log")
+        let previous = directory.appendingPathComponent("clipboard-paste.log.1")
+        for file in [active, previous] {
+            let attributes = try FileManager.default.attributesOfItem(atPath: file.path)
+            XCTAssertLessThanOrEqual(try Data(contentsOf: file).count, TidyTapClipboardPasteLog.maximumFileBytes)
+            XCTAssertEqual((attributes[.posixPermissions] as? NSNumber)?.intValue, 0o600)
+        }
+        let directoryAttributes = try FileManager.default.attributesOfItem(atPath: directory.path)
+        XCTAssertEqual((directoryAttributes[.posixPermissions] as? NSNumber)?.intValue, 0o700)
+        let latest = try String(contentsOf: active, encoding: .utf8)
+        XCTAssertTrue(latest.contains("last event with newline"))
+        XCTAssertFalse(latest.contains("last event\nwith newline"))
+    }
+
     func testClipboardPanelSelectsNewestAndFiltersTextWithoutOpeningAWindow() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("tidytap-panel-\(UUID())")
         defer { try? FileManager.default.removeItem(at: directory) }

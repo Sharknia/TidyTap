@@ -90,9 +90,11 @@ final class ClipboardHistoryAppHost: NSObject {
         let id: UUID
         let targetPID: pid_t
         let focusedElement: AXUIElement?
+        let focusCaptureError: Int32
     }
 
     private var pasteSession: PasteSession?
+    private let focusRecovery = ClipboardPasteFocusRecovery()
 
     override private init() {
         super.init()
@@ -110,9 +112,14 @@ final class ClipboardHistoryAppHost: NSObject {
     }
 
     private func presentOnMain() {
+        focusRecovery.cancelActive()
         guard let targetPID = NSWorkspace.shared.frontmostApplication?.processIdentifier else { return }
         let sessionID = UUID()
-        pasteSession = PasteSession(id: sessionID, targetPID: targetPID, focusedElement: focusedElement(for: targetPID))
+        let focus = focusedElement(for: targetPID)
+        pasteSession = PasteSession(
+            id: sessionID, targetPID: targetPID,
+            focusedElement: focus.element, focusCaptureError: focus.error.rawValue
+        )
         let displayID = focusedDisplayID(for: targetPID)
         let appURL = Bundle.main.bundleURL.resolvingSymlinksInPath().standardizedFileURL
         if NSRunningApplication.runningApplications(withBundleIdentifier: TidyTapProduct.appBundleIdentifier)
@@ -158,16 +165,64 @@ final class ClipboardHistoryAppHost: NSObject {
         guard let request = TidyTapIPC.clipboardPasteRequest(in: notification),
               let session = pasteSession, session.id == request.sessionID else { return }
         pasteSession = nil
-        let error = paste(session: session, entryID: request.entryID, formatted: request.formatted)
-        TidyTapIPC.postClipboardHistoryPasteResult(sessionID: session.id, error: error)
+        var lastFocusError: Int32?
+        focusRecovery.start(
+            id: session.id,
+            originalCaptured: session.focusedElement != nil,
+            targetIsReady: { self.targetIsReady(for: session.targetPID) },
+            inspectFocus: {
+                let current = self.focusedElement(for: session.targetPID)
+                lastFocusError = current.error.rawValue
+                guard current.error == .success else {
+                    return current.error == .noValue ? .noValue : .otherError(current.error.rawValue)
+                }
+                guard let currentElement = current.element else { return .otherError(current.error.rawValue) }
+                guard let originalElement = session.focusedElement else { return .different }
+                return CFEqual(currentElement, originalElement) ? .original : .different
+            },
+            paste: {
+                self.postPaste(session: session, entryID: request.entryID, formatted: request.formatted)
+            },
+            completion: { outcome in
+                let sessionLabel = session.id.uuidString.prefix(8)
+                switch outcome {
+                case .pasted(let error, let retries):
+                    TidyTapClipboardPasteLog.append(
+                        "helperResult session=\(sessionLabel) reason=\(error ?? "pasteEventPosted") " +
+                        "focusRetries=\(retries) originalMatched=true currentAX=\(lastFocusError ?? 0)"
+                    )
+                    TidyTapIPC.postClipboardHistoryPasteResult(sessionID: session.id, error: error)
+                case .failed(let reason, let retries, let axError, let originalMatched):
+                    TidyTapClipboardPasteLog.append(
+                        "helperResult session=\(sessionLabel) reason=\(reason) " +
+                        "focusRetries=\(retries) originalMatched=\(originalMatched) " +
+                        "captureAX=\(session.focusCaptureError) originalPresent=\(session.focusedElement != nil) " +
+                        "originalRoleAX=\(self.roleError(for: session.focusedElement)) " +
+                        "currentAX=\(axError ?? lastFocusError ?? 0)"
+                    )
+                    TidyTapIPC.postClipboardHistoryPasteResult(sessionID: session.id, error: reason)
+                case .superseded:
+                    TidyTapClipboardPasteLog.append("helperResult session=\(sessionLabel) reason=superseded")
+                    TidyTapIPC.postClipboardHistoryPasteResult(sessionID: session.id, error: "superseded")
+                }
+            }
+        )
     }
 
-    private func focusedElement(for processID: pid_t) -> AXUIElement? {
+    private func focusedElement(for processID: pid_t) -> (element: AXUIElement?, error: AXError) {
         var value: CFTypeRef?
         let application = AXUIElementCreateApplication(processID)
-        guard AXUIElementCopyAttributeValue(application, kAXFocusedUIElementAttribute as CFString, &value) == .success,
-              let value, CFGetTypeID(value) == AXUIElementGetTypeID() else { return nil }
-        return (value as! AXUIElement)
+        let error = AXUIElementCopyAttributeValue(application, kAXFocusedUIElementAttribute as CFString, &value)
+        guard error == .success,
+              let value, CFGetTypeID(value) == AXUIElementGetTypeID() else { return (nil, error) }
+        let element = value as! AXUIElement
+        return (element, error)
+    }
+
+    private func roleError(for element: AXUIElement?) -> Int32 {
+        guard let element else { return AXError.noValue.rawValue }
+        var value: CFTypeRef?
+        return AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &value).rawValue
     }
 
     private func focusedDisplayID(for processID: pid_t) -> CGDirectDisplayID? {
@@ -198,15 +253,13 @@ final class ClipboardHistoryAppHost: NSObject {
         return displayID
     }
 
-    private func paste(session: PasteSession, entryID: UUID, formatted: Bool) -> String? {
+    private func targetIsReady(for pid: pid_t) -> Bool {
+        NSWorkspace.shared.frontmostApplication?.processIdentifier == pid &&
+            NSRunningApplication(processIdentifier: pid)?.isTerminated == false
+    }
+
+    private func postPaste(session: PasteSession, entryID: UUID, formatted: Bool) -> String? {
         guard CGPreflightPostEventAccess() else { return "eventUnavailable" }
-        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == session.targetPID,
-              NSRunningApplication(processIdentifier: session.targetPID)?.isTerminated == false else {
-            return "targetUnavailable"
-        }
-        guard let originalFocus = session.focusedElement,
-              let currentFocus = focusedElement(for: session.targetPID),
-              CFEqual(currentFocus, originalFocus) else { return "focusChanged" }
         let suite = TidyTapLaunchSmoke.current()?.preferencesSuite ?? TidyTapProduct.appBundleIdentifier
         guard let store = try? ClipboardHistoryStore(
             directory: TidyTapProduct.clipboardHistoryDirectory(preferencesSuite: suite),
@@ -221,6 +274,7 @@ final class ClipboardHistoryAppHost: NSObject {
               let up = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: false) else {
             return "eventUnavailable"
         }
+        guard targetIsReady(for: session.targetPID) else { return "targetUnavailable" }
         guard ClipboardPasteboardWriter.write(
             entry.content,
             style: formatted ? .formatted : .plain,
