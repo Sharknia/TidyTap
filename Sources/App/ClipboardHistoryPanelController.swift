@@ -311,6 +311,8 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
         root.addSubview(searchField)
 
         contentFilter.segmentCount = 2
+        contentFilter.segmentDistribution = .fillEqually
+        if #available(macOS 26.0, *) { contentFilter.borderShape = .capsule }
         contentFilter.setLabel(String(localized: "All"), forSegment: 0)
         contentFilter.setLabel(String(localized: "Images"), forSegment: 1)
         contentFilter.trackingMode = .selectOne
