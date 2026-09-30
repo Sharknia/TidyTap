@@ -457,13 +457,20 @@ final class SettingsViewControllerTests: XCTestCase {
 
         panel.search("")
         panel.updateEntries(try store.entries())
+        let filter = try XCTUnwrap(panel.panel.contentView?.subviews.compactMap { $0 as? NSSegmentedControl }.first)
+        filter.selectedSegment = 1
+        XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(filter.action), to: filter.target, from: filter))
+        XCTAssertEqual(panel.visibleCount, 1)
         let latestImage = try XCTUnwrap(panel.selectedEntry)
         XCTAssertEqual(latestImage.content, .image(data: png, type: .png))
         XCTAssertTrue(ClipboardPasteboardWriter.write(latestImage.content, style: .plain, to: pasted))
         let imageView = NSTextView(frame: NSRect(x: 0, y: 0, width: 300, height: 100))
         XCTAssertTrue(imageView.readSelection(from: pasted, type: .png))
+        XCTAssertEqual(imageView.textStorage?.length, 1, "one image is inserted from the filtered selection")
         XCTAssertNotNil(imageView.textStorage?.attribute(.attachment, at: 0, effectiveRange: nil) as? NSTextAttachment)
 
+        filter.selectedSegment = 0
+        XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(filter.action), to: filter.target, from: filter))
         panel.search("Bold")
         let selectedRichText = try XCTUnwrap(panel.selectedEntry)
         XCTAssertTrue(ClipboardPasteboardWriter.write(selectedRichText.content, style: .formatted, to: pasted))
