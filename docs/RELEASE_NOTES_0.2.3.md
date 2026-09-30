@@ -8,6 +8,17 @@
 
 ## 검증 범위
 
-macOS 26.5.2·Xcode 26.6의 작업 브랜치에서 앱 테스트 165개·입력 엔진 테스트 119개 및 격리 실행 검사가 통과했다. Astra 후속 적대적 리뷰에서 확정한 코드 회귀·호환성·레이아웃 결함은 없다. 빌드 11 로컬 설치 후보의 Developer ID 서명·Apple 공증·Gatekeeper·체크섬·앱/Helper 내용 검사와 설정·권한 보존도 확인했다. 공개 DMG는 병합 후 최종 main 커밋에서 새로 빌드한다.
+최종 main 커밋 `bd891c5`에서 macOS 26.5.2·Xcode 26.6의 앱 테스트 165개·입력 엔진 테스트 119개 및 단독 격리 실행 검사가 통과했다. Astra 후속 적대적 리뷰에서 확정한 코드 회귀·호환성·레이아웃 결함은 없다. 공개 DMG를 이 커밋에서 새로 빌드해 Developer ID 서명·Apple 공증·Gatekeeper·체크섬·앱/Helper 내용 검사를 통과했다. 공개된 파일을 다시 다운로드해 체크섬이 일치하는 것도 확인했다. 앞선 로컬 빌드 11 설치에서는 설정·권한 보존을 확인했다.
 
 실제 상단바 수동 드래그, 한글 IME 필터 전환, VoiceOver, 밝은 외관의 추가 확인 및 외부 앱의 최종 입력 결과는 전체 통과로 처리하지 않았다. 상세 코드·단위 검증과 실제 사용 검증의 경계는 [작업계획 및 검증 기록](SETTINGS_SCROLL_AND_CLIPBOARD_IMAGE_FILTER_PLAN.md)에 남긴다. 화면 크기에 따른 상대 크기 대응은 이번 릴리스에 포함하지 않는다.
+
+
+## 공개 산출물
+
+- [GitHub Release v0.2.3](https://github.com/Sharknia/TidyTap/releases/tag/v0.2.3)
+- [TidyTap-0.2.3.dmg](https://github.com/Sharknia/TidyTap/releases/download/v0.2.3/TidyTap-0.2.3.dmg)
+- [SHA-256 파일](https://github.com/Sharknia/TidyTap/releases/download/v0.2.3/TidyTap-0.2.3.dmg.sha256)
+- 태그 커밋: `bd891c5ebe33bcaeffdce4c5218712bf9d894c5b`
+- SHA-256: `6292004219209a3f0493daad7d4f45da93252a5a6e32ed0068c726888f49582f`
+
+공개 파일 게시 후 서명된 Sparkle 0.2.3/빌드 11 피드를 반영한다. 기존 설치본에서 다운로드·교체·재실행하는 자동 업데이트 전체 흐름은 별도 실사용 검증이 남아 있다.
