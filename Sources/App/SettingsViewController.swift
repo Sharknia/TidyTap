@@ -141,13 +141,13 @@ final class SettingsViewController: NSViewController {
         NSLayoutConstraint.activate([
             scrollView.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             scrollView.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-            scrollView.topAnchor.constraint(equalTo: root.topAnchor),
+            scrollView.topAnchor.constraint(equalTo: root.safeAreaLayoutGuide.topAnchor),
             scrollView.bottomAnchor.constraint(equalTo: root.bottomAnchor),
             contentDocumentView.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
             contentDocumentView.heightAnchor.constraint(greaterThanOrEqualTo: scrollView.contentView.heightAnchor),
             contentStack.leadingAnchor.constraint(equalTo: contentDocumentView.leadingAnchor, constant: 28),
             contentStack.trailingAnchor.constraint(equalTo: contentDocumentView.trailingAnchor, constant: -28),
-            contentStack.topAnchor.constraint(equalTo: contentDocumentView.topAnchor, constant: 44),
+            contentStack.topAnchor.constraint(equalTo: contentDocumentView.topAnchor, constant: 22),
             contentStack.bottomAnchor.constraint(equalTo: contentDocumentView.bottomAnchor, constant: -18)
         ])
 
