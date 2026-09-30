@@ -222,15 +222,15 @@ final class ClipboardHistoryAppHost: NSObject {
                     TidyTapIPC.postClipboardHistoryPasteResult(sessionID: session.id, error: error)
                     TidyTapClipboardPasteLog.record(
                         "helperResult session=\(sessionLabel) reason=\(error ?? "pasteEventPosted") " +
-                        "focusRetries=\(retries) originalMatched=true currentAX=\(lastFocusError ?? 0)"
+                        "focusRetries=\(retries) recoveryOriginalMatched=true recoveryAX=\(lastFocusError ?? 0)"
                     )
                 case .failed(let reason, let retries, let axError, let originalMatched):
                     TidyTapIPC.postClipboardHistoryPasteResult(sessionID: session.id, error: reason)
                     TidyTapClipboardPasteLog.record(
                         "helperResult session=\(sessionLabel) reason=\(reason) " +
-                        "focusRetries=\(retries) originalMatched=\(originalMatched) " +
+                        "focusRetries=\(retries) recoveryOriginalMatched=\(originalMatched) " +
                         "captureAX=\(session.focusCaptureError) originalPresent=\(session.focusedElement != nil) " +
-                        "currentAX=\(axError.map(String.init) ?? lastFocusError.map(String.init) ?? "none")"
+                        "recoveryAX=\(axError.map(String.init) ?? lastFocusError.map(String.init) ?? "none")"
                     )
                 case .expired(let retries, let originalMatched):
                     TidyTapIPC.postClipboardHistoryPasteResult(
@@ -238,8 +238,8 @@ final class ClipboardHistoryAppHost: NSObject {
                     )
                     TidyTapClipboardPasteLog.record(
                         "helperResult session=\(sessionLabel) reason=focusDeadlineExceeded " +
-                        "focusRetries=\(retries) originalMatched=\(originalMatched) " +
-                        "captureAX=\(session.focusCaptureError) currentAX=\(lastFocusError.map(String.init) ?? "none")"
+                        "focusRetries=\(retries) recoveryOriginalMatched=\(originalMatched) " +
+                        "captureAX=\(session.focusCaptureError) recoveryAX=\(lastFocusError.map(String.init) ?? "none")"
                     )
                 case .superseded:
                     TidyTapIPC.postClipboardHistoryPasteResult(sessionID: session.id, error: "superseded")
@@ -366,7 +366,6 @@ final class ClipboardHistoryAppHost: NSObject {
         var keyPosted = false
         let error = ClipboardPasteCommitGate.perform(
             validate: {
-                defer { phase = "beforeKey" }
                 return self.validateCommitFocus(
                     for: session, deadlineContinuousTime: deadlineContinuousTime, phase: phase
                 )
@@ -389,6 +388,10 @@ final class ClipboardHistoryAppHost: NSObject {
                 }
                 keyPosted = true
                 self.recordStage("keyPost keyPosted=true")
+            },
+            observePhase: { observed in
+                phase = observed
+                self.recordStage("commitStep phase=\(observed)")
             }
         )
         recordStage("commitResult phase=\(phase) reason=\(error ?? "pasteEventPosted") clipboardWritten=\(clipboardWritten) keyPosted=\(keyPosted)")

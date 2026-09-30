@@ -94,7 +94,16 @@ enum TidyTapClipboardPasteLog {
     }
 
     static var directory: URL {
-        FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
+        directory(for: TidyTapLaunchSmoke.current())
+    }
+
+    static func directory(for smoke: TidyTapLaunchSmoke?) -> URL {
+        if let smoke {
+            return TidyTapProduct.workerLockURL(preferencesSuite: smoke.preferencesSuite)
+                .deletingLastPathComponent()
+                .appendingPathComponent("paste-logs", isDirectory: true)
+        }
+        return FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Logs/TidyTap", isDirectory: true)
     }
 

@@ -80,6 +80,20 @@ final class SettingsViewControllerTests: XCTestCase {
         XCTAssertNotEqual(TidyTapStrings.clipboardPasteNotice(for: "accessibilityDenied"), stopped)
     }
 
+    func testLaunchSmokePasteLogsCannotClearProductionLogs() throws {
+        let suite = TidyTapLaunchSmoke.suitePrefix + "PasteLogs." + UUID().uuidString
+        let smoke = TidyTapLaunchSmoke(preferencesSuite: suite)
+        let testDirectory = TidyTapClipboardPasteLog.directory(for: smoke)
+        let productionDirectory = TidyTapClipboardPasteLog.directory(for: nil)
+        XCTAssertNotEqual(testDirectory, productionDirectory)
+        XCTAssertEqual(testDirectory.deletingLastPathComponent().lastPathComponent, suite)
+        defer { try? FileManager.default.removeItem(at: testDirectory.deletingLastPathComponent()) }
+        XCTAssertTrue(TidyTapClipboardPasteLog.append("isolated paste attempt", in: testDirectory))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: testDirectory.appendingPathComponent("clipboard-paste.log").path))
+        XCTAssertTrue(TidyTapClipboardPasteLog.clear(in: testDirectory))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: testDirectory.appendingPathComponent("clipboard-paste.log").path))
+    }
+
     func testPasteFeedbackPreservesFocusAndUsesNativeMaterial() {
         let feedback = ClipboardPasteFeedbackPanelController()
         let keyWindow = NSApp.keyWindow
