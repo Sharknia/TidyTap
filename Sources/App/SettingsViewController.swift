@@ -147,7 +147,7 @@ final class SettingsViewController: NSViewController {
             contentDocumentView.heightAnchor.constraint(greaterThanOrEqualTo: scrollView.contentView.heightAnchor),
             contentStack.leadingAnchor.constraint(equalTo: contentDocumentView.leadingAnchor, constant: 28),
             contentStack.trailingAnchor.constraint(equalTo: contentDocumentView.trailingAnchor, constant: -28),
-            contentStack.topAnchor.constraint(equalTo: contentDocumentView.topAnchor, constant: 44),
+            contentStack.topAnchor.constraint(equalTo: contentDocumentView.topAnchor, constant: 22),
             contentStack.bottomAnchor.constraint(equalTo: contentDocumentView.bottomAnchor, constant: -18)
         ])
 

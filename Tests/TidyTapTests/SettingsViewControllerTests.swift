@@ -955,6 +955,35 @@ final class SettingsViewControllerTests: XCTestCase {
         }
     }
 
+    func testSettingsScrollStaysBelowWindowButtonsAtEveryPosition() throws {
+        let controller = makeController()
+        let window = NSWindow(contentViewController: controller)
+        window.styleMask = [.titled, .closable, .miniaturizable]
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.setContentSize(NSSize(width: 560, height: 480))
+        window.contentView?.layoutSubtreeIfNeeded()
+        let scroll = try XCTUnwrap(controller.view.subviews.compactMap { $0 as? NSScrollView }.first)
+        let document = try XCTUnwrap(scroll.documentView)
+        let button = try XCTUnwrap(window.standardWindowButton(.closeButton))
+        let frameView = try XCTUnwrap(button.superview?.superview)
+        let buttonRect = button.convert(button.bounds, to: frameView)
+        for offset in [CGFloat(0), (document.bounds.height - scroll.contentSize.height) / 2,
+                       document.bounds.height - scroll.contentSize.height] {
+            scroll.contentView.scroll(to: NSPoint(x: 0, y: offset))
+            scroll.reflectScrolledClipView(scroll.contentView)
+            XCTAssertFalse(scroll.convert(scroll.bounds, to: frameView).intersects(buttonRect))
+            let viewport = scroll.convert(scroll.bounds, to: nil)
+            XCTAssertLessThanOrEqual(viewport.maxY, window.contentLayoutRect.maxY + 1,
+                                     "viewport: \(viewport), content: \(window.contentLayoutRect)")
+        }
+        let general = try XCTUnwrap(findView(
+            identifier: SettingsViewController.ControlIdentifier.generalGroup, in: controller.view
+        ))
+        general.scrollToVisible(general.bounds)
+        XCTAssertTrue(scroll.documentVisibleRect.contains(general.convert(general.bounds, to: document)))
+    }
+
     func testShortViewportCanScrollToGeneralSettingsAndToggleKeepsHeight() throws {
         let controller = makeController()
         controller.view.setFrameSize(NSSize(width: 560, height: 480))
