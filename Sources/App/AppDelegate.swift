@@ -184,8 +184,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
         window.setContentSize(contentSizeThatFitsVisibleFrame(for: window))
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
-        window.backgroundColor = .clear
-        window.isOpaque = false
+        window.backgroundColor = .windowBackgroundColor
+        window.isOpaque = true
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         window.center()
