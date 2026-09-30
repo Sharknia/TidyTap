@@ -202,7 +202,7 @@ enum TidyTapClipboardPasteLog {
 /// Confirmed local retention and size bounds. Deletion controls are decided separately.
 enum TidyTapClipboardPolicy {
     static let retention: TimeInterval = 7 * 24 * 60 * 60
-    static let maximumEntries = 100
+    static let maximumEntries = 1_000
     static let maximumBytes = 50 * 1024 * 1024
     static let maximumItemBytes = 10 * 1024 * 1024
 }
