@@ -47,7 +47,7 @@ To create a signed archive, copy `Config/LocalSigning.xcconfig.example` to the g
 - Earlier physical-Mac checks used an Apple M3 Pro MacBook Pro on macOS 26.5.2. Finder-specific results are in [Finder validation](FINDER_CUT_PASTE_VALIDATION.md).
 - Remaining live checks include macOS 15.1 runtime, physical Caps Lock and mouse coverage, permission changes, login/helper lifetime, and removal. Clipboard history has [separate acceptance status](CLIPBOARD_HISTORY_ACCEPTANCE_STATUS.md); passing its code tests does not complete these live checks.
 
-Project version: `0.2.4` (build 12). Published versions and signed downloads are listed on [GitHub Releases](https://github.com/Sharknia/TidyTap/releases).
+Project version: `0.2.5` (build 13). Published versions and signed downloads are listed on [GitHub Releases](https://github.com/Sharknia/TidyTap/releases).
 
 See the [MVP work plan](MVP_PLAN.md) and [Korean README](../README.ko.md).
 

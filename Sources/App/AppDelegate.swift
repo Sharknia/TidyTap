@@ -435,7 +435,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
                     }
                 }
             )
-            launchSmoke?.report("clipboard-panel-visible=\(panel.isVisible) entries=\(entries.count)")
+            launchSmoke?.report("clipboard-panel-visible=\(panel.isVisible) entries=\(entries.count) window=\(panel.panel.windowNumber)")
         } catch {
             showClipboardOpenError()
         }
