@@ -1,11 +1,53 @@
 import AppKit
 import CoreGraphics
 import XCTest
-import TidyTapInputEngine
+@testable import TidyTapInputEngine
 import ServiceManagement
 
 @MainActor
 final class TidyTapSettingsTests: XCTestCase {
+    func testClipboardPolicyKeepsNewestThousandAndSearchesThem() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("tidytap-thousand-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ClipboardHistoryStore(
+            directory: directory, retention: TidyTapClipboardPolicy.retention,
+            maximumEntries: TidyTapClipboardPolicy.maximumEntries,
+            maximumBytes: TidyTapClipboardPolicy.maximumBytes,
+            maximumItemBytes: TidyTapClipboardPolicy.maximumItemBytes
+        )
+        let encoder = PropertyListEncoder()
+        encoder.outputFormat = .binary
+        let now = Date()
+        for index in 0...1_000 {
+            let entry = ClipboardHistoryEntry(
+                id: UUID(), copiedAt: now.addingTimeInterval(Double(index)),
+                content: .text(plain: "record-\(index) " + String(repeating: "x", count: 2_048), rtf: nil, html: nil)
+            )
+            try encoder.encode(entry).write(to: directory.appendingPathComponent("\(index).clip"))
+        }
+        let clock = ContinuousClock()
+        let started = clock.now
+        let entries = try store.entries(now: now.addingTimeInterval(1_001))
+        let loaded = clock.now
+        XCTAssertEqual(entries.count, 1_000)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.appendingPathComponent("0.clip").path))
+        let newest = try store.add(.text(plain: "newest-copy", rtf: nil, html: nil), copiedAt: now.addingTimeInterval(1_002))
+        let refreshed = try store.entries(now: now.addingTimeInterval(1_003))
+        XCTAssertEqual(refreshed.count, 1_000)
+        XCTAssertEqual(refreshed.first?.id, newest.id)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.appendingPathComponent("1.clip").path))
+        let panel = ClipboardHistoryPanelController()
+        panel.updateEntries(refreshed)
+        XCTAssertEqual(panel.visibleCount, 1_000)
+        panel.search("newest-copy")
+        for _ in 0..<100 where panel.selectedEntry?.id != newest.id {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(panel.visibleCount, 1)
+        XCTAssertEqual(panel.selectedEntry?.id, newest.id)
+        print("1000개 합성 기록 조회: \(started.duration(to: loaded)), 새 복사·재조회·패널 검색: \(loaded.duration(to: clock.now))")
+    }
+
     func testOnlyInstalledAppRunsOutsideIsolatedDevelopment() {
         let installed = TidyTapProduct.installedAppURL
         let copy = URL(fileURLWithPath: "/tmp/TidyTap.app", isDirectory: true)

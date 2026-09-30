@@ -46,7 +46,7 @@ Scripts/launch-smoke.sh
 - 이전 실기기 확인은 Apple M3 Pro MacBook Pro의 macOS 26.5.2 환경에서 수행했습니다. Finder 개별 결과는 [Finder 검증 기록](FINDER_CUT_PASTE_VALIDATION.md)에 있습니다.
 - macOS 15.1 실제 실행, 물리 Caps Lock·마우스 동작, 권한 변경, 로그인·보조 프로그램 수명, 제거 순서는 남아 있습니다. 클립보드 히스토리의 [수용 기준 현황](CLIPBOARD_HISTORY_ACCEPTANCE_STATUS.md)은 별도이며 코드 테스트 통과를 실제 사용 검증 완료로 취급하지 않습니다.
 
-프로젝트 버전: `0.2.3`(빌드 11). 공개된 버전과 서명된 다운로드 파일은 [GitHub Releases](https://github.com/Sharknia/TidyTap/releases)에서 확인하세요.
+프로젝트 버전: `0.2.4`(빌드 12). 공개된 버전과 서명된 다운로드 파일은 [GitHub Releases](https://github.com/Sharknia/TidyTap/releases)에서 확인하세요.
 
 [MVP 작업 계획](MVP_PLAN.md)과 [English README](../README.md)도 참고하세요.
 
@@ -61,7 +61,7 @@ Scripts/launch-smoke.sh
 
 각 기능은 독립적으로 토글할 수 있습니다. 설정 창에는 **로그인할 때 시작** 옵션도 있습니다. 마우스 기능을 사용하려면 **TidyTap**에 손쉬운 사용 권한을 허용하세요. Worker는 같은 앱 내부 실행 파일이며 별도의 권한 대상이 아닙니다. TidyTap은 Dock에 표시되는 일반 앱이며, `Command-Q`로 설정 앱을 종료해도 켜진 helper는 계속 실행됩니다.
 
-0.2.0에는 클립보드 히스토리와 Sparkle 업데이트가 추가됐습니다. 기존 보조 프로그램이 새 복사를 감시하고, 앱은 검색·미리보기 패널을 열어 선택한 기록 ID를 보조 프로그램에 전달합니다. 지원 텍스트·이미지는 이 Mac에 7일·최대 100개·총 50 MiB·항목당 10 MiB로 보관합니다. 완전히 같은 재복사 또는 성공 응답을 받은 붙여넣기 요청은 한 항목을 맨 위로 올리고 보관 기간을 갱신합니다. 클립보드 읽기 상태는 손쉬운 사용 권한과 구분합니다. [요구사항](CLIPBOARD_HISTORY_URS.md), [작업 계획](CLIPBOARD_HISTORY_WORK_PLAN.md), [수용 기준 현황](CLIPBOARD_HISTORY_ACCEPTANCE_STATUS.md)에 구현 범위와 남은 실제 검증을 기록합니다. 서명 DMG와 업데이트 피드 절차는 [릴리스 문서](RELEASE.md)를 참고하세요.
+0.2.0에는 클립보드 히스토리와 Sparkle 업데이트가 추가됐습니다. 기존 보조 프로그램이 새 복사를 감시하고, 앱은 검색·미리보기 패널을 열어 선택한 기록 ID를 보조 프로그램에 전달합니다. 지원 텍스트·이미지는 이 Mac에 7일·최대 1,000개·총 50 MiB·항목당 10 MiB로 보관합니다. 완전히 같은 재복사 또는 성공 응답을 받은 붙여넣기 요청은 한 항목을 맨 위로 올리고 보관 기간을 갱신합니다. 클립보드 읽기 상태는 손쉬운 사용 권한과 구분합니다. [요구사항](CLIPBOARD_HISTORY_URS.md), [작업 계획](CLIPBOARD_HISTORY_WORK_PLAN.md), [수용 기준 현황](CLIPBOARD_HISTORY_ACCEPTANCE_STATUS.md)에 구현 범위와 남은 실제 검증을 기록합니다. 서명 DMG와 업데이트 피드 절차는 [릴리스 문서](RELEASE.md)를 참고하세요.
 
 Finder 잘라내기는 0.1.3 릴리스에 포함된 기능입니다. 이동 명령을 보내면 기억을 지우므로 Finder에서 이동을 취소하거나 실패하면 다시 `⌘X`가 필요합니다. 바탕화면·다른 파일 관리자·우클릭 붙여넣기는 변환하지 않습니다. [설계](FINDER_CUT_PASTE_PLAN.md)와 [검증 범위](FINDER_CUT_PASTE_VALIDATION.md)를 참고하세요.
 
