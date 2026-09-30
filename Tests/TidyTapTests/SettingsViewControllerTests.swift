@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import TidyTapInputEngine
 import XCTest
 
@@ -77,6 +78,54 @@ final class SettingsViewControllerTests: XCTestCase {
         XCTAssertFalse(messages.contains(TidyTapStrings.clipboardPasteFailureMessage(for: nil)))
     }
 
+    func testClipboardPasteLogIsPrivateAndBounded() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("tidytap-paste-log-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        for index in 0..<600 {
+            TidyTapClipboardPasteLog.append("test event=\(index) " + String(repeating: "x", count: 300), in: directory)
+        }
+        TidyTapClipboardPasteLog.append("last event\nwith newline", in: directory)
+
+        let active = directory.appendingPathComponent("clipboard-paste.log")
+        let previous = directory.appendingPathComponent("clipboard-paste.log.1")
+        for file in [active, previous] {
+            let attributes = try FileManager.default.attributesOfItem(atPath: file.path)
+            XCTAssertLessThanOrEqual(try Data(contentsOf: file).count, TidyTapClipboardPasteLog.maximumFileBytes)
+            XCTAssertEqual((attributes[.posixPermissions] as? NSNumber)?.intValue, 0o600)
+        }
+        let directoryAttributes = try FileManager.default.attributesOfItem(atPath: directory.path)
+        XCTAssertEqual((directoryAttributes[.posixPermissions] as? NSNumber)?.intValue, 0o700)
+        let latest = try String(contentsOf: active, encoding: .utf8)
+        XCTAssertTrue(latest.contains("last event with newline"))
+        XCTAssertFalse(latest.contains("last event\nwith newline"))
+    }
+
+    func testClipboardPasteLogExpiresOldPreviewsAndCanBeCleared() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("tidytap-paste-expiry-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let now = Date()
+        TidyTapClipboardPasteLog.append(
+            "private preview from old attempt", in: directory,
+            now: now.addingTimeInterval(-TidyTapClipboardPasteLog.maximumAge - 1)
+        )
+        TidyTapClipboardPasteLog.append("new attempt", in: directory, now: now)
+        let active = directory.appendingPathComponent("clipboard-paste.log")
+        let contents = try String(contentsOf: active, encoding: .utf8)
+        XCTAssertTrue(contents.contains("new attempt"))
+        XCTAssertFalse(contents.contains("private preview from old attempt"))
+        let lockFD = open(directory.appendingPathComponent("clipboard-paste.lock").path, O_RDWR)
+        XCTAssertGreaterThanOrEqual(lockFD, 0)
+        defer { close(lockFD) }
+        XCTAssertEqual(flock(lockFD, LOCK_EX), 0)
+        TidyTapClipboardPasteLog.record("queued private preview", in: directory)
+        XCTAssertTrue(TidyTapClipboardPasteLog.clear(in: directory))
+        XCTAssertEqual(flock(lockFD, LOCK_UN), 0)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: active.path))
+        XCTAssertFalse(FileManager.default.fileExists(
+            atPath: directory.appendingPathComponent("clipboard-paste.log.1").path
+        ))
+    }
+
     func testClipboardPanelSelectsNewestAndFiltersTextWithoutOpeningAWindow() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("tidytap-panel-\(UUID())")
         defer { try? FileManager.default.removeItem(at: directory) }
@@ -91,6 +140,8 @@ final class SettingsViewControllerTests: XCTestCase {
         let panel = ClipboardHistoryPanelController()
         panel.updateEntries([a, c, b])
         XCTAssertEqual(panel.selectedEntry?.id, c.id)
+        XCTAssertEqual(panel.sourcePosition(for: c.id).index, 0)
+        XCTAssertEqual(panel.sourcePosition(for: c.id).count, 3)
         XCTAssertEqual(panel.visibleCount, 3)
         panel.search("첫 번째")
         XCTAssertEqual(panel.selectedEntry?.id, a.id)
@@ -102,8 +153,12 @@ final class SettingsViewControllerTests: XCTestCase {
         panel.refreshPreservingSelection([a, b, c, d])
         XCTAssertEqual(panel.visibleCount, 4)
         XCTAssertEqual(panel.selectedEntry?.id, c.id, "new copies do not interrupt the current selection")
+        XCTAssertEqual(panel.sourcePosition(for: c.id).index, 1)
+        XCTAssertEqual(panel.sourcePosition(for: c.id).count, 4)
         panel.refreshAfterDeleting([c, a], previousRow: 1)
         XCTAssertEqual(panel.selectedEntry?.id, a.id)
+        XCTAssertEqual(panel.sourcePosition(for: a.id).index, 1)
+        XCTAssertEqual(panel.sourcePosition(for: a.id).count, 2)
         panel.refreshAfterDeleting([c], previousRow: 1)
         XCTAssertEqual(panel.selectedEntry?.id, c.id)
         XCTAssertFalse(panel.isVisible)

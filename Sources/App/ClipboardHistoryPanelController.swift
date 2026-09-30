@@ -98,15 +98,20 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
         panel.delegate = self
         buildContent()
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .keyUp]) { [weak self] event in
-            self?.handleKey(event) ?? event
+            guard let self else { return event }
+            return self.handleKey(event)
         }
     }
 
     var isVisible: Bool { panel.isVisible }
+    var searchQuery: String { searchField.stringValue }
     var selectedEntry: ClipboardHistoryEntry? {
         filtered.indices.contains(tableView.selectedRow) ? filtered[tableView.selectedRow] : nil
     }
     var visibleCount: Int { filtered.count }
+    func sourcePosition(for id: UUID) -> (index: Int, count: Int) {
+        (entries.firstIndex(where: { $0.id == id }) ?? -1, entries.count)
+    }
 
     func updateEntries(_ entries: [ClipboardHistoryEntry], latestCopyTooLarge: Bool = false) {
         self.latestCopyTooLarge = latestCopyTooLarge

@@ -152,22 +152,30 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(notification.userInfo?.count, 3, "clipboard contents stay outside distributed notifications")
     }
 
-    func testClipboardPasteRequestCarriesOnlyEntryIDAndStyle() throws {
+    func testClipboardPasteRequestCarriesEntryIDStyleAndDeadline() throws {
         let sessionID = UUID()
         let entryID = UUID()
+        let deadline: TimeInterval = 1234.5
         let request = Notification(
             name: TidyTapIPC.clipboardHistoryPaste,
             userInfo: [
                 TidyTapIPC.clipboardSessionUserInfoKey: sessionID.uuidString,
                 TidyTapIPC.clipboardEntryUserInfoKey: entryID.uuidString,
-                TidyTapIPC.clipboardFormattedUserInfoKey: true
+                TidyTapIPC.clipboardFormattedUserInfoKey: true,
+                TidyTapIPC.clipboardDeadlineUserInfoKey: deadline
             ]
         )
         let decoded = try XCTUnwrap(TidyTapIPC.clipboardPasteRequest(in: request))
         XCTAssertEqual(decoded.sessionID, sessionID)
         XCTAssertEqual(decoded.entryID, entryID)
         XCTAssertTrue(decoded.formatted)
-        XCTAssertEqual(request.userInfo?.count, 3, "clipboard contents stay outside distributed notifications")
+        XCTAssertEqual(decoded.deadlineContinuousTime, deadline)
+        XCTAssertEqual(request.userInfo?.count, 4, "clipboard contents stay outside distributed notifications")
+        var missingDeadline = request.userInfo ?? [:]
+        missingDeadline.removeValue(forKey: TidyTapIPC.clipboardDeadlineUserInfoKey)
+        XCTAssertNil(TidyTapIPC.clipboardPasteRequest(in: Notification(
+            name: TidyTapIPC.clipboardHistoryPaste, userInfo: missingDeadline
+        )))
     }
 
     func testPermissionSettingsURLsTargetTheirExactPrivacyPanes() {
