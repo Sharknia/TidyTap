@@ -164,6 +164,145 @@ final class SettingsViewControllerTests: XCTestCase {
         XCTAssertFalse(panel.isVisible)
     }
 
+    func testImageFilterPreservesSearchSelectionAndDeletionWithinFilteredRows() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("tidytap-image-filter-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ClipboardHistoryStore(directory: directory, retention: 600,
+            maximumEntries: 10, maximumBytes: 3_000_000, maximumItemBytes: 1_500_000)
+        let now = Date()
+        let text = try store.add(.text(plain: "needle", rtf: nil, html: nil), copiedAt: now)
+        let image = try store.add(.image(data: Data(), type: .png), copiedAt: now.addingTimeInterval(-1))
+        let older = try store.add(.image(data: Data(), type: .tiff), copiedAt: now.addingTimeInterval(-2))
+        let panel = ClipboardHistoryPanelController()
+        panel.updateEntries([older, text, image])
+        panel.search("needle")
+        let root = try XCTUnwrap(panel.panel.contentView)
+        let search = try XCTUnwrap(root.subviews.compactMap { $0 as? NSSearchField }.first)
+        let filter = try XCTUnwrap(root.subviews.compactMap { $0 as? NSSegmentedControl }.first)
+        func switchTo(_ segment: Int) throws {
+            filter.selectedSegment = segment
+            XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(filter.action), to: filter.target, from: filter))
+        }
+        try switchTo(1)
+        XCTAssertEqual(panel.visibleCount, 2)
+        XCTAssertEqual(panel.selectedEntry?.id, image.id)
+        XCTAssertFalse(search.isEnabled)
+        XCTAssertEqual(search.stringValue, "needle")
+        XCTAssertEqual(panel.searchQuery, "")
+        try switchTo(0)
+        XCTAssertTrue(search.isEnabled)
+        XCTAssertEqual(panel.searchQuery, "needle")
+        XCTAssertEqual(panel.selectedEntry?.id, text.id)
+        try switchTo(1)
+        let newerText = try store.add(text.content, copiedAt: now.addingTimeInterval(1))
+        let newerImage = try store.add(image.content, copiedAt: now.addingTimeInterval(2))
+        panel.refreshPreservingSelection([older, text, image, newerText, newerImage])
+        XCTAssertEqual(panel.visibleCount, 3)
+        XCTAssertEqual(panel.selectedEntry?.id, image.id)
+        panel.refreshAfterDeleting([older, text, newerText, newerImage], previousRow: 1)
+        XCTAssertEqual(panel.selectedEntry?.id, older.id)
+        panel.refreshAfterDeleting([text, newerText], previousRow: 1)
+        XCTAssertEqual(panel.visibleCount, 0)
+        XCTAssertNil(panel.selectedEntry)
+        XCTAssertTrue(root.subviews.compactMap { $0 as? NSTextField }
+            .contains { !$0.isHidden && $0.stringValue == String(localized: "No saved images") })
+        let initialSize = panel.panel.frame.size
+        panel.panel.setContentSize(NSSize(width: 480, height: root.bounds.height))
+        root.layoutSubtreeIfNeeded()
+        XCTAssertLessThanOrEqual(search.frame.maxX + 8, filter.frame.minX)
+        XCTAssertLessThanOrEqual(filter.frame.maxX, root.bounds.maxX - 8)
+        XCTAssertEqual(panel.panel.frame.height, initialSize.height, accuracy: 1)
+    }
+
+    func testImageFilterCannotBypassOversizedCopyProtectionWithRetainedSearch() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("tidytap-image-filter-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ClipboardHistoryStore(directory: directory, retention: 600,
+            maximumEntries: 10, maximumBytes: 3_000_000, maximumItemBytes: 1_500_000)
+        let text = try store.add(.text(plain: "needle", rtf: nil, html: nil))
+        let image = try store.add(.image(data: Data(), type: .png), copiedAt: Date().addingTimeInterval(-1))
+        let panel = ClipboardHistoryPanelController()
+        panel.updateEntries([text, image], latestCopyTooLarge: true)
+        panel.search("needle")
+        XCTAssertEqual(panel.selectedEntry?.id, text.id)
+        let root = try XCTUnwrap(panel.panel.contentView)
+        let filter = try XCTUnwrap(root.subviews.compactMap { $0 as? NSSegmentedControl }.first)
+        filter.selectedSegment = 1
+        XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(filter.action), to: filter.target, from: filter))
+        XCTAssertEqual(panel.visibleCount, 1)
+        XCTAssertNil(panel.selectedEntry)
+        XCTAssertTrue(root.subviews.compactMap { $0 as? NSTextField }
+            .contains { !$0.isHidden && $0.stringValue.contains("10 MiB") })
+        panel.refreshPreservingSelection([text, image], latestCopyTooLarge: true)
+        XCTAssertNil(panel.selectedEntry)
+        let table = try XCTUnwrap(root.subviews.compactMap { $0 as? NSScrollView }
+            .compactMap { $0.documentView as? NSTableView }.first)
+        table.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        XCTAssertEqual(panel.selectedEntry?.id, image.id)
+        panel.refreshPreservingSelection([text, image], latestCopyTooLarge: true)
+        XCTAssertEqual(panel.selectedEntry?.id, image.id)
+    }
+
+    func testImageFilterFocusAndReopenReset() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("tidytap-image-filter-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ClipboardHistoryStore(directory: directory, retention: 600,
+            maximumEntries: 10, maximumBytes: 3_000_000, maximumItemBytes: 1_500_000)
+        let entry = try store.add(.text(plain: "needle", rtf: nil, html: nil))
+        let panel = ClipboardHistoryPanelController()
+        defer { panel.close() }
+        panel.show(entries: [entry], displayID: nil, pasteFormattedByDefault: false, latestCopyTooLarge: false,
+                   onPaste: { _, _ in XCTFail("filter changes must not paste") }, onDelete: { _, _ in }, onCancel: { _ in })
+        let root = try XCTUnwrap(panel.panel.contentView)
+        let search = try XCTUnwrap(root.subviews.compactMap { $0 as? NSSearchField }.first)
+        let filter = try XCTUnwrap(root.subviews.compactMap { $0 as? NSSegmentedControl }.first)
+        panel.search("needle")
+        filter.selectedSegment = 1
+        XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(filter.action), to: filter.target, from: filter))
+        XCTAssertTrue(panel.panel.firstResponder === filter)
+        filter.selectedSegment = 0
+        XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(filter.action), to: filter.target, from: filter))
+        XCTAssertTrue(panel.panel.firstResponder === search.currentEditor())
+        XCTAssertEqual(panel.searchQuery, "needle")
+        filter.selectedSegment = 1
+        XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(filter.action), to: filter.target, from: filter))
+        panel.close()
+        panel.show(entries: [entry], displayID: nil, pasteFormattedByDefault: false, latestCopyTooLarge: false,
+                   onPaste: { _, _ in XCTFail("reopening must not paste") }, onDelete: { _, _ in }, onCancel: { _ in })
+        XCTAssertEqual(filter.selectedSegment, 0)
+        XCTAssertTrue(search.isEnabled)
+        XCTAssertEqual(panel.searchQuery, "")
+        XCTAssertEqual(panel.visibleCount, 1)
+        XCTAssertTrue(panel.panel.firstResponder === search.currentEditor())
+    }
+
+    func testImageFilterCancelsPendingTextSearch() async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("tidytap-image-filter-\(UUID())")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = try ClipboardHistoryStore(directory: directory, retention: 600,
+            maximumEntries: 10, maximumBytes: 3_000_000, maximumItemBytes: 1_500_000)
+        let text = try store.add(.text(plain: String(repeating: "x", count: 1_100_000) + "needle", rtf: nil, html: nil))
+        let image = try store.add(.image(data: Data(), type: .png), copiedAt: Date().addingTimeInterval(-1))
+        let panel = ClipboardHistoryPanelController()
+        panel.updateEntries([text, image])
+        panel.search("needle")
+        XCTAssertNil(panel.selectedEntry)
+        let root = try XCTUnwrap(panel.panel.contentView)
+        let filter = try XCTUnwrap(root.subviews.compactMap { $0 as? NSSegmentedControl }.first)
+        filter.selectedSegment = 1
+        XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(filter.action), to: filter.target, from: filter))
+        XCTAssertEqual(panel.selectedEntry?.id, image.id)
+        try await Task.sleep(for: .milliseconds(200))
+        XCTAssertEqual(panel.visibleCount, 1)
+        XCTAssertEqual(panel.selectedEntry?.id, image.id, "a completed text search cannot replace image results")
+        filter.selectedSegment = 0
+        XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(filter.action), to: filter.target, from: filter))
+        for _ in 0..<100 where panel.selectedEntry?.id != text.id {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(panel.selectedEntry?.id, text.id)
+    }
+
     func testOversizedLatestCopyDoesNotOfferAnOlderItemForImmediatePaste() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("tidytap-oversized-panel-\(UUID())")
         defer { try? FileManager.default.removeItem(at: directory) }

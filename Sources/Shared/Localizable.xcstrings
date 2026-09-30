@@ -1,6 +1,11 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "All" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "All"}}, "ko": {"stringUnit": {"state": "translated", "value": "전체"}}}} ,
+    "Images" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Images"}}, "ko": {"stringUnit": {"state": "translated", "value": "이미지"}}}} ,
+    "Clipboard content filter" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Clipboard content filter"}}, "ko": {"stringUnit": {"state": "translated", "value": "클립보드 유형 필터"}}}} ,
+    "Text search is available in All" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Text search is available in All"}}, "ko": {"stringUnit": {"state": "translated", "value": "텍스트 검색은 전체에서 사용할 수 있습니다"}}}} ,
+    "No saved images" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "No saved images"}}, "ko": {"stringUnit": {"state": "translated", "value": "저장된 이미지가 없습니다"}}}} ,
     "Another TidyTap is running" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Another TidyTap is running" } }, "ko" : { "stringUnit" : { "state" : "translated", "value" : "다른 TidyTap이 실행 중입니다" } } } },
     "Move TidyTap to Applications and open it from there." : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Move TidyTap to Applications and open it from there." } }, "ko" : { "stringUnit" : { "state" : "translated", "value" : "TidyTap을 응용 프로그램 폴더로 옮긴 뒤 거기에서 실행하세요." } } } },
     "Open the installed TidyTap" : { "localizations" : { "en" : { "stringUnit" : { "state" : "translated", "value" : "Open the installed TidyTap" } }, "ko" : { "stringUnit" : { "state" : "translated", "value" : "설치된 TidyTap을 실행하세요" } } } },

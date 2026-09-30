@@ -56,6 +56,7 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
 
     let panel: NSPanel
     private let searchField = NSSearchField()
+    private let contentFilter = NSSegmentedControl()
     private let listScroll = NSScrollView()
     private let tableView = NSTableView()
     private let textPreview = NSTextView()
@@ -104,7 +105,10 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
     }
 
     var isVisible: Bool { panel.isVisible }
-    var searchQuery: String { searchField.stringValue }
+    var searchQuery: String { imagesOnly ? "" : searchField.stringValue }
+    private var imagesOnly: Bool { contentFilter.selectedSegment == 1 }
+    private var effectiveQuery: String { searchQuery.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var preventsAutomaticSelection: Bool { latestCopyTooLarge && effectiveQuery.isEmpty }
     var selectedEntry: ClipboardHistoryEntry? {
         filtered.indices.contains(tableView.selectedRow) ? filtered[tableView.selectedRow] : nil
     }
@@ -161,6 +165,8 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
         self.onDelete = onDelete
         self.onCancel = onCancel
         pasteKeyState.reset()
+        contentFilter.selectedSegment = 0
+        searchField.isEnabled = true
         searchField.stringValue = ""
         updateEntries(entries, latestCopyTooLarge: latestCopyTooLarge)
         let focusedScreen = NSScreen.screens.first(where: {
@@ -257,9 +263,17 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
         applyFilter(selection: defaultSearchSelection(), debounce: true)
     }
 
+    @objc private func changeContentFilter(_ sender: NSSegmentedControl) {
+        let selectedID = selectedEntry?.id
+        panel.endEditing(for: searchField)
+        pasteKeyState.reset()
+        searchField.isEnabled = !imagesOnly
+        applyFilter(selection: selectedID.map(SelectionTarget.id) ?? defaultSearchSelection())
+        panel.makeFirstResponder(imagesOnly ? contentFilter : searchField)
+    }
+
     private func defaultSearchSelection() -> SelectionTarget {
-        latestCopyTooLarge && searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? .none : .first
+        preventsAutomaticSelection ? .none : .first
     }
 
     func windowDidResignKey(_ notification: Notification) {
@@ -295,6 +309,18 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
         searchField.setAccessibilityLabel(String(localized: "Search copied text"))
         searchField.translatesAutoresizingMaskIntoConstraints = false
         root.addSubview(searchField)
+
+        contentFilter.segmentCount = 2
+        contentFilter.setLabel(String(localized: "All"), forSegment: 0)
+        contentFilter.setLabel(String(localized: "Images"), forSegment: 1)
+        contentFilter.trackingMode = .selectOne
+        contentFilter.selectedSegment = 0
+        contentFilter.target = self
+        contentFilter.action = #selector(changeContentFilter(_:))
+        contentFilter.setAccessibilityLabel(String(localized: "Clipboard content filter"))
+        contentFilter.translatesAutoresizingMaskIntoConstraints = false
+        root.addSubview(contentFilter)
+        searchField.toolTip = String(localized: "Text search is available in All")
 
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("clipboard.history.content"))
         column.width = 260
@@ -368,9 +394,12 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
 
         NSLayoutConstraint.activate([
             searchField.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 12),
-            searchField.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -12),
+            searchField.trailingAnchor.constraint(equalTo: contentFilter.leadingAnchor, constant: -12),
             searchField.topAnchor.constraint(equalTo: root.topAnchor, constant: 16),
             searchField.heightAnchor.constraint(equalToConstant: 32),
+            contentFilter.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -12),
+            contentFilter.centerYAnchor.constraint(equalTo: searchField.centerYAnchor),
+            contentFilter.widthAnchor.constraint(equalToConstant: 140),
             searchSeparator.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             searchSeparator.trailingAnchor.constraint(equalTo: root.trailingAnchor),
             searchSeparator.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 10),
@@ -412,7 +441,15 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
         let generation = searchGeneration
         searchTask?.cancel()
         searchTask = nil
-        let query = searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        if imagesOnly {
+            isFiltering = false
+            finishFilter(entries.filter {
+                if case .image = $0.content { return true }
+                return false
+            }, selection: selection)
+            return
+        }
+        let query = effectiveQuery
         guard !query.isEmpty else {
             isFiltering = false
             finishFilter(entries, selection: selection)
@@ -464,6 +501,11 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
             case .first:
                 row = 0
             case .id(let id):
+                if preventsAutomaticSelection && !filtered.contains(where: { $0.id == id }) {
+                    tableView.deselectAll(nil)
+                    updatePreview()
+                    return
+                }
                 row = filtered.firstIndex(where: { $0.id == id }) ?? 0
             case .row(let previous):
                 row = max(0, min(previous, filtered.count - 1))
@@ -484,10 +526,12 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
             textScroll.isHidden = true
             textPreview.string = isFiltering
                 ? String(localized: "Searching copied text…")
-                : latestCopyTooLarge && searchField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                : preventsAutomaticSelection
                     ? String(localized: "The latest copy exceeded the 10 MiB item limit and was not saved. Select another item from the list.")
                     : entries.isEmpty
                         ? String(localized: "No copied items yet")
+                        : imagesOnly
+                            ? String(localized: "No saved images")
                         : String(localized: "No search results")
             emptyStateLabel.stringValue = textPreview.string
             emptyStateLabel.isHidden = false
