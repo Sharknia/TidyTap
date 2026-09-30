@@ -33,6 +33,7 @@ enum TidyTapIPC {
     static let clipboardDisplayIDUserInfoKey = "displayID"
     static let clipboardEntryUserInfoKey = "entryID"
     static let clipboardFormattedUserInfoKey = "formatted"
+    static let clipboardDeadlineUserInfoKey = "deadlineContinuousTime"
     static let clipboardPasteErrorUserInfoKey = "error"
     static let applyRequestIDUserInfoKey = "applyRequestID"
     static let finderFeedbackModeEnvironmentKey = "TIDYTAP_FINDER_FEEDBACK_MODE"
@@ -108,27 +109,34 @@ enum TidyTapIPC {
         )
     }
 
-    static func postClipboardHistoryPaste(sessionID: UUID, entryID: UUID, formatted: Bool) {
+    static func postClipboardHistoryPaste(
+        sessionID: UUID, entryID: UUID, formatted: Bool, deadlineContinuousTime: TimeInterval
+    ) {
         DistributedNotificationCenter.default().postNotificationName(
             clipboardHistoryPaste,
             object: TidyTapProduct.appBundleIdentifier,
             userInfo: [
                 clipboardSessionUserInfoKey: sessionID.uuidString,
                 clipboardEntryUserInfoKey: entryID.uuidString,
-                clipboardFormattedUserInfoKey: formatted
+                clipboardFormattedUserInfoKey: formatted,
+                clipboardDeadlineUserInfoKey: deadlineContinuousTime
             ],
             deliverImmediately: true
         )
     }
 
-    static func clipboardPasteRequest(in notification: Notification) -> (sessionID: UUID, entryID: UUID, formatted: Bool)? {
+    static func clipboardPasteRequest(in notification: Notification) -> (
+        sessionID: UUID, entryID: UUID, formatted: Bool, deadlineContinuousTime: TimeInterval
+    )? {
         guard let info = notification.userInfo,
               let session = info[clipboardSessionUserInfoKey] as? String,
               let sessionID = UUID(uuidString: session),
               let entry = info[clipboardEntryUserInfoKey] as? String,
               let entryID = UUID(uuidString: entry),
-              let formatted = info[clipboardFormattedUserInfoKey] as? Bool else { return nil }
-        return (sessionID, entryID, formatted)
+              let formatted = info[clipboardFormattedUserInfoKey] as? Bool,
+              let deadline = info[clipboardDeadlineUserInfoKey] as? TimeInterval,
+              deadline.isFinite, deadline > 0 else { return nil }
+        return (sessionID, entryID, formatted, deadline)
     }
 
     static func postClipboardHistoryPasteResult(sessionID: UUID, error: String?) {

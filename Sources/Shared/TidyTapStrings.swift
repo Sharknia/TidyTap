@@ -36,7 +36,7 @@ enum TidyTapStrings {
         case "pasteboardWriteFailed": String(localized: "TidyTap could not write the selected item to the clipboard. Try again.", bundle: bundle)
         case "helperTimeout": String(localized: "TidyTap Helper did not respond. Reopen history and try again.", bundle: bundle)
         case "targetUnavailable": String(localized: "The original app is no longer active. Reopen history from the input field and try again.", bundle: bundle)
-        case "focusChanged": String(localized: "The original input field could not be confirmed or its focus changed. Reopen history from the field you want to paste into.", bundle: bundle)
+        case "focusChanged", "focusDeadlineExceeded": String(localized: "The original input field could not be confirmed or its focus changed. Reopen history from the field you want to paste into.", bundle: bundle)
         default: String(localized: "Return to the original input field and try again.", bundle: bundle)
         }
     }

@@ -44,6 +44,7 @@ trap cleanup EXIT INT TERM
 xcodebuild -quiet -project TidyTap.xcodeproj -scheme TidyTap \
   -configuration Debug -derivedDataPath "$probe_root/DerivedData" \
   CODE_SIGNING_ALLOWED=NO build
+"$project_root/Scripts/sign-sparkle-adhoc.sh" "$app_path"
 /usr/bin/codesign --force --sign - --timestamp=none "$helper_path" >/dev/null
 /usr/bin/codesign --force --sign - --timestamp=none "$app_path" >/dev/null
 /usr/bin/codesign --verify --deep --strict "$app_path"
