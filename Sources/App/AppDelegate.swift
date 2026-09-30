@@ -16,6 +16,7 @@ private struct ClipboardPasteDiagnostic {
     let sourceIndex: Int
     let sourceCount: Int
     let resultCount: Int
+    let startedAt = TidyTapContinuousClock.now()
     var activationAccepted: Bool?
     var dispatched = false
 }
@@ -35,6 +36,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
     private var pendingClipboardPasteSessionID: UUID?
     private var pendingClipboardPasteEntryID: UUID?
     private var pendingClipboardPasteDiagnostic: ClipboardPasteDiagnostic?
+    private var clipboardPasteFeedback: ClipboardPasteFeedbackPanelController?
+    private var clipboardPasteScreen: NSScreen?
+    private var lastClipboardPasteIssue: String?
     private var updaterController: SPUStandardUpdaterController?
 
     init(
@@ -47,6 +51,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self, selector: #selector(clipboardTargetDidActivate(_:)),
+            name: NSWorkspace.didActivateApplicationNotification, object: nil
+        )
         if launchSmoke == nil {
             NSWorkspace.shared.notificationCenter.addObserver(
                 self,
@@ -59,21 +67,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
             self,
             selector: #selector(clipboardHistoryToggle(_:)),
             name: TidyTapIPC.clipboardHistoryToggle,
-            object: TidyTapProduct.appBundleIdentifier,
+            object: TidyTapIPC.clipboardNotificationObject,
             suspensionBehavior: .deliverImmediately
         )
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(clipboardHistoryChanged(_:)),
             name: TidyTapIPC.clipboardHistoryChanged,
-            object: TidyTapProduct.appBundleIdentifier,
+            object: TidyTapIPC.clipboardNotificationObject,
             suspensionBehavior: .deliverImmediately
         )
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(clipboardHistoryPasteResult(_:)),
             name: TidyTapIPC.clipboardHistoryPasteResult,
-            object: TidyTapProduct.appBundleIdentifier,
+            object: TidyTapIPC.clipboardNotificationObject,
             suspensionBehavior: .deliverImmediately
         )
         DistributedNotificationCenter.default().addObserver(
@@ -293,6 +301,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
     }
 
     @objc private func clipboardHistoryToggle(_ notification: Notification) {
+        launchSmoke?.report("clipboard-toggle-received target=\(TidyTapIPC.clipboardTargetPID(in: notification) ?? 0) frontmost=\(NSWorkspace.shared.frontmostApplication?.processIdentifier ?? 0)")
         toggleClipboardHistory(
             targetPID: TidyTapIPC.clipboardTargetPID(in: notification),
             sessionID: TidyTapIPC.clipboardSessionID(in: notification),
@@ -307,17 +316,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
             "appResult session=\(result.sessionID.uuidString.prefix(8)) " +
             "reason=\(result.error ?? "pasteEventPosted")"
         )
+        recordPasteStage("result reason=\(result.error ?? "pasteEventPosted")")
         logPendingClipboardSelection(outcome: result.error ?? "pasteEventPosted")
         pendingClipboardPasteSessionID = nil
-        let entryID = pendingClipboardPasteEntryID
         pendingClipboardPasteEntryID = nil
         clipboardProbeReport("helper result=\(result.error ?? "posted")")
         if result.error == "superseded" {
             return
         } else if let error = result.error {
             showClipboardError(reason: error)
-        } else if let entryID {
-            promotePastedHistoryEntry(entryID)
+        } else {
+            lastClipboardPasteIssue = nil
+            clipboardHistoryPanel?.setPreviousAttempt(nil)
         }
     }
 
@@ -342,6 +352,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
     }
 
     private func toggleClipboardHistory(targetPID: pid_t?, sessionID: UUID?, displayID: UInt32?) {
+        clipboardPasteFeedback?.hide()
         if let pending = pendingClipboardPasteSessionID, pending != sessionID {
             logPendingClipboardSelection(outcome: "superseded")
             pendingClipboardPasteSessionID = nil
@@ -351,9 +362,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
             clipboardHistoryPanel?.close()
             return
         }
+        let frontmost = NSWorkspace.shared.frontmostApplication
+        let targetApplication = targetPID.flatMap(NSRunningApplication.init(processIdentifier:))
+        launchSmoke?.report("clipboard-open-state sessionValid=\(sessionID != nil) frontmost=\(frontmost?.processIdentifier ?? 0) target=\(targetPID ?? 0) appExists=\(targetApplication != nil)")
         guard let targetPID, let sessionID, targetPID != getpid(),
-              NSWorkspace.shared.frontmostApplication?.processIdentifier == targetPID,
-              let application = NSRunningApplication(processIdentifier: targetPID) else { return }
+              frontmost?.processIdentifier == targetPID,
+              let application = targetApplication else { return }
         clipboardProbeReport("opened")
 
         do {
@@ -375,17 +389,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
             // Activating the history panel also raises other windows owned by
             // this app. Keep Settings out of the way until explicitly reopened.
             windowController?.window?.orderOut(nil)
+            panel.setPreviousAttempt(lastClipboardPasteIssue.map { TidyTapStrings.clipboardPastePreviousAttempt(for: $0) })
             panel.show(
                 entries: entries,
                 displayID: displayID,
                 pasteFormattedByDefault: preferences.readRequest().settings.pasteFormattedTextByDefault,
                 latestCopyTooLarge: latestCopyTooLarge,
                 onPaste: { [weak self, weak panel] entry, style in
-                    guard let self, let target = self.clipboardPasteTarget else { return }
+                    guard let self else { return }
+                    let sessionID = self.clipboardPasteTarget?.sessionID ?? UUID()
+                    self.clipboardPasteScreen = panel?.pasteScreen
                     let query = panel?.searchQuery ?? ""
                     let source = panel?.sourcePosition(for: entry.id)
                     self.pendingClipboardPasteDiagnostic = ClipboardPasteDiagnostic(
-                        sessionID: target.sessionID, targetPID: targetPID,
+                        sessionID: sessionID, targetPID: targetPID,
                         entry: entry, query: query,
                         sourceIndex: source?.index ?? -1, sourceCount: source?.count ?? 0,
                         resultCount: panel?.visibleCount ?? 0
@@ -418,6 +435,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
                     }
                 }
             )
+            launchSmoke?.report("clipboard-panel-visible=\(panel.isVisible) entries=\(entries.count)")
         } catch {
             showClipboardOpenError()
         }
@@ -426,6 +444,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
     private func paste(_ entry: ClipboardHistoryEntry, style: ClipboardTextPasteStyle) {
         pendingClipboardPasteSessionID = nil
         pendingClipboardPasteEntryID = nil
+        lastClipboardPasteIssue = nil
+        clipboardHistoryPanel?.setPreviousAttempt(nil)
+        recordPasteStage("attempt")
+        promotePastedHistoryEntry(entry.id)
         guard let target = clipboardPasteTarget, !target.application.isTerminated else {
             showClipboardError(reason: "targetUnavailable")
             return
@@ -438,6 +460,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
         let activated = target.application.activate(options: [])
         clipboardProbeReport("activation=\(activated)")
         pendingClipboardPasteDiagnostic?.activationAccepted = activated
+        recordPasteStage("activation accepted=\(activated)")
         pasteWhenTargetIsActive(
             entry, style: style, target: target, attemptsRemaining: 15,
             deadlineContinuousTime: deadlineContinuousTime
@@ -461,7 +484,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
             return
         }
         let processID = target.application.processIdentifier
-        if NSWorkspace.shared.frontmostApplication?.processIdentifier != processID {
+        let frontmost = NSWorkspace.shared.frontmostApplication
+        recordPasteStage("activationCheck target=\(processID) frontmost=\(frontmost?.processIdentifier ?? 0) app=\(frontmost?.bundleIdentifier ?? "none") terminated=\(target.application.isTerminated)")
+        if frontmost?.processIdentifier != processID {
             guard attemptsRemaining > 0 else {
                 clipboardProbeReport("target not frontmost")
                 showClipboardError(reason: "targetUnavailable")
@@ -477,6 +502,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
             return
         }
         pendingClipboardPasteDiagnostic?.dispatched = true
+        recordPasteStage("dispatch")
         TidyTapIPC.postClipboardHistoryPaste(
             sessionID: target.sessionID,
             entryID: entry.id,
@@ -503,9 +529,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
                 maximumBytes: TidyTapClipboardPolicy.maximumBytes,
                 maximumItemBytes: TidyTapClipboardPolicy.maximumItemBytes
             )
-            _ = try store.promote(id)
+            let promoted = try store.promote(id)
+            recordPasteStage("promotion item=\(id.uuidString) result=\(promoted == nil ? "missing" : "promoted")")
         } catch {
-            NSLog("TidyTap clipboard history recency update failed")
+            recordPasteStage("promotion item=\(id.uuidString) result=storageFailure")
         }
     }
 
@@ -520,15 +547,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
     }
 
     private func showClipboardError(reason: String? = nil) {
+        recordPasteStage("result reason=\(reason ?? "unknown")")
         pendingClipboardPasteSessionID = nil
         pendingClipboardPasteEntryID = nil
         NSLog("TidyTap clipboard paste failed: %@", reason ?? "unknown")
         TidyTapClipboardPasteLog.record("appFailure reason=\(reason ?? "unknown")")
         logPendingClipboardSelection(outcome: reason ?? "unknown")
-        let alert = NSAlert()
-        alert.messageText = String(localized: "Could not paste the selected item")
-        alert.informativeText = TidyTapStrings.clipboardPasteFailureMessage(for: reason)
-        presentClipboardAlert(alert)
+        let issue = reason ?? "unknown"
+        lastClipboardPasteIssue = issue
+        clipboardHistoryPanel?.setPreviousAttempt(TidyTapStrings.clipboardPastePreviousAttempt(for: issue))
+        let feedback = clipboardPasteFeedback ?? ClipboardPasteFeedbackPanelController()
+        clipboardPasteFeedback = feedback
+        feedback.show(message: TidyTapStrings.clipboardPasteNotice(for: reason), on: clipboardPasteScreen)
+    }
+
+    private func recordPasteStage(_ phase: String) {
+        guard let diagnostic = pendingClipboardPasteDiagnostic else { return }
+        TidyTapClipboardPasteLog.record(
+            "appStage session=\(diagnostic.sessionID.uuidString) elapsed=\(TidyTapContinuousClock.now() - diagnostic.startedAt) phase=\(phase)"
+        )
+    }
+
+    @objc private func clipboardTargetDidActivate(_ notification: Notification) {
+        guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
+        recordPasteStage("didActivate app=\(app.bundleIdentifier ?? "none") frontmost=\(app.processIdentifier)")
     }
 
     private func logPendingClipboardSelection(outcome: String) {

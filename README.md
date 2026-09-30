@@ -26,7 +26,7 @@ Apple silicon · macOS 15.1+ · English & Korean · [MIT license](LICENSE)
 | Finder cut & paste | Press `⌘X`, open the destination folder, then press `⌘V` to move files. `⌘C` still copies. |
 | Clipboard history | Set a shortcut, search copied text and images, and press `Enter` to paste. |
 
-Clipboard history is off until you enable it and record a shortcut. Settings suggests `⌥V` but does not assign it. Text pastes without formatting by default; `Shift+Enter` uses the opposite style. When the paste key event is posted successfully, that history item moves to the top. See the [validation scope](docs/CLIPBOARD_HISTORY_ACCEPTANCE_STATUS.md).
+Clipboard history is off until you enable it and record a shortcut. Settings suggests `⌥V` but does not assign it. Text pastes without formatting by default; `Shift+Enter` uses the opposite style. Requesting a paste moves that history item to the top, even if pasting is interrupted. A short, non-interactive notice reports paste problems; reopen history to see the previous attempt. See the [validation scope](docs/CLIPBOARD_HISTORY_ACCEPTANCE_STATUS.md).
 
 > **Closing the window or quitting with `⌘Q` keeps enabled features running.** To stop them, turn off all features in the app. [How to stop or uninstall](#stopping-or-uninstalling)
 

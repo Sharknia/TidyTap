@@ -68,6 +68,53 @@ final class SettingsViewControllerTests: XCTestCase {
         XCTAssertNil(state.handle(type: .keyUp, keyCode: 36, isRepeat: false, shiftHeld: false).reverseStyle)
     }
 
+    func testPasteNoticeSeparatesUnsentAndUnknownResults() {
+        let stopped = TidyTapStrings.clipboardPasteNotice(for: "targetUnavailable")
+        for reason in ["focusChanged", "focusDeadlineExceeded", "pasteboardWriteFailed", "entryUnavailable", "eventUnavailable"] {
+            XCTAssertEqual(TidyTapStrings.clipboardPasteNotice(for: reason), stopped)
+        }
+        let unknown = TidyTapStrings.clipboardPasteNotice(for: "helperTimeout")
+        XCTAssertNotEqual(unknown, stopped)
+        XCTAssertEqual(TidyTapStrings.clipboardPasteNotice(for: "futureUnknownReason"), unknown)
+        XCTAssertEqual(TidyTapStrings.clipboardPasteNotice(for: nil), unknown)
+        XCTAssertNotEqual(TidyTapStrings.clipboardPasteNotice(for: "accessibilityDenied"), stopped)
+    }
+
+    func testPasteFeedbackPreservesFocusAndUsesNativeMaterial() {
+        let feedback = ClipboardPasteFeedbackPanelController()
+        let keyWindow = NSApp.keyWindow
+        let mainWindow = NSApp.mainWindow
+        let frontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier
+        feedback.show(message: "붙여넣지 못했어요", on: NSScreen.main)
+        XCTAssertFalse(feedback.panel.canBecomeKey)
+        XCTAssertFalse(feedback.panel.canBecomeMain)
+        XCTAssertTrue(feedback.panel.ignoresMouseEvents)
+        XCTAssertTrue(feedback.panel.styleMask.contains(.nonactivatingPanel))
+        XCTAssertTrue(NSApp.keyWindow === keyWindow)
+        XCTAssertTrue(NSApp.mainWindow === mainWindow)
+        XCTAssertEqual(NSWorkspace.shared.frontmostApplication?.processIdentifier, frontmost)
+        if #available(macOS 26.0, *) {
+            XCTAssertTrue(feedback.panel.contentView is NSGlassEffectView)
+        } else {
+            XCTAssertTrue(feedback.panel.contentView is NSVisualEffectView)
+        }
+        feedback.show(message: "붙여넣었는지 확인해 주세요", on: NSScreen.main)
+        XCTAssertTrue(NSApp.keyWindow === keyWindow)
+        feedback.hide()
+        XCTAssertFalse(feedback.panel.isVisible)
+    }
+
+    func testPasteFeedbackExpiresAfterLastNotice() async throws {
+        let feedback = ClipboardPasteFeedbackPanelController()
+        feedback.show(message: "Could not paste", on: NSScreen.main)
+        try await Task.sleep(for: .seconds(1))
+        feedback.show(message: "Check whether the item was pasted", on: NSScreen.main)
+        try await Task.sleep(for: .seconds(1.7))
+        XCTAssertTrue(feedback.panel.isVisible)
+        try await Task.sleep(for: .seconds(1))
+        XCTAssertFalse(feedback.panel.isVisible)
+    }
+
     func testClipboardPasteFailureCopyDistinguishesReasons() {
         let reasons = [
             "entryUnavailable", "eventUnavailable", "pasteboardWriteFailed",
