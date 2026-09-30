@@ -180,12 +180,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, SPUUpdaterDelegate {
         }
         let window = NSWindow(contentViewController: controller)
         window.title = TidyTapStrings.appName
-        window.styleMask = [.titled, .closable, .miniaturizable]
+        window.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
         window.setContentSize(contentSizeThatFitsVisibleFrame(for: window))
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
-        window.backgroundColor = .clear
-        window.isOpaque = false
+        window.backgroundColor = .windowBackgroundColor
+        window.isOpaque = true
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
         window.center()

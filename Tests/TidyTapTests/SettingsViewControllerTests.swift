@@ -1104,9 +1104,12 @@ final class SettingsViewControllerTests: XCTestCase {
     func testSettingsScrollStaysBelowWindowButtonsAtEveryPosition() throws {
         let controller = makeController()
         let window = NSWindow(contentViewController: controller)
-        window.styleMask = [.titled, .closable, .miniaturizable]
+        window.styleMask = [.titled, .closable, .miniaturizable, .fullSizeContentView]
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
+        window.backgroundColor = .windowBackgroundColor
+        window.isOpaque = true
+        window.isMovableByWindowBackground = true
         window.setContentSize(NSSize(width: 560, height: 480))
         window.contentView?.layoutSubtreeIfNeeded()
         let scroll = try XCTUnwrap(controller.view.subviews.compactMap { $0 as? NSScrollView }.first)
