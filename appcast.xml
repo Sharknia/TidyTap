@@ -3,6 +3,16 @@
     <channel>
         <title>TidyTap Updates</title>
         <item>
+            <title>0.2.3</title>
+            <pubDate>Wed, 30 Sep 2026 15:02:31 +0900</pubDate>
+            <link>https://github.com/Sharknia/TidyTap/releases/tag/v0.2.3</link>
+            <sparkle:version>11</sparkle:version>
+            <sparkle:shortVersionString>0.2.3</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.1</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://github.com/Sharknia/TidyTap/releases/download/v0.2.3/TidyTap-0.2.3.dmg" length="3488283" type="application/octet-stream" sparkle:edSignature="cxxKrPpJQeQUCFWDC6ORtSbKFk05FSV6KtqgW5doqkE/I3A+ju24XsjE+4kvWNSZMZr6j2uuTe6PMMu8EpviCQ=="/>
+        </item>
+        <item>
             <title>0.2.2</title>
             <pubDate>Wed, 30 Sep 2026 10:44:31 +0900</pubDate>
             <link>https://github.com/Sharknia/TidyTap/releases/tag/v0.2.2</link>
@@ -21,16 +31,6 @@
             <sparkle:minimumSystemVersion>15.1</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <enclosure url="https://github.com/Sharknia/TidyTap/releases/download/v0.2.1/TidyTap-0.2.1.dmg" length="3450877" type="application/octet-stream" sparkle:edSignature="mt8g/2/Kba62iH+7K0aO6NR11i9lGKZy1n4lTFTBzbaXU/StCfY3uTG6tG1xqV7gFPeGV3RLXeWq519G8lMIAw=="/>
-        </item>
-        <item>
-            <title>0.2.0</title>
-            <pubDate>Mon, 28 Sep 2026 18:24:29 +0900</pubDate>
-            <link>https://github.com/Sharknia/TidyTap/releases/tag/v0.2.0</link>
-            <sparkle:version>6</sparkle:version>
-            <sparkle:shortVersionString>0.2.0</sparkle:shortVersionString>
-            <sparkle:minimumSystemVersion>15.1</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <enclosure url="https://github.com/Sharknia/TidyTap/releases/download/v0.2.0/TidyTap-0.2.0.dmg" length="3451068" type="application/octet-stream" sparkle:edSignature="cQGI6XICU0SyGpkFEFQdiSgZ7uiZnO1y71Zdt79ro1z4umT5GaRP75E986jiwy1+uQ2wOXaNUNVaoA++Muq6CA=="/>
         </item>
     </channel>
 </rss>
