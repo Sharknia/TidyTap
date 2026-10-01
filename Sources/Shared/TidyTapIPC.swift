@@ -19,6 +19,10 @@ enum TidyTapIPC {
     static let permissionResult = Notification.Name("com.sharknia.TidyTap.permissionResult")
     static let finderFeedback = Notification.Name("com.sharknia.TidyTap.finderFeedback")
     static let finderFeedbackReady = Notification.Name("com.sharknia.TidyTap.finderFeedbackReady")
+    // Keep launch-smoke clipboard events away from the installed app and worker.
+    static var clipboardNotificationObject: String {
+        TidyTapLaunchSmoke.current()?.preferencesSuite ?? TidyTapProduct.appBundleIdentifier
+    }
     static let clipboardHistoryToggle = Notification.Name("com.sharknia.TidyTap.clipboardHistoryToggle")
     static let clipboardHistoryChanged = Notification.Name("com.sharknia.TidyTap.clipboardHistoryChanged")
     static let clipboardHistoryPaste = Notification.Name("com.sharknia.TidyTap.clipboardHistoryPaste")
@@ -103,7 +107,7 @@ enum TidyTapIPC {
         if let displayID { info[clipboardDisplayIDUserInfoKey] = displayID }
         DistributedNotificationCenter.default().postNotificationName(
             clipboardHistoryToggle,
-            object: TidyTapProduct.appBundleIdentifier,
+            object: clipboardNotificationObject,
             userInfo: info,
             deliverImmediately: true
         )
@@ -114,7 +118,7 @@ enum TidyTapIPC {
     ) {
         DistributedNotificationCenter.default().postNotificationName(
             clipboardHistoryPaste,
-            object: TidyTapProduct.appBundleIdentifier,
+            object: clipboardNotificationObject,
             userInfo: [
                 clipboardSessionUserInfoKey: sessionID.uuidString,
                 clipboardEntryUserInfoKey: entryID.uuidString,
@@ -142,7 +146,7 @@ enum TidyTapIPC {
     static func postClipboardHistoryPasteResult(sessionID: UUID, error: String?) {
         DistributedNotificationCenter.default().postNotificationName(
             clipboardHistoryPasteResult,
-            object: TidyTapProduct.appBundleIdentifier,
+            object: clipboardNotificationObject,
             userInfo: [
                 clipboardSessionUserInfoKey: sessionID.uuidString,
                 clipboardPasteErrorUserInfoKey: error ?? ""
@@ -162,7 +166,7 @@ enum TidyTapIPC {
     static func postClipboardHistoryChanged() {
         DistributedNotificationCenter.default().postNotificationName(
             clipboardHistoryChanged,
-            object: TidyTapProduct.appBundleIdentifier,
+            object: clipboardNotificationObject,
             userInfo: nil,
             deliverImmediately: true
         )

@@ -122,3 +122,88 @@ final class FinderFeedbackPanelController: NSObject {
         return NSScreen.screens.first { $0.frame.contains(anchorPoint) }
     }
 }
+
+/// Passive paste feedback uses the same system materials as Settings.
+@MainActor
+final class ClipboardPasteFeedbackPanelController {
+    private final class PassivePanel: NSPanel {
+        override var canBecomeKey: Bool { false }
+        override var canBecomeMain: Bool { false }
+    }
+
+    let panel: NSPanel
+    private let label = NSTextField(labelWithString: "")
+    private var hideTimer: Timer?
+
+    init() {
+        panel = PassivePanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel],
+                             backing: .buffered, defer: false)
+        let content = NSView()
+        if #available(macOS 26.0, *) {
+            let glass = NSGlassEffectView()
+            glass.style = .regular
+            glass.cornerRadius = 8
+            glass.contentView = content
+            panel.contentView = glass
+        } else {
+            let effect = NSVisualEffectView()
+            effect.material = .popover
+            effect.blendingMode = .behindWindow
+            effect.state = .active
+            effect.wantsLayer = true
+            effect.layer?.cornerRadius = 8
+            effect.layer?.masksToBounds = true
+            panel.contentView = effect
+            content.autoresizingMask = [.width, .height]
+            effect.addSubview(content)
+        }
+        label.font = .systemFont(ofSize: 13, weight: .medium)
+        label.textColor = .labelColor
+        label.alignment = .center
+        label.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(label)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 12),
+            label.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -12),
+            label.topAnchor.constraint(equalTo: content.topAnchor, constant: 8),
+            label.bottomAnchor.constraint(equalTo: content.bottomAnchor, constant: -8)
+        ])
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.level = .statusBar
+        panel.hidesOnDeactivate = false
+        panel.ignoresMouseEvents = true
+        panel.isReleasedWhenClosed = false
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+    }
+
+    func show(message: String, on screen: NSScreen?) {
+        guard let screen = screen.flatMap({ requested in
+            NSScreen.screens.first { $0 == requested }
+        }) ?? NSScreen.main ?? NSScreen.screens.first else { return }
+        hideTimer?.invalidate()
+        label.stringValue = message
+        let size = NSSize(width: label.intrinsicContentSize.width + 24,
+                          height: label.intrinsicContentSize.height + 16)
+        let frame = screen.visibleFrame
+        panel.setFrame(NSRect(x: frame.midX - size.width / 2,
+                              y: frame.maxY - size.height - 12,
+                              width: size.width, height: size.height), display: true)
+        panel.orderFrontRegardless()
+        NSAccessibility.post(element: label, notification: .announcementRequested, userInfo: [
+            .announcement: message, .priority: NSAccessibilityPriorityLevel.medium.rawValue
+        ])
+        let timer = Timer(timeInterval: 2.5, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.hide() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        hideTimer = timer
+    }
+
+    func hide() {
+        hideTimer?.invalidate()
+        hideTimer = nil
+        panel.orderOut(nil)
+    }
+}

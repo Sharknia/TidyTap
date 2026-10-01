@@ -29,6 +29,31 @@ enum TidyTapStrings {
     static let applyingChanges = String(localized: "Applying changes…", bundle: .main)
     static let changesApplied = String(localized: "Changes applied.", bundle: .main)
     static let changesCouldNotBeApplied = String(localized: "Changes could not be applied.", bundle: .main)
+    static func clipboardPasteNotice(for reason: String?, bundle: Bundle = .main) -> String {
+        switch reason {
+        case "targetUnavailable", "focusChanged", "focusDeadlineExceeded", "pasteboardWriteFailed",
+             "entryUnavailable", "eventUnavailable":
+            String(localized: "Could not paste", bundle: bundle)
+        case "accessibilityDenied":
+            String(localized: "Accessibility permission is needed", bundle: bundle)
+        default:
+            String(localized: "Check whether the item was pasted", bundle: bundle)
+        }
+    }
+
+    static func clipboardPastePreviousAttempt(for reason: String, bundle: Bundle = .main) -> String {
+        let detail: String
+        if reason == "helperTimeout" {
+            detail = String(localized: "No response. Check whether the item was pasted before trying again.", bundle: bundle)
+        } else if reason == "accessibilityDenied" {
+            detail = String(localized: "Enable TidyTap in System Settings > Privacy & Security > Accessibility.", bundle: bundle)
+        } else if ["targetUnavailable", "focusChanged", "focusDeadlineExceeded", "pasteboardWriteFailed", "entryUnavailable", "eventUnavailable"].contains(reason) {
+            detail = clipboardPasteFailureMessage(for: reason, bundle: bundle)
+        } else {
+            detail = clipboardPasteNotice(for: reason, bundle: bundle)
+        }
+        return String(format: String(localized: "Previous attempt: %@", bundle: bundle), detail)
+    }
     static func clipboardPasteFailureMessage(for reason: String?, bundle: Bundle = .main) -> String {
         return switch reason {
         case "entryUnavailable": String(localized: "The selected history item is no longer available. Reopen history and try again.", bundle: bundle)

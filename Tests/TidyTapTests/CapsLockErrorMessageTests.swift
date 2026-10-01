@@ -2,6 +2,20 @@ import XCTest
 
 @MainActor
 final class CapsLockErrorMessageTests: XCTestCase {
+    func testPasteNoticesAreLocalizedWithoutClaimingUnknownFailure() {
+        let cases = [
+            ("targetUnavailable", "Could not paste", "붙여넣지 못했어요"),
+            ("helperTimeout", "Check whether the item was pasted", "붙여넣었는지 확인해 주세요"),
+            ("accessibilityDenied", "Accessibility permission is needed", "접근성 권한이 필요해요")
+        ]
+        for language in ["en", "ko"] {
+            let bundle = localizedBundle(language: language)
+            for (reason, english, korean) in cases {
+                XCTAssertEqual(TidyTapStrings.clipboardPasteNotice(for: reason, bundle: bundle), language == "en" ? english : korean)
+            }
+        }
+    }
+
     func testCapsLockFailuresMapToSpecificMessages() {
         let cases: [(String, String, String)] = [
             ("capsLock.invalidInputSourceCount.3", "Caps Lock input switching requires exactly two enabled input sources.", "Caps Lock 한·영 전환에는 활성화된 입력 소스가 정확히 두 개 필요합니다."),

@@ -1,6 +1,12 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Could not paste" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Could not paste"}}, "ko": {"stringUnit": {"state": "translated", "value": "붙여넣지 못했어요"}}}},
+    "Check whether the item was pasted" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Check whether the item was pasted"}}, "ko": {"stringUnit": {"state": "translated", "value": "붙여넣었는지 확인해 주세요"}}}},
+    "Accessibility permission is needed" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Accessibility permission is needed"}}, "ko": {"stringUnit": {"state": "translated", "value": "접근성 권한이 필요해요"}}}},
+    "Previous attempt: %@" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Previous attempt: %@"}}, "ko": {"stringUnit": {"state": "translated", "value": "직전 시도: %@"}}}},
+    "No response. Check whether the item was pasted before trying again." : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "No response. Check whether the item was pasted before trying again."}}, "ko": {"stringUnit": {"state": "translated", "value": "응답이 없어요. 붙여넣었는지 확인한 뒤 다시 시도하세요."}}}},
+    "Enable TidyTap in System Settings > Privacy & Security > Accessibility." : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Enable TidyTap in System Settings > Privacy & Security > Accessibility."}}, "ko": {"stringUnit": {"state": "translated", "value": "시스템 설정 > 개인정보 보호 및 보안 > 손쉬운 사용에서 TidyTap을 허용하세요."}}}},
     "All" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "All"}}, "ko": {"stringUnit": {"state": "translated", "value": "전체"}}}} ,
     "Images" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Images"}}, "ko": {"stringUnit": {"state": "translated", "value": "이미지"}}}} ,
     "Clipboard content filter" : {"localizations": {"en": {"stringUnit": {"state": "translated", "value": "Clipboard content filter"}}, "ko": {"stringUnit": {"state": "translated", "value": "클립보드 유형 필터"}}}} ,
