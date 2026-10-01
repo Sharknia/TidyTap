@@ -55,6 +55,7 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
     }
 
     let panel: NSPanel
+    private(set) var pasteScreen: NSScreen?
     private let searchField = NSSearchField()
     private let contentFilter = NSSegmentedControl()
     private let listScroll = NSScrollView()
@@ -63,6 +64,8 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
     private let textScroll = NSScrollView()
     private let imagePreview = NSImageView()
     private let emptyStateLabel = NSTextField(labelWithString: "")
+    private let previousAttempt = NSTextField(labelWithString: "")
+    private var previousAttemptHeight: NSLayoutConstraint!
     private let footer = NSTextField(labelWithString: "")
     private let deleteButton = NSButton()
     private var entries = [ClipboardHistoryEntry]()
@@ -102,6 +105,13 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
             guard let self else { return event }
             return self.handleKey(event)
         }
+    }
+
+    func setPreviousAttempt(_ message: String?) {
+        previousAttempt.stringValue = message ?? ""
+        previousAttempt.toolTip = message
+        previousAttempt.isHidden = message == nil
+        previousAttemptHeight.constant = message == nil ? 0 : 18
     }
 
     var isVisible: Bool { panel.isVisible }
@@ -376,6 +386,15 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
         emptyStateLabel.translatesAutoresizingMaskIntoConstraints = false
         root.addSubview(emptyStateLabel)
 
+        previousAttempt.font = .systemFont(ofSize: 11)
+        previousAttempt.textColor = .secondaryLabelColor
+        previousAttempt.lineBreakMode = .byTruncatingTail
+        previousAttempt.usesSingleLineMode = true
+        previousAttempt.translatesAutoresizingMaskIntoConstraints = false
+        previousAttempt.isHidden = true
+        root.addSubview(previousAttempt)
+        previousAttemptHeight = previousAttempt.heightAnchor.constraint(equalToConstant: 0)
+
         footer.font = .systemFont(ofSize: 11)
         footer.textColor = .secondaryLabelColor
         footer.lineBreakMode = .byTruncatingTail
@@ -427,7 +446,11 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
             emptyStateLabel.widthAnchor.constraint(equalTo: textScroll.widthAnchor, constant: -32),
             footerSeparator.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             footerSeparator.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-            footerSeparator.topAnchor.constraint(equalTo: footer.topAnchor, constant: -10),
+            footerSeparator.topAnchor.constraint(equalTo: previousAttempt.topAnchor, constant: -10),
+            previousAttempt.leadingAnchor.constraint(equalTo: footer.leadingAnchor),
+            previousAttempt.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -12),
+            previousAttempt.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -4),
+            previousAttemptHeight,
             footerSeparator.heightAnchor.constraint(equalToConstant: 1),
             footer.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 12),
             footer.trailingAnchor.constraint(lessThanOrEqualTo: deleteButton.leadingAnchor, constant: -12),
@@ -607,6 +630,7 @@ final class ClipboardHistoryPanelController: NSObject, NSTableViewDataSource, NS
         let entry = filtered[tableView.selectedRow]
         let formatted = pasteFormattedByDefault != reverseStyle
         let action = onPaste
+        pasteScreen = panel.screen
         onCancel = nil
         onDelete = nil
         onPaste = nil

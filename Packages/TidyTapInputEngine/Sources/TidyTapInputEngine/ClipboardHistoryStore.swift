@@ -3,7 +3,7 @@ import Foundation
 
 public struct ClipboardHistoryEntry: Codable, Equatable {
     public let id: UUID
-    /// Recency timestamp; refreshed after a successful history paste response.
+    /// Recency timestamp; refreshed when a history paste is requested.
     public let copiedAt: Date
     public let content: ClipboardCapturedContent
 }

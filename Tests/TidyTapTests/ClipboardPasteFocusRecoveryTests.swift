@@ -2,6 +2,26 @@ import XCTest
 
 @MainActor
 final class ClipboardPasteFocusRecoveryTests: XCTestCase {
+    func testCommitTraceStopsAtTheRejectedStage() {
+        for rejectAt in [1, 2] {
+            var validations = 0
+            var phases: [String] = []
+            var keyPosted = false
+            let error = ClipboardPasteCommitGate.perform(
+                validate: {
+                    validations += 1
+                    return validations == rejectAt ? "targetUnavailable" : nil
+                },
+                write: { true },
+                postKey: { keyPosted = true },
+                observePhase: { phases.append($0) }
+            )
+            XCTAssertEqual(error, "targetUnavailable")
+            XCTAssertEqual(phases, rejectAt == 1 ? ["beforeWrite"] : ["beforeWrite", "write", "beforeKey"])
+            XCTAssertFalse(keyPosted)
+        }
+    }
+
     @MainActor private final class Fixture {
         typealias Focus = ClipboardPasteFocusRecovery.FocusObservation
         typealias Outcome = ClipboardPasteFocusRecovery.Outcome

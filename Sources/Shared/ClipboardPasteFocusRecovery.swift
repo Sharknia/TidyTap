@@ -163,11 +163,16 @@ enum ClipboardPasteCommitGate {
     static func perform(
         validate: () -> String?,
         write: () -> Bool,
-        postKey: () -> Void
+        postKey: () -> Void,
+        observePhase: (String) -> Void = { _ in }
     ) -> String? {
+        observePhase("beforeWrite")
         if let error = validate() { return error }
+        observePhase("write")
         guard write() else { return "pasteboardWriteFailed" }
+        observePhase("beforeKey")
         if let error = validate() { return error }
+        observePhase("keyPost")
         postKey()
         return nil
     }
