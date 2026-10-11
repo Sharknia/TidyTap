@@ -80,30 +80,80 @@ public final class MacOSSystemApplyAdapter: HIDMappingApplying, SymbolicHotkeyAp
         "/System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings"
 
     private let runner: any ProcessRunning
+    private enum HIDScope {
+        case legacy
+        case keyboards
+
+        var arguments: [String] {
+            switch self {
+            case .legacy: []
+            case .keyboards: ["--matching", "{\"PrimaryUsagePage\":1,\"PrimaryUsage\":6}"]
+            }
+        }
+    }
+    // Scope discovery and HID commands are serialized. Once selected, scope
+    // stays fixed across pre-write checks, verification and rollback.
+    private let hidLock = NSLock()
+    private var hidScope: HIDScope?
+    private var hasValidatedHIDRead = false
 
     public init(runner: any ProcessRunning = FoundationProcessRunner()) {
         self.runner = runner
     }
 
     public func readHIDMappings() throws -> [HIDMapping] {
-        let data = try runner.run(
+        hidLock.lock()
+        defer { hidLock.unlock() }
+        return try readHIDMappingsLocked()
+    }
+
+    private func readHIDMappingsLocked() throws -> [HIDMapping] {
+        hasValidatedHIDRead = false
+        var data: Data
+        if let hidScope {
+            data = try readHIDProperty(scope: hidScope)
+        } else {
+            data = try readHIDProperty(scope: .legacy)
+            if Self.hasHIDTableHeader(data) {
+                hidScope = .keyboards
+                data = try readHIDProperty(scope: .keyboards)
+            } else {
+                hidScope = .legacy
+            }
+        }
+        // Do not silently broaden writes if the output changes or a matched
+        // query fails. Legacy systems retain their original command path.
+        guard Self.hasHIDTableHeader(data) == (hidScope == .keyboards) else {
+            throw InputEngineError.invalidSystemData(.hidMappings)
+        }
+        let mappings = try Self.decodeHIDMappings(data)
+        hasValidatedHIDRead = true
+        return mappings
+    }
+
+    private func readHIDProperty(scope: HIDScope) throws -> Data {
+        try runner.run(
             executable: "/usr/bin/hidutil",
-            arguments: ["property", "--get", "UserKeyMapping"],
+            arguments: ["property"] + scope.arguments + ["--get", "UserKeyMapping"],
             input: nil
         )
-        return try Self.decodeHIDMappings(data)
     }
 
     public func applyHIDMappings(_ mappings: [HIDMapping]) throws {
+        hidLock.lock()
+        defer { hidLock.unlock() }
+        if !hasValidatedHIDRead { _ = try readHIDMappingsLocked() }
+        guard let hidScope else { throw InputEngineError.invalidSystemData(.hidMappings) }
         let data = try JSONSerialization.data(
             withJSONObject: ["UserKeyMapping": mappings.map(\.hidDictionary)]
         )
         guard let payload = String(data: data, encoding: .utf8) else {
             throw InputEngineError.invalidSystemData(.hidMappings)
         }
+        hasValidatedHIDRead = false
         _ = try runner.run(
             executable: "/usr/bin/hidutil",
-            arguments: ["property", "--set", payload],
+            arguments: ["property"] + hidScope.arguments + ["--set", payload],
             input: nil
         )
     }
@@ -163,6 +213,88 @@ public final class MacOSSystemApplyAdapter: HIDMappingApplying, SymbolicHotkeyAp
     }
 
     static func decodeHIDMappings(_ data: Data) throws -> [HIDMapping] {
+        if hasHIDTableHeader(data) { return try decodeHIDTable(data) }
+        return try decodeLegacyHIDMappings(data)
+    }
+
+    private static func hasHIDTableHeader(_ data: Data) -> Bool {
+        guard let text = String(data: data, encoding: .utf8) else { return false }
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+            .components(separatedBy: .newlines).first?
+            .split(whereSeparator: { $0.isWhitespace }).map(String.init) == ["RegistryID", "Key", "Value"]
+    }
+
+    private static func decodeHIDTable(_ data: Data) throws -> [HIDMapping] {
+        guard let text = String(data: data, encoding: .utf8) else {
+            throw InputEngineError.invalidSystemData(.hidMappings)
+        }
+        let lines = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\r\n", with: "\n").components(separatedBy: "\n")
+        let body = lines.dropFirst().joined(separator: "\n") as NSString
+        let row = try NSRegularExpression(pattern: "(?m)^[ \\t]*([0-9a-fA-F]+)[ \\t]+([A-Za-z][A-Za-z0-9_]*)[ \\t]+")
+        let rows = row.matches(in: body as String, range: NSRange(location: 0, length: body.length))
+        guard let first = rows.first,
+              body.substring(to: first.range.location).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw InputEngineError.invalidSystemData(.hidMappings)
+        }
+        var identifiers = Set<UInt64>()
+        var consensus: [HIDMapping]?
+        for (index, match) in rows.enumerated() {
+            guard let identifier = UInt64(body.substring(with: match.range(at: 1)), radix: 16),
+                  identifiers.insert(identifier).inserted,
+                  body.substring(with: match.range(at: 2)) == "UserKeyMapping" else {
+                throw InputEngineError.invalidSystemData(.hidMappings)
+            }
+            let start = NSMaxRange(match.range)
+            let end = index + 1 < rows.count ? rows[index + 1].range.location : body.length
+            let value = body.substring(with: NSRange(location: start, length: end - start))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let mappings: [HIDMapping]
+            if value == "(null)" {
+                mappings = []
+            } else {
+                try validateTableArray(value)
+                mappings = try decodeLegacyHIDMappings(Data(value.utf8))
+            }
+            if let consensus, consensus != mappings {
+                // A single global backup cannot represent per-device states.
+                throw InputEngineError.invalidSystemData(.hidMappings)
+            }
+            consensus = mappings
+        }
+        return consensus ?? []
+    }
+
+    private static func validateTableArray(_ value: String) throws {
+        guard value.first == "(", value.last == ")" else {
+            throw InputEngineError.invalidSystemData(.hidMappings)
+        }
+        // OpenStep parsers may ignore trailing input. Require exactly one
+        // complete array, accounting for quoted/escaped string values.
+        var depth = 0
+        var quoted = false
+        var escaped = false
+        for index in value.indices {
+            let character = value[index]
+            if quoted {
+                if escaped { escaped = false }
+                else if character == "\\" { escaped = true }
+                else if character == "\"" { quoted = false }
+            } else if character == "\"" {
+                quoted = true
+            } else if character == "(" {
+                depth += 1
+            } else if character == ")" {
+                depth -= 1
+                guard depth >= 0, depth != 0 || index == value.index(before: value.endIndex) else {
+                    throw InputEngineError.invalidSystemData(.hidMappings)
+                }
+            }
+        }
+        guard depth == 0, !quoted else { throw InputEngineError.invalidSystemData(.hidMappings) }
+    }
+
+    private static func decodeLegacyHIDMappings(_ data: Data) throws -> [HIDMapping] {
         if String(data: data, encoding: .utf8)?
             .trimmingCharacters(in: .whitespacesAndNewlines) == "(null)"
         {
