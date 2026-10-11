@@ -2241,6 +2241,92 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertTrue(caps.enabled)
     }
 
+    func testLegacyAppliedJournalRestartsAndDisablesThroughKeyboardTables() throws {
+        let runner = TableCapsProcessRunner(mappings: [[.tidyTapCapsLock], [.tidyTapCapsLock]], hotkeyEnabled: true)
+        let ownership = try appliedTableCapsOwnership()
+        let adapter = tableCapsAdapter(runner: runner, ownership: ownership)
+        try adapter.apply(capsLockEnabled: true)
+        XCTAssertEqual(runner.hidWriteCount, 0)
+        try adapter.apply(capsLockEnabled: false)
+        XCTAssertEqual(runner.keyboardMappings, [[], []])
+        XCTAssertEqual(runner.hidWriteCount, 1)
+        XCTAssertNil(ownership.data)
+        XCTAssertNil(runner.domain["AppleSymbolicHotKeys"])
+    }
+
+    func testLegacyAppliedJournalRecoversAllNullTableAfterReset() throws {
+        let runner = TableCapsProcessRunner(mappings: [nil, nil], hotkeyEnabled: true)
+        let ownership = try appliedTableCapsOwnership()
+        try tableCapsAdapter(runner: runner, ownership: ownership).apply(capsLockEnabled: true)
+        XCTAssertEqual(runner.keyboardMappings, [[.tidyTapCapsLock], [.tidyTapCapsLock]])
+        XCTAssertEqual(runner.hidWriteCount, 1)
+        XCTAssertEqual(runner.hotkeyWriteCount, 0)
+        XCTAssertEqual(try JSONDecoder().decode(CapsJournal.self, from: XCTUnwrap(ownership.data)).phase, .applied)
+    }
+
+    func testLegacyPreparedJournalCompletesHIDOnlyAndHotkeyWriteInterruptionsWithTables() throws {
+        let plan = try makeCapsController(system: FakeCapsSystem()).prepareEnablePlan()
+        for hotkeyEnabled in [false, true] {
+            let runner = TableCapsProcessRunner(mappings: [[.tidyTapCapsLock], [.tidyTapCapsLock]], hotkeyEnabled: hotkeyEnabled)
+            let ownership = InMemoryCapsOwnership(data: try JSONEncoder().encode(CapsJournal(
+                enabled: true, phase: .prepared, ownership: XCTUnwrap(plan.ownership), enablePlan: plan
+            )))
+            try tableCapsAdapter(runner: runner, ownership: ownership).apply(capsLockEnabled: true)
+            XCTAssertEqual(runner.hidWriteCount, 0)
+            XCTAssertEqual(runner.activationCount, 1)
+            XCTAssertEqual(try JSONDecoder().decode(CapsJournal.self, from: XCTUnwrap(ownership.data)).phase, .applied)
+        }
+    }
+
+    func testMixedKeyboardTablePreservesAppliedJournalAndRetriesOnlyAfterConsensus() throws {
+        let runner = TableCapsProcessRunner(mappings: [[.tidyTapCapsLock], nil], hotkeyEnabled: true)
+        let ownership = try appliedTableCapsOwnership()
+        let original = ownership.data
+        let adapter = tableCapsAdapter(runner: runner, ownership: ownership)
+        XCTAssertThrowsError(try adapter.apply(capsLockEnabled: true))
+        XCTAssertEqual(ownership.data, original)
+        XCTAssertEqual(runner.hidWriteCount, 0)
+        XCTAssertEqual(runner.hotkeyWriteCount, 0)
+        runner.keyboardMappings = [[.tidyTapCapsLock], [.tidyTapCapsLock]]
+        try adapter.apply(capsLockEnabled: true)
+        XCTAssertEqual(runner.hidWriteCount, 0)
+    }
+
+    func testPartialKeyboardWritePreservesPreparedJournalForLaterCompletion() throws {
+        let runner = TableCapsProcessRunner(mappings: [nil, nil], hotkeyEnabled: false)
+        runner.partialHIDWrite = true
+        let ownership = InMemoryCapsOwnership()
+        let adapter = tableCapsAdapter(runner: runner, ownership: ownership)
+        XCTAssertThrowsError(try adapter.apply(capsLockEnabled: true))
+        XCTAssertEqual(runner.hidWriteCount, 1, "Rollback must not overwrite divergent device states")
+        XCTAssertEqual(runner.hotkeyWriteCount, 0)
+        let journal = try JSONDecoder().decode(CapsJournal.self, from: XCTUnwrap(ownership.data))
+        XCTAssertEqual(journal.phase, .prepared)
+        XCTAssertNotNil(journal.enablePlan)
+        XCTAssertEqual(journal.ownership.hid, .current)
+        runner.partialHIDWrite = false
+        runner.keyboardMappings = [[.tidyTapCapsLock], [.tidyTapCapsLock]]
+        try adapter.apply(capsLockEnabled: true)
+        XCTAssertEqual(runner.hidWriteCount, 1)
+        XCTAssertEqual(try JSONDecoder().decode(CapsJournal.self, from: XCTUnwrap(ownership.data)).phase, .applied)
+    }
+
+    private func appliedTableCapsOwnership() throws -> InMemoryCapsOwnership {
+        InMemoryCapsOwnership(data: try JSONEncoder().encode(CapsJournal(
+            enabled: true, phase: .applied,
+            ownership: CapsLockFeatureOwnership(hid: .current, hotkey60: Hotkey60Ownership(backup: nil, hotkeysContainerExisted: false))
+        )))
+    }
+
+    private func tableCapsAdapter(runner: TableCapsProcessRunner, ownership: InMemoryCapsOwnership) -> CapsLockFeatureAdapter {
+        let system = MacOSSystemApplyAdapter(runner: runner)
+        return CapsLockFeatureAdapter(controller: CapsLockFeatureController(
+            hid: CapsLockController(system: system),
+            hotkey: InputSourceShortcutController(system: system),
+            inputSources: FakeCapsSystem()
+        ), ownershipStore: ownership)
+    }
+
     private func makeCapsController(system: FakeCapsSystem) -> CapsLockFeatureController {
         CapsLockFeatureController(
             hid: CapsLockController(system: system),
@@ -2513,6 +2599,58 @@ private struct FakeFocusedProvider: FocusedApplicationProviding {
 
 private struct FakeNavigationSynthesizer: NavigationSynthesizing {
     func synthesize(_ direction: NavigationDirection, for target: FocusedApplication) -> Bool { false }
+}
+
+private final class TableCapsProcessRunner: ProcessRunning, @unchecked Sendable {
+    var keyboardMappings: [[HIDMapping]?]
+    var domain: [String: Any]
+    var hidWriteCount = 0
+    var hotkeyWriteCount = 0
+    var activationCount = 0
+    var partialHIDWrite = false
+
+    init(mappings: [[HIDMapping]?], hotkeyEnabled: Bool) {
+        keyboardMappings = mappings
+        domain = hotkeyEnabled ? ["AppleSymbolicHotKeys": ["60": PropertyListValue.tidyTapHotkey60.anyValue]] : [:]
+    }
+
+    func run(executable: String, arguments: [String], input: Data?) throws -> Data {
+        if executable == "/usr/bin/hidutil" {
+            if arguments.contains("--get") {
+                // Unscoped output also has an irrelevant null service. The
+                // production adapter must explicitly select keyboard services.
+                let values = arguments.contains("--matching") ? keyboardMappings : keyboardMappings + [nil]
+                let rows = values.enumerated().map { index, mappings in
+                    let value = mappings.map { mappings in
+                        "(" + mappings.map {
+                            "{ HIDKeyboardModifierMappingSrc = \($0.source); HIDKeyboardModifierMappingDst = \($0.destination); }"
+                        }.joined(separator: ",") + ")"
+                    } ?? "(null)"
+                    return "\(String(0x100000001 + index, radix: 16)) UserKeyMapping \(value)"
+                }
+                return Data(("RegistryID Key Value\n" + rows.joined(separator: "\n")).utf8)
+            }
+            guard arguments.contains("--matching"), let index = arguments.firstIndex(of: "--set") else { throw TestError.failure }
+            let mappings = try MacOSSystemApplyAdapter.decodeHIDMappings(Data(arguments[index + 1].utf8))
+            hidWriteCount += 1
+            if partialHIDWrite { keyboardMappings[0] = mappings }
+            else { keyboardMappings = keyboardMappings.map { _ in mappings } }
+            return Data()
+        }
+        if executable == "/usr/bin/defaults", arguments.first == "export" {
+            return try PropertyListSerialization.data(fromPropertyList: domain, format: .xml, options: 0)
+        }
+        if executable == "/usr/bin/defaults", arguments.first == "import", let input {
+            domain = try XCTUnwrap(PropertyListSerialization.propertyList(from: input, format: nil) as? [String: Any])
+            hotkeyWriteCount += 1
+            return Data()
+        }
+        if executable == MacOSSystemApplyAdapter.activateSettingsPath {
+            activationCount += 1
+            return Data()
+        }
+        throw TestError.failure
+    }
 }
 
 private final class InMemoryCapsOwnership: TidyTapCapsOwnershipStoring {
