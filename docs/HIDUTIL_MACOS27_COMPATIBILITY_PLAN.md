@@ -65,8 +65,10 @@
 
 - 계획 검수: 2026-10-11 gpt-6-astra가 adaptive scope, 고정된 scope의 실패 처리, journal/partial-write/hotplug 검증 조건을 반영하는 안을 승인했다. 최초 전OS matching 강제안은 채택하지 않았다.
 - 구현 검수: 2026-10-11 gpt-6-astra 승인. 유효한 P1/P2 차단 지적 없음. adaptive scope, 실패 후 쓰기 차단, hotplug/부분 적용 및 기존 journal 연결 테스트를 확인했다.
-- main / release 검수: 대기.
-- 최종 검증 및 PR / 릴리즈 링크: 실행 후 기록.
+- main 검수: gpt-6-astra가 PR #53 head `e37abdf9dcc80e68b37289248faad0a52e3e8082`를 승인했다. main merge `d1314f748888eef7f7a4b1fe416b9eac90ce3213`의 tree가 승인한 구현과 같음을 확인했다.
+- release 검수: gpt-6-astra가 exact DMG와 sidecar, 서명·공증·Gatekeeper·버전·plain helper·LaunchAgent·설치 앱과 산출물 일치를 독립 검사하고 v0.2.6 게시를 승인했다.
+- 구현 [PR #52](https://github.com/Sharknia/TidyTap/pull/52), main 통합 [PR #53](https://github.com/Sharknia/TidyTap/pull/53) 병합 완료.
+- 공개 릴리즈: [TidyTap 0.2.6](https://github.com/Sharknia/TidyTap/releases/tag/v0.2.6). `v0.2.6`은 위 main merge commit을 가리킨다.
 
 ### 구현 검증 (2026-10-11, macOS 27.0.1 / Xcode 27.0)
 
@@ -77,3 +79,21 @@
 - launch smoke 통과: 격리된 앱·helper 시작/종료·설정 창·운영 설정/HID 상태 보존 검사.
 - release / preview DMG workflow 회귀 검사, installer layout 검사, release build settings(`--require-local`) 통과.
 - 실제 macOS 재부팅, 구버전 OS 실행, 물리 입력 검증은 이 자동 테스트 결과에 포함하지 않는다.
+
+### 릴리즈 및 로컬 실행 확인
+
+- 최종 main clean checkout에서 `Scripts/package-release-dmg.sh`로 패키징했다. 시스템 Python 3.9는 DMG 도구의 최소 버전을 충족하지 않아 한 번 중단됐으며, Codex bundled Python 3.12.14를 build-only 환경으로 지정하여 같은 스크립트로 성공했다. 소스나 서명 키는 바꾸지 않았다.
+- 앱/helper/Sparkle nested code의 Developer ID 서명, DMG 서명·timestamp, Apple 공증·stapling, Gatekeeper 통과. `verify-release-artifact.sh`와 `verify-dmg-sidecar.sh` 통과.
+- DMG: `TidyTap-0.2.6.dmg`, 3,506,353 bytes. SHA-256: `4ae8897b5c873804cca0aee43f822c165be5c4e5e30600080f8fd3e442baa067`.
+- 공개 Release에서 DMG와 sidecar를 다시 내려받아 위 SHA-256과 동일함을 확인했다.
+- 기존 앱과 설정을 로컬에 복구 가능한 형태로 백업한 뒤 exact DMG의 앱을 `/Applications/TidyTap.app`에 설치했다. 앱/helper designated requirement가 기존 앱과 같고 설치된 실행 파일이 DMG와 일치함을 확인했다.
+- 실제 UI: 0.2.6, 손쉬운 사용 허용, ‘변경 사항이 적용되었습니다’. Caps Lock 설정 OFF → ON 실제 경로 모두 `applied`, 마지막 사용자 settings 전체와 effectiveSettings가 원래 값과 같다. durable journal은 `.applied`다.
+- 사용자가 다른 앱에서 물리 `⌥V`를 눌러 ‘히스토리가 정상적으로 열립니다’라고 확인했다. 자동 입력 도구의 app-directed 이벤트는 이 물리 검증을 대신하지 않았다.
+- 실제 Caps Lock 키 입력·휠·측면 버튼·Finder 파일 이동, 실제 재부팅, 구OS 실행은 이번 실기기 확인 범위에 포함하지 않는다.
+
+### 자동 업데이트 피드의 남은 조건
+
+- DMG 다운로드 릴리즈와 로컬 설치는 완료됐다. 자동 업데이트 feed는 현재 `0.2.5 / build 13`을 유지한다.
+- `prepare-update-feed.sh`의 기존 Keychain 공개키 조회가 `No existing signing key found`로 중단됐다. app-specific 계정과 legacy 기본 계정, Sparkle-labelled/service Keychain item을 확인했으나 기존 개인키를 찾지 못했다.
+- 기존 앱의 `SUPublicEDKey`와 일치하는 원래 개인키 복원이 필요하다. 새 키 생성·앱 공개키 교체·미서명 enclosure 게시·기존 0.2.5 피드 덮어쓰기는 하지 않았다. 따라서 기존 설치 앱의 자동 업데이트 배포는 완료로 주장하지 않는다.
+- 원래 키를 로컬 Keychain에 복원한 뒤 공개키 일치 확인 → exact DMG appcast 서명 → 아스트라 검수 → feature/dev/main PR 병합 → 공개 feed의 URL·버전·길이·서명 재확인을 수행한다.
