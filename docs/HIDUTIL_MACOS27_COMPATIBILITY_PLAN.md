@@ -91,9 +91,17 @@
 - 사용자가 다른 앱에서 물리 `⌥V`를 눌러 ‘히스토리가 정상적으로 열립니다’라고 확인했다. 자동 입력 도구의 app-directed 이벤트는 이 물리 검증을 대신하지 않았다.
 - 실제 Caps Lock 키 입력·휠·측면 버튼·Finder 파일 이동, 실제 재부팅, 구OS 실행은 이번 실기기 확인 범위에 포함하지 않는다.
 
-### 자동 업데이트 피드의 남은 조건
+### 자동 업데이트 피드의 남은 조건 (2026-10-11 기록)
 
 - DMG 다운로드 릴리즈와 로컬 설치는 완료됐다. 자동 업데이트 feed는 현재 `0.2.5 / build 13`을 유지한다.
 - `prepare-update-feed.sh`의 기존 Keychain 공개키 조회가 `No existing signing key found`로 중단됐다. app-specific 계정과 legacy 기본 계정, Sparkle-labelled/service Keychain item을 확인했으나 기존 개인키를 찾지 못했다.
 - 기존 앱의 `SUPublicEDKey`와 일치하는 원래 개인키 복원이 필요하다. 새 키 생성·앱 공개키 교체·미서명 enclosure 게시·기존 0.2.5 피드 덮어쓰기는 하지 않았다. 따라서 기존 설치 앱의 자동 업데이트 배포는 완료로 주장하지 않는다.
 - 원래 키를 로컬 Keychain에 복원한 뒤 공개키 일치 확인 → exact DMG appcast 서명 → 아스트라 검수 → feature/dev/main PR 병합 → 공개 feed의 URL·버전·길이·서명 재확인을 수행한다.
+
+### 자동 업데이트 피드 서명 및 게시 준비 (2026-10-12)
+
+- 이 Mac의 로그인 Keychain에 기존 `com.sharknia.TidyTap` 업데이트 서명 키가 있음을 확인했다. 기존 설치본 0.2.5와 공개 DMG 0.2.6의 `SUPublicEDKey`가 같으며 새 키 생성이나 키 이전은 수행하지 않았다.
+- 공개 v0.2.6 DMG와 sidecar를 다시 다운로드했다. 기존 SHA-256 및 3,506,353 bytes가 일치하고, 앱·Helper·Sparkle 중첩 서명, 팀 ID, 공증 티켓, Gatekeeper, 앱 build 14와 설치 레이아웃 검사가 통과했다.
+- `Scripts/prepare-update-feed.sh`로 기존 키를 사용해 0.2.6 / build 14 피드를 생성했다. 별도 CryptoKit 검증에서 설치된 0.2.5 앱의 공개키로 공개 DMG의 Ed25519 서명이 유효함을 확인했다.
+- 피드의 버전·build·URL·길이·서명과 이전 0.2.5/0.2.4 항목 보존을 확인했다. Sparkle 생성 도구의 기본 최근 3개 유지에 따라 0.2.3 항목은 제거됐다. XML 검사와 릴리즈 workflow 회귀 검사가 통과했다.
+- 이번 변경은 이미 공개된 DMG를 가리키는 appcast 게시다. 앱 코드·버전·릴리즈 태그·공개 DMG는 변경하지 않는다. 공개 피드 재확인과 기존 설치본의 업데이트 확인 결과는 게시 후 기록한다. 다운로드·교체·재실행 전체 흐름은 별도 실제 검증이 필요하다.
