@@ -4,8 +4,13 @@ import TidyTapInputEngine
 /// Feature-specific implementations live in later stages. These narrow
 /// interfaces keep the lifecycle transaction independent of CGEvent/HID APIs.
 protocol TidyTapCapsFeatureApplying: AnyObject {
+    func reconcileConnectedDevices(capsLockEnabled: Bool) throws
     func apply(capsLockEnabled: Bool) throws
     func currentCapsLockEnabled() throws -> Bool
+}
+
+extension TidyTapCapsFeatureApplying {
+    func reconcileConnectedDevices(capsLockEnabled: Bool) throws {}
 }
 
 private enum TidyTapClipboardSettingsError: Error {
@@ -85,8 +90,8 @@ extension TidyTapTerminating {
     }
 }
 
-/// Runs the whole settings snapshot as one serial transaction. On any failure,
-/// it reapplies the last known-good snapshot in reverse component order.
+/// Caps Lock owns a separate transaction so its HID errors cannot stop the
+/// event tap. Input/menu changes retain their last known-good rollback state.
 @MainActor
 final class ApplyCoordinator {
     private let preferences: TidyTapPreferencesStoring
@@ -97,6 +102,8 @@ final class ApplyCoordinator {
     private let clipboardPreflight: (Bool) throws -> Void
     private var activeRequest: TidyTapSettingsRequest?
     private var lastReportedStatus: TidyTapApplyStatus?
+    private var capsFailure: TidyTapApplyStatus?
+    private var knownCapsLockEnabled = false
 
     init(
         preferences: TidyTapPreferencesStoring,
@@ -124,7 +131,7 @@ final class ApplyCoordinator {
         var disabled = activeRequest.settings
         disabled.clipboardHistoryEnabled = false
         do {
-            try preferences.write(settings: disabled, applyRequestID: activeRequest.applyRequestID)
+            try persistEffectiveSettings(disabled, requestID: activeRequest.applyRequestID)
         } catch {
             report(TidyTapApplyStatus(
                 applyRequestID: activeRequest.applyRequestID,
@@ -214,11 +221,11 @@ final class ApplyCoordinator {
         }
         let latest = preferences.readRequest()
         if latest.applyRequestID == requestID, latest.settings != effective {
-            try? preferences.write(settings: effective, applyRequestID: requestID)
+            try? persistEffectiveSettings(effective, requestID: requestID)
         }
         self.activeRequest = TidyTapSettingsRequest(settings: effective, applyRequestID: requestID)
         report(status)
-        if !effective.requiresHelper { terminator.terminate() }
+        if !effective.requiresHelper, capsFailure == nil { terminator.terminate() }
     }
 
     @discardableResult
@@ -231,26 +238,11 @@ final class ApplyCoordinator {
            lastReportedStatus.errorCode == "eventTap.creationFailed" {
             return lastReportedStatus
         }
-        let previousState: ControllerState
-        do {
-            // A fresh adapter has not learned the persisted step yet. Seed the
-            // rollback snapshot from the last confirmed request, or the first
-            // persisted request, rather than its construction default.
-            previousState = try captureControllerState(
-                rememberedMouseWheelStepLines: activeRequest?.settings.mouseWheelStepLines
-                    ?? request.settings.mouseWheelStepLines
-            )
-        } catch {
-            let captureError = error as? ControllerStateCaptureError
-            let result = failure(
-                request.applyRequestID,
-                component: captureError?.component ?? .lifecycle,
-                error: captureError?.underlying ?? error,
-                effectiveSettings: request.settings
-            )
-            report(result)
-            return result
-        }
+        applyCapsLock(request)
+        let previousState = captureControllerState(
+            rememberedMouseWheelStepLines: activeRequest?.settings.mouseWheelStepLines
+                ?? request.settings.mouseWheelStepLines
+        )
         let attempt = apply(request.settings, requestID: request.applyRequestID)
         var result = attempt.status
         if result.outcome == .applied || result.outcome == .partiallyApplied {
@@ -258,7 +250,7 @@ final class ApplyCoordinator {
             result = result.withEffectiveSettings(effective)
             activeRequest = TidyTapSettingsRequest(settings: effective, applyRequestID: request.applyRequestID)
             if effective != request.settings {
-                try? preferences.write(settings: effective, applyRequestID: request.applyRequestID)
+                try? persistEffectiveSettings(effective, requestID: request.applyRequestID)
             }
         } else {
             let rollbackFailures = restore(previousState, touchedComponents: attempt.touchedComponents, requestID: request.applyRequestID)
@@ -277,22 +269,24 @@ final class ApplyCoordinator {
                     applyRequestID: request.applyRequestID
                 )
                 let recoveredSettings = activeRequest?.settings ?? restored
-                try? preferences.write(settings: recoveredSettings, applyRequestID: request.applyRequestID)
+                try? persistEffectiveSettings(recoveredSettings, requestID: request.applyRequestID)
                 report(recoveryResult)
                 return recoveryResult
             }
             result = result.withEffectiveSettings(restored)
             activeRequest = TidyTapSettingsRequest(settings: restored, applyRequestID: request.applyRequestID)
             if restored != request.settings {
-                try? preferences.write(settings: restored, applyRequestID: request.applyRequestID)
+                try? persistEffectiveSettings(restored, requestID: request.applyRequestID)
             }
         }
 
+        result = includingCapsFailure(result)
         report(result)
         let effective = result.effectiveSettings ?? request.settings
         let recoveredCreationFailure = result.outcome == .failed &&
             result.failedComponent == .eventTap && result.errorCode == "eventTap.creationFailed"
-        if (result.outcome == .applied || result.outcome == .partiallyApplied || recoveredCreationFailure), !effective.requiresHelper {
+        if (result.outcome == .applied || result.outcome == .partiallyApplied || recoveredCreationFailure),
+           !effective.requiresHelper, capsFailure == nil {
             terminateIfCurrent(request.applyRequestID)
         }
         return result
@@ -342,15 +336,6 @@ final class ApplyCoordinator {
             )
         }
 
-        touchedComponents.append(.capsLock)
-        do {
-            try capsFeature.apply(capsLockEnabled: settings.capsLockInputSourceSwitching)
-        } catch {
-            return ApplyAttempt(
-                status: failure(requestID, component: .capsLock, error: error),
-                touchedComponents: touchedComponents
-            )
-        }
         touchedComponents.append(.eventTap)
         let inputResult: TidyTapInputFeatureApplyResult
         do {
@@ -440,14 +425,6 @@ final class ApplyCoordinator {
             }
         }
 
-        if touchedComponents.contains(.capsLock) {
-            do {
-                try capsFeature.apply(capsLockEnabled: state.capsLockEnabled)
-            } catch {
-                failures.append(.capsLock)
-            }
-        }
-
         return failures
     }
 
@@ -498,7 +475,63 @@ final class ApplyCoordinator {
         )
     }
 
+    private func applyCapsLock(_ request: TidyTapSettingsRequest) {
+        capsFailure = nil
+        do {
+            try capsFeature.reconcileConnectedDevices(capsLockEnabled: request.settings.capsLockInputSourceSwitching)
+            knownCapsLockEnabled = try capsFeature.currentCapsLockEnabled()
+        } catch {
+            capsFailure = failure(request.applyRequestID, component: .capsLock, error: error)
+            return
+        }
+        let previous = knownCapsLockEnabled
+        do {
+            try capsFeature.apply(capsLockEnabled: request.settings.capsLockInputSourceSwitching)
+            knownCapsLockEnabled = try capsFeature.currentCapsLockEnabled()
+        } catch {
+            capsFailure = failure(request.applyRequestID, component: .capsLock, error: error)
+            do {
+                try capsFeature.apply(capsLockEnabled: previous)
+            } catch {
+                capsFailure = TidyTapApplyStatus(
+                    applyRequestID: request.applyRequestID, outcome: .recoveryRequired,
+                    failedComponent: .capsLock, errorCode: "lifecycle.rollbackFailed.capsLock"
+                )
+            }
+            knownCapsLockEnabled = (try? capsFeature.currentCapsLockEnabled()) ?? previous
+        }
+    }
+
+    private func includingCapsFailure(_ status: TidyTapApplyStatus) -> TidyTapApplyStatus {
+        guard let capsFailure, capsFailure.applyRequestID == status.applyRequestID,
+              status.outcome == .applied || capsFailure.outcome == .recoveryRequired else { return status }
+        if status.outcome == .recoveryRequired {
+            return TidyTapApplyStatus(
+                applyRequestID: status.applyRequestID, outcome: .recoveryRequired,
+                failedComponent: status.failedComponent,
+                errorCode: "lifecycle.rollbackFailed.eventTap.capsLock",
+                effectiveSettings: status.effectiveSettings
+            )
+        }
+        return TidyTapApplyStatus(
+            applyRequestID: status.applyRequestID,
+            outcome: capsFailure.outcome == .recoveryRequired ? .recoveryRequired : .partiallyApplied,
+            failedComponent: .capsLock, errorCode: capsFailure.errorCode,
+            effectiveSettings: status.effectiveSettings
+        )
+    }
+
+    private func persistEffectiveSettings(_ settings: TidyTapSettings, requestID: UUID) throws {
+        var persisted = settings
+        if capsFailure != nil {
+            // Keep the requested Caps state so a device reconnect can retry it.
+            persisted.capsLockInputSourceSwitching = preferences.readRequest().settings.capsLockInputSourceSwitching
+        }
+        try preferences.write(settings: persisted, applyRequestID: requestID)
+    }
+
     private func report(_ status: TidyTapApplyStatus) {
+        let status = includingCapsFailure(status)
         lastReportedStatus = status
         try? preferences.writeApplyStatus(status)
         TidyTapIPC.postApplyResult(status)
@@ -506,6 +539,7 @@ final class ApplyCoordinator {
 
     private func effectiveSettings(_ requested: TidyTapSettings) -> TidyTapSettings {
         var effective = requested
+        effective.capsLockInputSourceSwitching = knownCapsLockEnabled
         let input = inputFeatures.currentConfiguration()
         effective.reverseMouseWheelVertically = input.reverseMouseWheel
         effective.sideButtonNavigation = input.sideButtonNavigation
@@ -524,24 +558,13 @@ final class ApplyCoordinator {
         let menuBarVisible: Bool
     }
 
-    private struct ControllerStateCaptureError: Error {
-        let component: TidyTapApplyComponent
-        let underlying: Error
-    }
-
-    private func captureControllerState(rememberedMouseWheelStepLines: Int? = nil) throws -> ControllerState {
-        let capsLockEnabled: Bool
-        do {
-            capsLockEnabled = try capsFeature.currentCapsLockEnabled()
-        } catch {
-            throw ControllerStateCaptureError(component: .capsLock, underlying: error)
-        }
+    private func captureControllerState(rememberedMouseWheelStepLines: Int? = nil) -> ControllerState {
         var input = inputFeatures.currentConfiguration()
         if let rememberedMouseWheelStepLines {
             input.mouseWheelStepLines = rememberedMouseWheelStepLines
         }
         return ControllerState(
-            capsLockEnabled: capsLockEnabled,
+            capsLockEnabled: knownCapsLockEnabled,
             input: input,
             menuBarVisible: menuBar.isMenuBarVisible
         )
@@ -565,9 +588,9 @@ final class ApplyCoordinator {
     }
 
     private func currentSettings(fallback: TidyTapSettings) -> TidyTapSettings {
-        guard let state = try? captureControllerState(
+        let state = captureControllerState(
             rememberedMouseWheelStepLines: activeRequest == nil ? fallback.mouseWheelStepLines : nil
-        ) else { return fallback }
+        )
         return settings(fallback, applying: state)
     }
 

@@ -72,6 +72,13 @@ fi
 
 assert_container_codesign_order
 
+if ! /usr/bin/grep -Fq 'notary_keychain=$(/usr/bin/security default-keychain -d user' "$release_script" || \
+  ! /usr/bin/grep -Fq 'notarytool history --keychain-profile "$notary_profile" --keychain "$notary_keychain"' "$release_script" || \
+  ! /usr/bin/grep -Fq 'notarytool submit "$candidate_dmg" --keychain-profile "$notary_profile" --wait --keychain "$notary_keychain"' "$release_script"; then
+  print -u2 -- "Notarization preflight and submission must use the same explicit default user keychain."
+  exit 1
+fi
+
 if ! /usr/bin/grep -Fq 'Scripts/create-installer-dmg.sh' "$release_script" || \
   ! /usr/bin/grep -Fq -- '--source-directory "$project_root"' "$release_script"; then
   print -u2 -- "Release workflow must use the shared committed-source installer helper."
