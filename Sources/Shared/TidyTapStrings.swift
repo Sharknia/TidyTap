@@ -66,7 +66,7 @@ enum TidyTapStrings {
         }
     }
     static func capsLockApplyMessage(for status: TidyTapApplyStatus, bundle: Bundle = .main) -> String? {
-        guard status.outcome == .failed || status.outcome == .recoveryRequired else { return nil }
+        guard status.outcome == .failed || status.outcome == .recoveryRequired || status.outcome == .partiallyApplied else { return nil }
 
         if status.outcome == .recoveryRequired, hasCapsLockRollbackFailure(status.errorCode) {
             return String(localized: "Caps Lock changes need to be restored before you continue.", bundle: bundle)

@@ -20,7 +20,11 @@
 
 설정 스냅샷은 [TidyTapSettings.swift](../Sources/Shared/TidyTapSettings.swift)의 사용자 preferences domain에 저장한다. 앱이 요청 ID를 포함한 변경 알림을 보내면 Helper가 전체 스냅샷을 다시 읽고, [ApplyCoordinator.swift](../Sources/Helper/ApplyCoordinator.swift)가 직렬 적용·실패 복원·결과 보고를 맡는다. 앱은 일치하는 요청 ID의 결과만 성공으로 표시한다. 0.1.4에서는 로그인 항목이 아직 없는 신규 설치에서도 일반 기능 토글을 적용할 수 있게 했고, 실패 뒤 Helper 종료 직전의 새 요청을 보존했다. [0.1.4 릴리스 노트](RELEASE_NOTES_0.1.4.md)에 검증 범위가 있다.
 
-Caps Lock은 HID 매핑과 입력 소스 단축키의 백업·조건부 복원을 사용한다. 휠 방향·단계 크기, Safari/Finder 측면 버튼, Finder 파일 잘라내기와 클립보드 호출 키는 입력 엔진의 event tap 경로를 공유한다. Finder `⌘X`는 파일 이동 대기 상태를 관리하고, 일반 `⌘C`는 복사로 둔다. 클립보드 히스토리는 최초 단축키 입력과 적용 성공 전에는 수집하지 않는다. 기존 입력 기능과 Finder 동작의 상세 수용 범위는 [MVP 계획](MVP_PLAN.md), [Finder 검증](FINDER_CUT_PASTE_VALIDATION.md), [클립보드 수용 현황](CLIPBOARD_HISTORY_ACCEPTANCE_STATUS.md)을 참고한다.
+Caps Lock은 HID 매핑과 입력 소스 단축키의 백업·조건부 복원을 사용한다. Caps Lock 적용·복원은 event tap 적용과 별도 트랜잭션이다. Caps Lock 조회·적용이 실패해도 휠·사이드 버튼·Finder·클립보드 단축키는 계속 적용하고, 결과는 부분 적용 또는 Caps Lock 복원 필요로 보고한다. 실패한 Caps Lock 요청은 다음 재연결 때 재시도하도록 유지한다.
+
+Helper는 IOKit의 HID 서비스 연결·해제 알림과 절전 복귀 알림을 받아 0.5초 뒤 설정을 다시 적용한다. 기존 소유권 기록이 있고 장치 간 차이가 TidyTap Caps Lock 변환의 누락뿐이면 그 변환을 보충한다. 다른 Caps Lock 매핑이나 장치마다 다른 사용자 지정 매핑은 덮어쓰지 않고 Caps Lock 오류로 남긴다. 이 경우에도 event tap 기능은 계속 적용한다.
+
+ 휠 방향·단계 크기, Safari/Finder 측면 버튼, Finder 파일 잘라내기와 클립보드 호출 키는 입력 엔진의 event tap 경로를 공유한다. Finder `⌘X`는 파일 이동 대기 상태를 관리하고, 일반 `⌘C`는 복사로 둔다. 클립보드 히스토리는 최초 단축키 입력과 적용 성공 전에는 수집하지 않는다. 기존 입력 기능과 Finder 동작의 상세 수용 범위는 [MVP 계획](MVP_PLAN.md), [Finder 검증](FINDER_CUT_PASTE_VALIDATION.md), [클립보드 수용 현황](CLIPBOARD_HISTORY_ACCEPTANCE_STATUS.md)을 참고한다.
 
 ## 클립보드 히스토리
 

@@ -56,7 +56,7 @@ final class CapsLockErrorMessageTests: XCTestCase {
         XCTAssertNil(TidyTapStrings.capsLockApplyMessage(for: makeStatus(
             errorCode: "capsLock.commandFailed"
         )))
-        XCTAssertNil(TidyTapStrings.capsLockApplyMessage(for: TidyTapApplyStatus(
+        XCTAssertNotNil(TidyTapStrings.capsLockApplyMessage(for: TidyTapApplyStatus(
             applyRequestID: UUID(),
             outcome: .partiallyApplied,
             failedComponent: .capsLock,

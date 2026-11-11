@@ -59,7 +59,14 @@ if ! /usr/bin/security find-identity -v -p codesigning 2>/dev/null | /usr/bin/gr
   print -u2 -- "The configured Developer ID Application identity is unavailable in this keychain."
   exit 2
 fi
-if ! /usr/bin/xcrun notarytool history --keychain-profile "$notary_profile" >/dev/null 2>&1; then
+# Resolve the file keychain explicitly: implicit profile lookup may select a
+# different credential with the same profile name from another keychain store.
+notary_keychain=$(/usr/bin/security default-keychain -d user | /usr/bin/sed -E 's/^[[:space:]]*"//; s/"[[:space:]]*$//')
+if [[ ! -f "$notary_keychain" ]]; then
+  print -u2 -- "The default user keychain file is unavailable."
+  exit 2
+fi
+if ! /usr/bin/xcrun notarytool history --keychain-profile "$notary_profile" --keychain "$notary_keychain" >/dev/null 2>&1; then
   print -u2 -- "The configured notarytool keychain profile is unavailable or unusable."
   exit 2
 fi
@@ -237,7 +244,7 @@ fi
 run_step \
   "Notarization submission" \
   "Check Apple notarization service availability and the local keychain profile." \
-  /usr/bin/xcrun notarytool submit "$candidate_dmg" --keychain-profile "$notary_profile" --wait
+  /usr/bin/xcrun notarytool submit "$candidate_dmg" --keychain-profile "$notary_profile" --wait --keychain "$notary_keychain"
 run_step \
   "Notarization stapling" \
   "Apple accepted the candidate, but its ticket could not be attached." \

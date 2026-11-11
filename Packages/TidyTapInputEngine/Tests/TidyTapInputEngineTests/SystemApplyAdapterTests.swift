@@ -58,6 +58,36 @@ final class SystemApplyAdapterTests: XCTestCase {
         ])
     }
 
+    func testOwnedCapsMappingRepairsNewKeyboardWithoutRemovingOtherMappings() throws {
+        let baseline = "({ HIDKeyboardModifierMappingSrc = 1; HIDKeyboardModifierMappingDst = 2; })"
+        let mapped = "({ HIDKeyboardModifierMappingSrc = 1; HIDKeyboardModifierMappingDst = 2; }, { HIDKeyboardModifierMappingSrc = 30064771129; HIDKeyboardModifierMappingDst = 30064771181; })"
+        let mixed = table([mapped, baseline])
+        let runner = FakeProcessRunner(outputs: [mixed, mixed, mixed, Data(), table([mapped, mapped])])
+        try MacOSSystemApplyAdapter(runner: runner).reconcileOwnedCapsLockMappings(ownership: .current)
+        let writes = runner.invocations.filter { $0.arguments.contains("--set") }
+        XCTAssertEqual(writes.count, 1)
+        XCTAssertEqual(Array(writes[0].arguments.prefix(3)), ["property"] + keyboardScope)
+        XCTAssertEqual(try MacOSSystemApplyAdapter.decodeHIDMappings(Data(writes[0].arguments.last!.utf8)), [
+            HIDMapping(source: 1, destination: 2), .tidyTapCapsLock
+        ])
+    }
+
+    func testDeviceRepairRefusesForeignMappingDifferentLayoutAndRacingHotplug() {
+        let foreign = "({ HIDKeyboardModifierMappingSrc = 30064771129; HIDKeyboardModifierMappingDst = 1; })"
+        let unrelated = "({ HIDKeyboardModifierMappingSrc = 1; HIDKeyboardModifierMappingDst = 2; })"
+        let mixed = table([capsArray, "(null)"])
+        let cases = [
+            [table([capsArray, foreign]), table([capsArray, foreign])],
+            [table([capsArray, unrelated]), table([capsArray, unrelated])],
+            [mixed, mixed, table([capsArray, "(null)", "(null)"])]
+        ]
+        for outputs in cases {
+            let runner = FakeProcessRunner(outputs: outputs)
+            XCTAssertThrowsError(try MacOSSystemApplyAdapter(runner: runner).reconcileOwnedCapsLockMappings(ownership: .current))
+            XCTAssertFalse(runner.invocations.contains { $0.arguments.contains("--set") })
+        }
+    }
+
     func testRejectsDivergentAndMalformedTables() {
         let malformed = [
             table(["(null)", capsArray]),
