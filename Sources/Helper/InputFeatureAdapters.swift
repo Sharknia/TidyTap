@@ -161,6 +161,7 @@ final class CapsLockFeatureAdapter: TidyTapCapsFeatureApplying {
     private let ownershipStore: TidyTapCapsOwnershipStoring
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
+    private var reconcileHID: ((CapsHIDOwnership, Bool) throws -> Void)?
 
     convenience init(system: MacOSSystemApplyAdapter, ownershipStore: TidyTapCapsOwnershipStoring) {
         self.init(controller: CapsLockFeatureController(
@@ -168,11 +169,28 @@ final class CapsLockFeatureAdapter: TidyTapCapsFeatureApplying {
             hotkey: InputSourceShortcutController(system: system),
             inputSources: system
         ), ownershipStore: ownershipStore)
+        reconcileHID = { ownership, enabling in
+            let domain = try system.readSymbolicHotkeyDomain()
+            if enabling, InputSourceShortcutController.hotkey60(in: domain) != .tidyTapHotkey60 {
+                throw InputEngineError.symbolicHotkeyOwnershipConflict
+            }
+            try system.reconcileOwnedCapsLockMappings(ownership: ownership)
+        }
     }
 
-    init(controller: CapsLockFeatureController, ownershipStore: TidyTapCapsOwnershipStoring) {
+    func reconcileConnectedDevices(capsLockEnabled: Bool) throws {
+        guard let journal = try readJournal(), journal.enabled, journal.phase == .applied else { return }
+        try reconcileHID?(journal.ownership.hid, capsLockEnabled)
+    }
+
+    init(
+        controller: CapsLockFeatureController,
+        ownershipStore: TidyTapCapsOwnershipStoring,
+        reconcileHID: ((CapsHIDOwnership, Bool) throws -> Void)? = nil
+    ) {
         self.controller = controller
         self.ownershipStore = ownershipStore
+        self.reconcileHID = reconcileHID
     }
 
     func apply(capsLockEnabled: Bool) throws {

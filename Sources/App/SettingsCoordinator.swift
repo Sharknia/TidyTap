@@ -96,6 +96,9 @@ final class SettingsCoordinator {
             correlatedStatus = nil
         }
         var settings = correlatedStatus?.effectiveSettings ?? request.settings
+        if correlatedStatus?.failedComponent == .capsLock {
+            settings.capsLockInputSourceSwitching = request.settings.capsLockInputSourceSwitching
+        }
         settings.launchAtLogin = loginItemManager.status() == .enabled
         return settings
     }
@@ -170,6 +173,9 @@ final class SettingsCoordinator {
             case .pending, .applied, .partiallyApplied:
                 settings = persistedSettings()
             }
+        }
+        if validatedStatus.failedComponent == .capsLock {
+            settings.capsLockInputSourceSwitching = request.settings.capsLockInputSourceSwitching
         }
         settings.launchAtLogin = loginItemManager.status() == .enabled
         return settings

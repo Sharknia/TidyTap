@@ -111,6 +111,12 @@ The release operator needs all of the following on the release Mac:
 The profile name refers to credentials stored in Keychain, not to a file in the
 repository.
 
+The public packaging script explicitly passes the current user's default file
+keychain to both the profile preflight and submission. This keeps the selected
+credential store consistent when implicit profile lookup finds another entry
+with the same name. The existing profile may use an app-specific password or
+an existing App Store Connect API key; private key files stay outside the repository.
+
 ## Build, sign, notarize, staple
 
 Before creating a public candidate, check the project configuration:

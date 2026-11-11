@@ -206,6 +206,7 @@ final class HelperRuntime: NSObject {
         )
         self.lifecycle = lifecycle
         lifecycle.start()
+        if launchSmoke == nil { lifecycle.monitorConnectedDevices() }
         let updateStopProbe = launchSmoke != nil &&
             ProcessInfo.processInfo.environment["TIDYTAP_UPDATE_STOP_PROBE"] == "1"
         if launchSmoke == nil || updateStopProbe {

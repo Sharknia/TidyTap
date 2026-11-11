@@ -535,7 +535,7 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertTrue(authorized.isAuthorized(for: .mouseWheel))
     }
 
-    func testApplyCoordinatorRollsBackInReverseOrderAfterInputFailure() {
+    func testInputFailureRollsBackInputWithoutUndoingIndependentCapsSetting() {
         let requestID = UUID()
         let store = InMemoryPreferences(request: TidyTapSettingsRequest(
             settings: TidyTapSettings(
@@ -561,7 +561,7 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(status.failedComponent, .eventTap)
         XCTAssertEqual(status.applyRequestID, requestID)
         XCTAssertEqual(store.status, status)
-        XCTAssertEqual(calls.values, ["caps:true", "input:true:false", "input:false:false", "caps:false"])
+        XCTAssertEqual(calls.values, ["caps:true", "input:true:false", "input:false:false"])
     }
 
     func testClipboardShortcutAppliesAndInvalidReplacementKeepsThePriorTap() {
@@ -663,10 +663,10 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(result.errorCode, "clipboardHistory.readDenied")
         XCTAssertFalse(store.request.settings.clipboardHistoryEnabled)
         XCTAssertNil(input.currentConfiguration().clipboardShortcut)
-        XCTAssertTrue(calls.values.isEmpty)
+        XCTAssertEqual(calls.values, ["caps:false"])
     }
 
-    func testFirstApplyCapsFailurePreservesPersistedWheelStepBeforeInputIsTouched() {
+    func testFirstApplyCapsFailureStillAppliesPersistedWheelStep() {
         var requested = TidyTapSettings.defaults
         requested.capsLockInputSourceSwitching = true
         requested.fixedMouseWheelStepEnabled = true
@@ -684,13 +684,13 @@ final class TidyTapSettingsTests: XCTestCase {
 
         let result = coordinator.applyLatestSettings()
 
-        XCTAssertEqual(result.outcome, .failed)
+        XCTAssertEqual(result.outcome, .partiallyApplied)
         XCTAssertEqual(result.failedComponent, .capsLock)
-        XCTAssertTrue(calls.values.isEmpty, "Caps validation must fail before any input application")
-        XCTAssertEqual(input.currentConfiguration().mouseWheelStepLines, 3, "fresh adapter remains untouched")
-        XCTAssertEqual(result.effectiveSettings?.mouseWheelStepLines, 7)
-        XCTAssertEqual(result.effectiveSettings?.fixedMouseWheelStepEnabled, false)
-        XCTAssertEqual(store.request.settings, result.effectiveSettings)
+        XCTAssertEqual(calls.values, ["input:false:false"])
+        XCTAssertEqual(input.currentConfiguration().mouseWheelStepLines, 7)
+        XCTAssertEqual(result.effectiveSettings?.fixedMouseWheelStepEnabled, true)
+        XCTAssertEqual(result.effectiveSettings?.capsLockInputSourceSwitching, false)
+        XCTAssertTrue(store.request.settings.capsLockInputSourceSwitching, "Preserve intent for reconnect retry")
     }
 
     func testSubsequentSizeChangeFailureRestoresPreviouslyAppliedWheelStep() {
@@ -932,7 +932,7 @@ final class TidyTapSettingsTests: XCTestCase {
 
         XCTAssertEqual(status.outcome, .recoveryRequired)
         XCTAssertEqual(status.errorCode, "lifecycle.rollbackFailed.menuBar.eventTap")
-        XCTAssertEqual(calls.values.last, "caps:false")
+        XCTAssertEqual(calls.values.last, "input:passThrough")
     }
 
     func testRegisterFailureDoesNotPersistOrLaunchNewSettings() {
@@ -2109,6 +2109,94 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(terminator.calls.values, ["terminate"])
     }
 
+    func testUnreadableCapsStateKeepsWheelReversalAndShortcutWorkingAcrossReconnect() {
+        var settings = TidyTapSettings.defaults
+        settings.capsLockInputSourceSwitching = true
+        settings.reverseMouseWheelVertically = true
+        settings.sideButtonNavigation = true
+        settings.finderCutPasteEnabled = true
+        settings.clipboardHistoryEnabled = true
+        settings.clipboardHistoryShortcut = .init(keyCode: 9, modifiers: CGEventFlags.maskAlternate.rawValue)
+        let store = InMemoryPreferences(request: .init(settings: settings, applyRequestID: UUID()))
+        let backend = FakeEventTapBackend()
+        let input = InputFeaturesAdapter(
+            permissionChecker: MutableInputPermissions(accessibility: true, inputMonitoring: true), backend: backend
+        )
+        let caps = UnreadableCaps()
+        let coordinator = ApplyCoordinator(
+            preferences: store, capsFeature: caps, inputFeatures: input,
+            menuBar: RecordingMenu(calls: CallLog()), terminator: RecordingTerminator(calls: CallLog())
+        )
+        let lifecycle = HelperLifecycle(
+            coordinator: coordinator, permissionCoordinator: HelperPermissionCoordinator(preferences: store)
+        )
+        lifecycle.start()
+        defer { lifecycle.stop() }
+        XCTAssertEqual(store.status?.outcome, .partiallyApplied)
+        XCTAssertTrue(input.currentConfiguration().reverseMouseWheel)
+        XCTAssertTrue(input.currentConfiguration().sideButtonNavigation)
+        XCTAssertTrue(input.currentConfiguration().finderCutPasteEnabled)
+        XCTAssertEqual(input.currentConfiguration().clipboardShortcut, settings.clipboardHistoryShortcut)
+        let deltas = ScrollDeltaFields(verticalLine: 2, verticalPoint: 12, verticalFixed: 131072,
+                                      horizontalLine: 0, horizontalPoint: 0, horizontalFixed: 0)
+        let observation = ScrollObservation(timestampNanoseconds: 1, isContinuous: false, deltas: deltas,
+                                            phase: [], momentumPhase: [])
+        XCTAssertEqual(backend.send(.scroll(observation)), .replaceScrollDeltas(
+            ScrollDeltaFields(verticalLine: -2, verticalPoint: -12, verticalFixed: -131072,
+                              horizontalLine: 0, horizontalPoint: 0, horizontalFixed: 0)
+        ))
+        coordinator.reportRuntimeInput(requestID: store.request.applyRequestID, .applied, error: nil)
+        XCTAssertEqual(store.status?.failedComponent, .capsLock, "Input status must not hide a pending Caps error")
+        XCTAssertTrue(store.request.settings.capsLockInputSourceSwitching)
+        let ui = SettingsCoordinator(
+            preferences: store, helperLauncher: RecordingHelperLauncher(),
+            loginItemManager: StatefulLoginItem(status: .disabled)
+        )
+        XCTAssertTrue(ui.settingsForUI().capsLockInputSourceSwitching)
+        XCTAssertTrue(ui.visibleSettings(for: store.status!).capsLockInputSourceSwitching)
+        caps.readFails = false
+        lifecycle.refreshConnectedDevices()
+        XCTAssertEqual(store.status?.outcome, .applied)
+        XCTAssertTrue(store.status?.effectiveSettings?.capsLockInputSourceSwitching == true)
+        XCTAssertTrue(input.currentConfiguration().reverseMouseWheel)
+    }
+
+    func testPendingCapsOnlyRequestKeepsHelperAliveForDeviceRetry() {
+        var settings = TidyTapSettings.defaults
+        settings.capsLockInputSourceSwitching = true
+        let store = InMemoryPreferences(request: .init(settings: settings, applyRequestID: UUID()))
+        let calls = CallLog()
+        let coordinator = ApplyCoordinator(
+            preferences: store, capsFeature: ThrowingCaps(error: InputEngineError.invalidSystemData(.hidMappings)),
+            inputFeatures: RecordingInput(calls: CallLog()), menuBar: RecordingMenu(calls: CallLog()),
+            terminator: RecordingTerminator(calls: calls)
+        )
+        XCTAssertEqual(coordinator.applyLatestSettings().outcome, .partiallyApplied)
+        XCTAssertTrue(calls.values.isEmpty)
+        settings.capsLockInputSourceSwitching = false
+        store.request = .init(settings: settings, applyRequestID: UUID())
+        XCTAssertEqual(coordinator.applyLatestSettings().outcome, .applied)
+        XCTAssertEqual(calls.values, ["terminate"])
+    }
+
+    func testDeviceNotificationRegistrationDoesNotModifyInputAndCanStop() {
+        var settings = TidyTapSettings.defaults
+        settings.reverseMouseWheelVertically = true
+        let store = InMemoryPreferences(request: .init(settings: settings, applyRequestID: UUID()))
+        let input = RecordingInput(calls: CallLog())
+        let lifecycle = HelperLifecycle(
+            coordinator: ApplyCoordinator(
+                preferences: store, capsFeature: RecordingCaps(calls: CallLog()), inputFeatures: input,
+                menuBar: RecordingMenu(calls: CallLog()), terminator: RecordingTerminator(calls: CallLog())
+            ), permissionCoordinator: HelperPermissionCoordinator(preferences: store)
+        )
+        lifecycle.start()
+        XCTAssertTrue(lifecycle.monitorConnectedDevices())
+        lifecycle.stop()
+        XCTAssertTrue(input.currentConfiguration().reverseMouseWheel)
+        XCTAssertEqual(store.status?.outcome, .applied)
+    }
+
     func testEnableFinalJournalWriteFailureRollsBackAppliedCapsState() {
         let requestID = UUID()
         var settings = TidyTapSettings.defaults
@@ -2126,7 +2214,7 @@ final class TidyTapSettingsTests: XCTestCase {
 
         let status = coordinator.applyLatestSettings()
 
-        XCTAssertEqual(status.outcome, .failed)
+        XCTAssertEqual(status.outcome, .partiallyApplied)
         XCTAssertEqual(status.effectiveSettings?.capsLockInputSourceSwitching, false)
         XCTAssertTrue(system.mappings.isEmpty)
         XCTAssertNil(InputSourceShortcutController.hotkey60(in: system.domain))
@@ -2151,7 +2239,7 @@ final class TidyTapSettingsTests: XCTestCase {
 
         let status = coordinator.applyLatestSettings()
 
-        XCTAssertEqual(status.outcome, .failed)
+        XCTAssertEqual(status.outcome, .partiallyApplied)
         XCTAssertEqual(status.effectiveSettings?.capsLockInputSourceSwitching, true)
         XCTAssertEqual(system.mappings, [.tidyTapCapsLock])
         XCTAssertEqual(InputSourceShortcutController.hotkey60(in: system.domain), .tidyTapHotkey60)
@@ -2278,18 +2366,22 @@ final class TidyTapSettingsTests: XCTestCase {
         }
     }
 
-    func testMixedKeyboardTablePreservesAppliedJournalAndRetriesOnlyAfterConsensus() throws {
+    func testReconnectRepairsMixedKeyboardTableAndRestartRemainsApplied() throws {
         let runner = TableCapsProcessRunner(mappings: [[.tidyTapCapsLock], nil], hotkeyEnabled: true)
         let ownership = try appliedTableCapsOwnership()
-        let original = ownership.data
         let adapter = tableCapsAdapter(runner: runner, ownership: ownership)
-        XCTAssertThrowsError(try adapter.apply(capsLockEnabled: true))
-        XCTAssertEqual(ownership.data, original)
-        XCTAssertEqual(runner.hidWriteCount, 0)
-        XCTAssertEqual(runner.hotkeyWriteCount, 0)
-        runner.keyboardMappings = [[.tidyTapCapsLock], [.tidyTapCapsLock]]
+        try adapter.reconcileConnectedDevices(capsLockEnabled: true)
         try adapter.apply(capsLockEnabled: true)
-        XCTAssertEqual(runner.hidWriteCount, 0)
+        XCTAssertEqual(runner.keyboardMappings, [[.tidyTapCapsLock], [.tidyTapCapsLock]])
+        XCTAssertEqual(runner.hidWriteCount, 1)
+        XCTAssertEqual(runner.hotkeyWriteCount, 0)
+        let restarted = tableCapsAdapter(runner: runner, ownership: ownership)
+        try restarted.reconcileConnectedDevices(capsLockEnabled: true)
+        try restarted.apply(capsLockEnabled: true)
+        XCTAssertEqual(runner.hidWriteCount, 1)
+        try restarted.apply(capsLockEnabled: false)
+        XCTAssertEqual(runner.keyboardMappings, [[], []])
+        XCTAssertNil(ownership.data)
     }
 
     func testPartialKeyboardWritePreservesPreparedJournalForLaterCompletion() throws {
@@ -2324,7 +2416,7 @@ final class TidyTapSettingsTests: XCTestCase {
             hid: CapsLockController(system: system),
             hotkey: InputSourceShortcutController(system: system),
             inputSources: FakeCapsSystem()
-        ), ownershipStore: ownership)
+        ), ownershipStore: ownership, reconcileHID: { ownership, _ in try system.reconcileOwnedCapsLockMappings(ownership: ownership) })
     }
 
     private func makeCapsController(system: FakeCapsSystem) -> CapsLockFeatureController {
@@ -2773,6 +2865,16 @@ private final class ThrowingCaps: TidyTapCapsFeatureApplying {
         enabled = false
     }
     func currentCapsLockEnabled() throws -> Bool { enabled }
+}
+
+private final class UnreadableCaps: TidyTapCapsFeatureApplying {
+    var readFails = true
+    private var enabled = false
+    func apply(capsLockEnabled: Bool) throws { enabled = capsLockEnabled }
+    func currentCapsLockEnabled() throws -> Bool {
+        if readFails { throw InputEngineError.invalidSystemData(.hidMappings) }
+        return enabled
+    }
 }
 
 private final class MutatingRecoveryCaps: TidyTapCapsFeatureApplying {

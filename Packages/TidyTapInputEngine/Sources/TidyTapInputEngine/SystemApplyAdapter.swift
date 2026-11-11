@@ -109,6 +109,13 @@ public final class MacOSSystemApplyAdapter: HIDMappingApplying, SymbolicHotkeyAp
 
     private func readHIDMappingsLocked() throws -> [HIDMapping] {
         hasValidatedHIDRead = false
+        let data = try readHIDSnapshotLocked()
+        let mappings = try Self.decodeHIDMappings(data)
+        hasValidatedHIDRead = true
+        return mappings
+    }
+
+    private func readHIDSnapshotLocked() throws -> Data {
         var data: Data
         if let hidScope {
             data = try readHIDProperty(scope: hidScope)
@@ -126,9 +133,46 @@ public final class MacOSSystemApplyAdapter: HIDMappingApplying, SymbolicHotkeyAp
         guard Self.hasHIDTableHeader(data) == (hidScope == .keyboards) else {
             throw InputEngineError.invalidSystemData(.hidMappings)
         }
-        let mappings = try Self.decodeHIDMappings(data)
-        hasValidatedHIDRead = true
-        return mappings
+        return data
+    }
+
+    /// A newly connected keyboard has no volatile mapping. Repair only the
+    /// missing owned entry, never a different Caps mapping or device layout.
+    public func reconcileOwnedCapsLockMappings(ownership: CapsHIDOwnership) throws {
+        guard ownership == .current else { throw InputEngineError.capsLockOwnershipConflict }
+        hidLock.lock()
+        defer { hidLock.unlock() }
+        hasValidatedHIDRead = false
+        let data = try readHIDSnapshotLocked()
+        guard hidScope == .keyboards else { return }
+        let devices = try Self.decodeHIDTableDevices(data)
+        guard let first = devices.first else { return }
+        let baseline = first.mappings.filter { $0 != .tidyTapCapsLock }
+        for device in devices {
+            let caps = device.mappings.filter { $0.source == HIDMapping.capsLockSource }
+            guard caps.isEmpty || caps == [.tidyTapCapsLock] else {
+                throw InputEngineError.capsLockOwnershipConflict
+            }
+            guard device.mappings.filter({ $0 != .tidyTapCapsLock }) == baseline else {
+                throw InputEngineError.invalidSystemData(.hidMappings)
+            }
+        }
+        let mapped = devices.filter { $0.mappings.contains(.tidyTapCapsLock) }
+        guard !mapped.isEmpty, mapped.count != devices.count else { return }
+        // Re-read before writing: a device or another remapper may have changed.
+        guard try Self.decodeHIDTableDevices(readHIDSnapshotLocked()) == devices else {
+            throw InputEngineError.preWriteStateChanged(.hidMappings)
+        }
+        let expected = baseline + [.tidyTapCapsLock]
+        let payload = try JSONSerialization.data(withJSONObject: ["UserKeyMapping": expected.map(\.hidDictionary)])
+        _ = try runner.run(
+            executable: "/usr/bin/hidutil",
+            arguments: ["property"] + HIDScope.keyboards.arguments + ["--set", String(decoding: payload, as: UTF8.self)],
+            input: nil
+        )
+        guard try readHIDMappingsLocked() == expected else {
+            throw InputEngineError.verificationFailed(.hidMappings)
+        }
     }
 
     private func readHIDProperty(scope: HIDScope) throws -> Data {
@@ -225,6 +269,20 @@ public final class MacOSSystemApplyAdapter: HIDMappingApplying, SymbolicHotkeyAp
     }
 
     private static func decodeHIDTable(_ data: Data) throws -> [HIDMapping] {
+        let devices = try decodeHIDTableDevices(data)
+        guard let consensus = devices.first?.mappings,
+              devices.allSatisfy({ $0.mappings == consensus }) else {
+            throw InputEngineError.invalidSystemData(.hidMappings)
+        }
+        return consensus
+    }
+
+    private struct HIDDeviceMappings: Equatable {
+        let identifier: UInt64
+        let mappings: [HIDMapping]
+    }
+
+    private static func decodeHIDTableDevices(_ data: Data) throws -> [HIDDeviceMappings] {
         guard let text = String(data: data, encoding: .utf8) else {
             throw InputEngineError.invalidSystemData(.hidMappings)
         }
@@ -238,7 +296,7 @@ public final class MacOSSystemApplyAdapter: HIDMappingApplying, SymbolicHotkeyAp
             throw InputEngineError.invalidSystemData(.hidMappings)
         }
         var identifiers = Set<UInt64>()
-        var consensus: [HIDMapping]?
+        var devices: [HIDDeviceMappings] = []
         for (index, match) in rows.enumerated() {
             guard let identifier = UInt64(body.substring(with: match.range(at: 1)), radix: 16),
                   identifiers.insert(identifier).inserted,
@@ -256,13 +314,9 @@ public final class MacOSSystemApplyAdapter: HIDMappingApplying, SymbolicHotkeyAp
                 try validateTableArray(value)
                 mappings = try decodeLegacyHIDMappings(Data(value.utf8))
             }
-            if let consensus, consensus != mappings {
-                // A single global backup cannot represent per-device states.
-                throw InputEngineError.invalidSystemData(.hidMappings)
-            }
-            consensus = mappings
+            devices.append(HIDDeviceMappings(identifier: identifier, mappings: mappings))
         }
-        return consensus ?? []
+        return devices
     }
 
     private static func validateTableArray(_ value: String) throws {
