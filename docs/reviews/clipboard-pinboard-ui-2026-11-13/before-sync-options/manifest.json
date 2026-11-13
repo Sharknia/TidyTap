@@ -1,0 +1,75 @@
+{
+  "status": "reviewing",
+  "mode": "uninterrupted",
+  "target": "/Users/crobat/dev/tidytap/docs/CLIPBOARD_PINBOARD_UI_WORK_PLAN.md",
+  "sha256": "e1707cc9759b4dbb2cb39782eb2c87bcd3e9274ffa7b044d9a0eff44a15c6a74",
+  "feature_range": [
+    1,
+    73
+  ],
+  "detailed_range": [
+    74,
+    158
+  ],
+  "local_context": [
+    "/Users/crobat/dev/tidytap/docs/CLIPBOARD_PINBOARD_ICLOUD_PLAN.md",
+    "/Users/crobat/dev/tidytap/docs/CLIPBOARD_HISTORY_URS.md",
+    "/Users/crobat/dev/tidytap/docs/CLIPBOARD_PASTE_FEEDBACK_VALIDATION.md"
+  ],
+  "sources": [
+    {
+      "path": "/Users/crobat/dev/tidytap/docs/reviews/clipboard-pinboard-ui-2026-11-13/sources/local-monitor.html",
+      "url": "https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/EventOverview/MonitoringEvents/MonitoringEvents.html",
+      "sha256": "9bad57244437bd88ebe212c6bfe792b94bfe120b3d6f4254a568b39ca804db04"
+    },
+    {
+      "path": "/Users/crobat/dev/tidytap/docs/reviews/clipboard-pinboard-ui-2026-11-13/sources/make-first-responder.md",
+      "url": "https://developer.apple.com/documentation/appkit/nswindow/makefirstresponder(_:).md",
+      "sha256": "d3b7db200aabba34f8a5c1a1d2a2a9c9460a68896c8f4386d9077c24b966bb7d"
+    },
+    {
+      "path": "/Users/crobat/dev/tidytap/docs/reviews/clipboard-pinboard-ui-2026-11-13/sources/end-editing.md",
+      "url": "https://developer.apple.com/documentation/appkit/nswindow/endediting(for:).md",
+      "sha256": "673a36a6d9c44a4662b2b3f19bf7c3126ea775af1aa548f057efb2f8a687e2ea"
+    }
+  ],
+  "source_context": [
+    "/Users/crobat/dev/tidytap/docs/reviews/clipboard-pinboard-ui-2026-11-13/sources/local-monitor.txt",
+    "/Users/crobat/dev/tidytap/docs/reviews/clipboard-pinboard-ui-2026-11-13/sources/make-first-responder.md",
+    "/Users/crobat/dev/tidytap/docs/reviews/clipboard-pinboard-ui-2026-11-13/sources/end-editing.md"
+  ],
+  "reviewers": [
+    {
+      "stage": 5,
+      "task": "ui05_zoom",
+      "status": "completed"
+    },
+    {
+      "stage": 5,
+      "task": "ui05_catalyst",
+      "status": "completed"
+    },
+    {
+      "stage": 6,
+      "task": "ui06_comprehension",
+      "status": "running"
+    }
+  ],
+  "stage_reports": {
+    "5": "zoom_out_report.md"
+  },
+  "protocol": {
+    "fresh_context": "fork_turns=none",
+    "parent_conversation_supplied": false,
+    "host_instruction_exclusion": "미검증",
+    "product_implementation": false
+  },
+  "context_sha256": {
+    "/Users/crobat/dev/tidytap/docs/CLIPBOARD_PINBOARD_ICLOUD_PLAN.md": "d5e4b8ad13f38da89e256af0f6010545e6b699c12ea23e1bfb40489a4085a43b",
+    "/Users/crobat/dev/tidytap/docs/CLIPBOARD_HISTORY_URS.md": "d5efcee62ea9b5e44f5c86aa7378c83d3e48659f021b4d529a63eb2f98a4f2fa",
+    "/Users/crobat/dev/tidytap/docs/CLIPBOARD_PASTE_FEEDBACK_VALIDATION.md": "11d9b459052d15ded7e4c373acf6aba69f41beaabf2aaae49b8b7fe40a892ed0",
+    "/Users/crobat/dev/tidytap/docs/reviews/clipboard-pinboard-ui-2026-11-13/sources/local-monitor.txt": "4b234f888a433bfe41d1893c3e46c97759a2b94faa956d0af7a503373898abf6",
+    "/Users/crobat/dev/tidytap/docs/reviews/clipboard-pinboard-ui-2026-11-13/sources/make-first-responder.md": "d3b7db200aabba34f8a5c1a1d2a2a9c9460a68896c8f4386d9077c24b966bb7d",
+    "/Users/crobat/dev/tidytap/docs/reviews/clipboard-pinboard-ui-2026-11-13/sources/end-editing.md": "673a36a6d9c44a4662b2b3f19bf7c3126ea775af1aa548f057efb2f8a687e2ea"
+  }
+}

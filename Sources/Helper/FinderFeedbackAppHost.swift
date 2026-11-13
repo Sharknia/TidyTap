@@ -19,7 +19,7 @@ final class FinderFeedbackAppHost: NSObject {
             self,
             selector: #selector(feedbackHostReady(_:)),
             name: TidyTapIPC.finderFeedbackReady,
-            object: TidyTapProduct.appBundleIdentifier,
+            object: TidyTapIPC.notificationObject,
             suspensionBehavior: .deliverImmediately
         )
     }
@@ -209,7 +209,7 @@ final class ClipboardHistoryAppHost: NSObject {
             paste: { deadline in
                 self.postPaste(
                     session: session, entryID: request.entryID,
-                    formatted: request.formatted, deadlineContinuousTime: deadline
+                    formatted: request.formatted, deadlineContinuousTime: deadline, route: request.route
                 )
             },
             completion: { outcome in
@@ -339,23 +339,28 @@ final class ClipboardHistoryAppHost: NSObject {
     }
 
     private func postPaste(
-        session: PasteSession, entryID: UUID, formatted: Bool, deadlineContinuousTime: TimeInterval
+        session: PasteSession, entryID: UUID, formatted: Bool, deadlineContinuousTime: TimeInterval,
+        route: ClipboardLibraryRouter.Route?
+    ) -> String? {
+        guard let route else { return "entryUnavailable" }
+        let suite = TidyTapLaunchSmoke.current()?.preferencesSuite ?? TidyTapProduct.appBundleIdentifier
+        do {
+            let router = try TidyTapProduct.clipboardRouter(directory: TidyTapProduct.clipboardHistoryDirectory(preferencesSuite: suite))
+            return try router.withStore(route: route, requireCurrent: true) { store in
+                self.postPasteInLibrary(session: session, entryID: entryID, formatted: formatted,
+                    deadlineContinuousTime: deadlineContinuousTime, store: store)
+            }
+        } catch { return "entryUnavailable" }
+    }
+
+    private func postPasteInLibrary(
+        session: PasteSession, entryID: UUID, formatted: Bool, deadlineContinuousTime: TimeInterval,
+        store: ClipboardLibraryStore
     ) -> String? {
         recordStage("postPasteBegin clipboardWritten=false keyPosted=false")
         guard TidyTapContinuousClock.now() < deadlineContinuousTime else { return "focusDeadlineExceeded" }
-        guard CGPreflightPostEventAccess() else {
-            recordStage("accessibility postAccess=false")
-            return "accessibilityDenied"
-        }
-        let suite = TidyTapLaunchSmoke.current()?.preferencesSuite ?? TidyTapProduct.appBundleIdentifier
-        guard let store = try? ClipboardHistoryStore(
-            directory: TidyTapProduct.clipboardHistoryDirectory(preferencesSuite: suite),
-            retention: TidyTapClipboardPolicy.retention,
-            maximumEntries: TidyTapClipboardPolicy.maximumEntries,
-            maximumBytes: TidyTapClipboardPolicy.maximumBytes,
-            maximumItemBytes: TidyTapClipboardPolicy.maximumItemBytes
-        ), let entries = try? store.entries(),
-              let entry = entries.first(where: { $0.id == entryID }) else { return "entryUnavailable" }
+        guard CGPreflightPostEventAccess() else { return "accessibilityDenied" }
+        guard let entry = try? store.entry(id: entryID) else { return "entryUnavailable" }
         guard let source = CGEventSource(stateID: .hidSystemState),
               let down = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: true),
               let up = CGEvent(keyboardEventSource: source, virtualKey: 9, keyDown: false) else {

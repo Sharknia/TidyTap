@@ -1,0 +1,7 @@
+{
+  "symlink_rejected": true,
+  "outside_path_rejected": true,
+  "fresh_inside_allowed": true,
+  "outside_writes": false,
+  "test_scope": "exact guard function; xcodebuild not invoked"
+}

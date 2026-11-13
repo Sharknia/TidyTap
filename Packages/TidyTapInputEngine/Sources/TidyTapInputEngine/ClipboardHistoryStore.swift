@@ -11,7 +11,7 @@ public struct ClipboardHistoryEntry: Codable, Equatable {
 /// A bounded, user-only local store. Each copy is one atomic file; the same
 /// directory lock protects reads and deletes from the app and the helper.
 @MainActor
-public final class ClipboardHistoryStore {
+public final class ClipboardHistoryStore: ClipboardHistoryStoring {
     public enum StoreError: Error {
         case itemTooLarge
         case invalidPolicy

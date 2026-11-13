@@ -1,0 +1,50 @@
+{
+  "stage": "Gate0-B-local",
+  "status": "reauditing",
+  "target": "docs/CLIPBOARD_ICLOUD_GATE0.md",
+  "source_sha256": {
+    "Spikes/ClipboardCloudKitProbe/ClipboardCloudKitProbe.xcodeproj/project.pbxproj": "b2cbd6c74243bc30c48135f086eb22f14332854babdb7fb6252fdca5b46918b3",
+    "Spikes/ClipboardCloudKitProbe/Info.plist": "ec9bf12abdd1df66e1e6e74360b16c1c6b002384c907298a48e02fa1939e68b8",
+    "Spikes/ClipboardCloudKitProbe/Probe.entitlements": "55a9c3dbd2e3925788619684eace456de8fcbdd4e0afb681237cdcff36d6bda9",
+    "Spikes/ClipboardCloudKitProbe/README.md": "ef65d0a681ea22e7bb057e7c4c7d828d1e79e657635fcbe3ecd4e55c65db4ac2",
+    "Spikes/ClipboardCloudKitProbe/Sources/ProbeApp.swift": "393694b0d50e5a0cbb96b5d8bcccad1d266f53dcc86df3909b89e162fd98d84d",
+    "Spikes/ClipboardCloudKitProbe/Sources/ProbeScenario.swift": "2c8e91b2fd831e5f1f5a6833d6b41f770cb5ede4bed2b331afc7a9aa82f5cc93",
+    "Spikes/ClipboardCloudKitProbe/Sources/ProbeStore.swift": "a711b33e4118b013682276afa74892a3dcebf552030d36b521a26eb67fb2bc40",
+    "Scripts/run-clipboard-cloudkit-probe.sh": "1b92f6fd206f2b2620a4a4794c5b65eb0ac2fe44c2ba79f73f63e8214020b07e"
+  },
+  "evidence_run": "/Users/crobat/dev/tidytap/build/clipboard-cloudkit-probe/run.oedrtn73",
+  "evidence_sha256": {
+    "launcher-summary.json": "0cf04802cacc8c0915cff003d22d1c907c6346dde2a3d25fc080f88025320c00",
+    "results.json": "da510f9b60527b35c563f50f728bfde385895342119ca29bb02d42b97e12d2bc",
+    "path-boundary-check.json": "90bc888835f548145d53da415e9fade1d12a163a0c7eb3a47177ca6931934048"
+  },
+  "ordinary_product_tests": "not_run; product code unchanged",
+  "real_cloud_tests": "not_run; user hold",
+  "invalid_script_mode": {
+    "exit": 64,
+    "new_run": false
+  },
+  "reviewers": [
+    {
+      "task": "gate0b_codebase",
+      "status": "completed",
+      "round": 1
+    },
+    {
+      "task": "gate0b_readiness",
+      "status": "completed",
+      "round": 1
+    },
+    {
+      "task": "gate0b_style",
+      "status": "completed",
+      "round": 1
+    }
+  ],
+  "protocol": {
+    "fork_turns": "none",
+    "host_instruction_exclusion": "unverified",
+    "child_reads": "reviewer attestation"
+  },
+  "round1_manifest": "round1/manifest.json"
+}

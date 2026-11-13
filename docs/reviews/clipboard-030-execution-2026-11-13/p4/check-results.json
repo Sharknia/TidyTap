@@ -1,0 +1,29 @@
+{
+  "engine": {
+    "tests": 156,
+    "skipped": 1,
+    "failures": 0
+  },
+  "app": {
+    "tests": 209,
+    "failures": 0
+  },
+  "launch_smoke": "passed after suite-scoped IPC fix; production hashes unchanged",
+  "clipboard_startup": "passed",
+  "packaging_regressions": "passed",
+  "release_build_settings": "passed",
+  "cloudkit_metadata_unit": {
+    "tests": 3,
+    "mismatch_variants": 8,
+    "status": "passed",
+    "replay": "python3 Scripts/test-clipboard-cloudkit-configuration.py",
+    "real_signed_profile_positive": "not_run"
+  },
+  "preview": "build/artifacts/TidyTap-0.3.0-preview-adhoc/TidyTap-0.3.0-preview-adhoc.dmg; regenerated after product fixes",
+  "actual_cloudkit": "not_run",
+  "signed_cloudkit_release": "not_prepared",
+  "actual_local_app_cloudkit_gate": {
+    "preview_exit": 0,
+    "require_cloudkit_exit": 1
+  }
+}

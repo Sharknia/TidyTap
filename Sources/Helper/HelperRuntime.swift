@@ -46,7 +46,7 @@ final class HelperRuntime: NSObject {
         if ProcessInfo.processInfo.environment["TIDYTAP_CLIPBOARD_G1_PROBE"] == "1" {
             guard let launchSmoke else { exit(1) }
             do {
-                let store = try ClipboardHistoryStore(
+                let store = try TidyTapProduct.clipboardLibrary(
                     directory: TidyTapProduct.clipboardHistoryDirectory(preferencesSuite: launchSmoke.preferencesSuite),
                     retention: TidyTapClipboardPolicy.retention,
                     maximumEntries: TidyTapClipboardPolicy.maximumEntries,
@@ -79,7 +79,7 @@ final class HelperRuntime: NSObject {
             guard let launchSmoke else { exit(1) }
             let directory = TidyTapProduct.clipboardHistoryDirectory(preferencesSuite: launchSmoke.preferencesSuite)
             do {
-                let store = try ClipboardHistoryStore(
+                let store = try TidyTapProduct.clipboardLibrary(
                     directory: directory,
                     retention: TidyTapClipboardPolicy.retention,
                     maximumEntries: TidyTapClipboardPolicy.maximumEntries,
@@ -238,7 +238,7 @@ final class HelperRuntime: NSObject {
         lifecycle?.stop()
     }
 
-    private func seedClipboardMediaProbe(in store: ClipboardHistoryStore) throws {
+    private func seedClipboardMediaProbe(in store: ClipboardLibraryHandle) throws {
         let now = Date()
         try store.add(.text(plain: "TidyTap G2 plain text", rtf: nil, html: nil), copiedAt: now.addingTimeInterval(-2))
         let bold = NSAttributedString(

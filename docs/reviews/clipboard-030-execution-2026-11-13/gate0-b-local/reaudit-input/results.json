@@ -1,0 +1,63 @@
+{
+  "measurements" : {
+    "L01-milliseconds" : 20,
+    "L02-milliseconds" : 9,
+    "L03-milliseconds" : 4,
+    "L04-milliseconds" : 4,
+    "L05-milliseconds" : 114,
+    "L06-milliseconds" : 31,
+    "L07-milliseconds" : 48,
+    "L08-milliseconds" : 3,
+    "L09-milliseconds" : 130,
+    "accepted-envelope-bytes" : 10485760,
+    "format-cases" : 5,
+    "marker-rejection-cases" : 3,
+    "rejected-envelope-bytes" : 10485761,
+    "reopen-count" : 3,
+    "writer-history-transactions" : 1,
+    "writer-notification-token-matched" : 1,
+    "writer-notifications" : 1,
+    "writer-token-consumed" : 1
+  },
+  "os" : "Version 27.2 (Build 26B123)",
+  "results" : [
+    {
+      "id" : "L01",
+      "status" : "passed"
+    },
+    {
+      "id" : "L02",
+      "status" : "passed"
+    },
+    {
+      "id" : "L03",
+      "status" : "passed"
+    },
+    {
+      "id" : "L04",
+      "status" : "passed"
+    },
+    {
+      "id" : "L05",
+      "status" : "passed"
+    },
+    {
+      "id" : "L06",
+      "status" : "passed"
+    },
+    {
+      "id" : "L07",
+      "status" : "passed"
+    },
+    {
+      "id" : "L08",
+      "status" : "passed"
+    },
+    {
+      "id" : "L09",
+      "status" : "passed"
+    }
+  ],
+  "runID" : "FAD8CCF5-6F3D-4395-B4D9-113F6C97302B",
+  "scope" : "local-only; CloudKit not run"
+}

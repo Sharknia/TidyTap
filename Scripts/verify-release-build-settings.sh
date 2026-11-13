@@ -54,6 +54,12 @@ for target in TidyTap TidyTapHelper; do
   grep -q 'ENABLE_HARDENED_RUNTIME = YES' <<<"$settings"
   grep -q 'CODE_SIGN_STYLE = Manual' <<<"$settings"
   grep -q 'OTHER_CODE_SIGN_FLAGS = --timestamp' <<<"$settings"
+  if [[ "$target" == "TidyTap" ]]; then
+    grep -Fq 'CODE_SIGN_ENTITLEMENTS = "$(TIDYTAP_CLOUDKIT_ENTITLEMENTS)"' TidyTap.xcodeproj/project.pbxproj || {
+      print -u2 -- "Main app is missing the optional CloudKit entitlement build setting."
+      exit 1
+    }
+  fi
 
   if $require_local; then
     grep -Fq "DEVELOPMENT_TEAM = $team_id" <<<"$settings"

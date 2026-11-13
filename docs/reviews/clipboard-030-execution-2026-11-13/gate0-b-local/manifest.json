@@ -1,0 +1,75 @@
+{
+  "stage": "Gate0-B-local",
+  "status": "local-tests-passed-review-findings-addressed",
+  "target": "docs/CLIPBOARD_ICLOUD_GATE0.md",
+  "source_sha256": {
+    "Spikes/ClipboardCloudKitProbe/ClipboardCloudKitProbe.xcodeproj/project.pbxproj": "b2cbd6c74243bc30c48135f086eb22f14332854babdb7fb6252fdca5b46918b3",
+    "Spikes/ClipboardCloudKitProbe/Info.plist": "ec9bf12abdd1df66e1e6e74360b16c1c6b002384c907298a48e02fa1939e68b8",
+    "Spikes/ClipboardCloudKitProbe/Probe.entitlements": "55a9c3dbd2e3925788619684eace456de8fcbdd4e0afb681237cdcff36d6bda9",
+    "Spikes/ClipboardCloudKitProbe/README.md": "ef65d0a681ea22e7bb057e7c4c7d828d1e79e657635fcbe3ecd4e55c65db4ac2",
+    "Spikes/ClipboardCloudKitProbe/Sources/ProbeApp.swift": "393694b0d50e5a0cbb96b5d8bcccad1d266f53dcc86df3909b89e162fd98d84d",
+    "Spikes/ClipboardCloudKitProbe/Sources/ProbeScenario.swift": "ce9ce4cd443e4a78a1b45035f71502a2fc606a5ad417b7ded767d31a192df6a3",
+    "Spikes/ClipboardCloudKitProbe/Sources/ProbeStore.swift": "a711b33e4118b013682276afa74892a3dcebf552030d36b521a26eb67fb2bc40",
+    "Scripts/run-clipboard-cloudkit-probe.sh": "1b92f6fd206f2b2620a4a4794c5b65eb0ac2fe44c2ba79f73f63e8214020b07e"
+  },
+  "evidence_run": "/Users/crobat/dev/tidytap/build/clipboard-cloudkit-probe/run.j7v51t1i",
+  "evidence_sha256": {
+    "launcher-summary.json": "90e3a73958131bdb486bd16f1ee5c20208be54871df7dda334f1f1b6b0dfec03",
+    "results.json": "839e104d3ccc792a9571d6e0a94297e809d7ba964810b859886dd79ec42f1382",
+    "path-boundary-check.json": "90bc888835f548145d53da415e9fade1d12a163a0c7eb3a47177ca6931934048"
+  },
+  "ordinary_product_tests": "not_run; product code unchanged",
+  "real_cloud_tests": "not_run; user hold",
+  "invalid_script_mode": {
+    "exit": 64,
+    "new_run": false
+  },
+  "reviewers": [
+    {
+      "task": "gate0b_codebase",
+      "status": "completed",
+      "round": 1
+    },
+    {
+      "task": "gate0b_readiness",
+      "status": "completed",
+      "round": 1
+    },
+    {
+      "task": "gate0b_style",
+      "status": "completed",
+      "round": 1
+    },
+    {
+      "task": "gate0b_codebase_reaudit",
+      "status": "completed",
+      "round": 2
+    },
+    {
+      "task": "gate0b_readiness_reaudit",
+      "status": "completed",
+      "round": 2
+    }
+  ],
+  "protocol": {
+    "fork_turns": "none",
+    "host_instruction_exclusion": "unverified",
+    "child_reads": "reviewer attestation"
+  },
+  "round1_manifest": "round1/manifest.json",
+  "reaudit_input": "reaudit-input/manifest.json",
+  "final_assertion_change": {
+    "finding": "C-I01",
+    "change": "L04 X 전체 ProbeValue 비교",
+    "independently_reaudited": false,
+    "rebuilt_and_rerun": true
+  },
+  "next_gate": "real CloudKit held by user; not passed",
+  "final_doc_sha256": {
+    "docs/CLIPBOARD_ICLOUD_GATE0.md": "28b0103382b490f121152e14be5d862090453ba14da237e59dee0c55ba813c00",
+    "docs/CLIPBOARD_030_EXECUTION.md": "c07120d2680278aa4826a93178014efd155303a112533493ae75f5143e76ec38",
+    "docs/CLIPBOARD_PINBOARD_ICLOUD_PLAN.md": "7651c0a87859afe93ac8569bc94985e247d42c1b4aa2c61ddf5bb245e060a5c5",
+    "Spikes/ClipboardCloudKitProbe/README.md": "ef65d0a681ea22e7bb057e7c4c7d828d1e79e657635fcbe3ecd4e55c65db4ac2",
+    "docs/reviews/clipboard-030-execution-2026-11-13/gate0-b-local/review_report.md": "28cadcd28b30bb2aff2aa8d9bd5d30e7adbff7a555fad2f91d2bfe8d787ff241"
+  }
+}

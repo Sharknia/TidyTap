@@ -24,6 +24,7 @@ final class SettingsViewController: NSViewController {
         static let mousePermissions = "settings.mouse.permissions"
         static let capsSwitch = "settings.caps.switch"
         static let finderCutPasteSwitch = "settings.finderCutPaste.switch"
+        static let clipboardSyncSwitch = "settings.clipboardHistory.iCloud"
         static let clipboardHistorySwitch = "settings.clipboardHistory.switch"
         static let clipboardOptions = "settings.clipboardHistory.options"
         static let clipboardShortcutButton = "settings.clipboardHistory.shortcut"
@@ -42,6 +43,8 @@ final class SettingsViewController: NSViewController {
     var onSettingsChange: ((TidyTapSettings) -> Void)?
     var onPermissionSettingsRequest: ((TidyTapPermission) -> Void)?
     var captureClipboardShortcut: (() -> TidyTapClipboardShortcut?)?
+    var onICloudSyncChanged: ((Bool) -> Void)?
+    var onRetryClipboardSync: (() -> Void)?
     var onClearClipboardHistory: (() -> Void)?
     var onCheckForUpdates: (() -> Void)?
 
@@ -59,6 +62,12 @@ final class SettingsViewController: NSViewController {
     private let statusMessage = NSTextField(wrappingLabelWithString: "")
     private let capsSwitch = NSSwitch()
     private let finderCutPasteSwitch = NSSwitch()
+    private let clipboardSyncSwitch = NSSwitch()
+    private let clipboardSyncStatus = NSTextField(labelWithString: "")
+    private let clipboardSyncRetry = NSButton()
+    private var syncEnabled = false
+    private var syncPauseNeedsRetry = false
+    private var syncState: ClipboardSyncCoordinator.State = .off
     private let clipboardHistorySwitch = NSSwitch()
     private let clipboardShortcutButton = NSButton()
     private let clipboardPasteStyle = NSPopUpButton()
@@ -226,6 +235,7 @@ final class SettingsViewController: NSViewController {
         contentStack.arrangedSubviews.last?.widthAnchor.constraint(equalTo: contentStack.widthAnchor).isActive = true
 
         configureActions()
+        applyClipboardSync(enabled: syncEnabled, state: syncState)
         apply(settings)
         applyPermissionState(permissionState)
     }
@@ -486,10 +496,56 @@ final class SettingsViewController: NSViewController {
             group.addArrangedSubview(view)
             view.widthAnchor.constraint(equalTo: group.widthAnchor).isActive = true
         }
+        let sync = featureRow(symbol: "icloud", title: syncText("iCloud sync"),
+            caption: syncText("When resumed, saved history and pinboard changes will merge."),
+            toggle: clipboardSyncSwitch, identifier: ControlIdentifier.clipboardSyncSwitch)
+        group.addArrangedSubview(sync); sync.widthAnchor.constraint(equalTo: group.widthAnchor).isActive = true
+        clipboardSyncSwitch.target = self; clipboardSyncSwitch.action = #selector(changeClipboardSync(_:))
+        clipboardSyncStatus.font = .systemFont(ofSize: 11); clipboardSyncStatus.textColor = .secondaryLabelColor
+        clipboardSyncStatus.maximumNumberOfLines = 2
+        clipboardSyncStatus.identifier = .init("settings.clipboardHistory.syncStatus")
+        clipboardSyncRetry.title = syncText("Retry"); clipboardSyncRetry.target = self
+        clipboardSyncRetry.action = #selector(retryClipboardSync(_:))
+        clipboardSyncRetry.identifier = .init("settings.clipboardHistory.syncRetry")
+        let statusRow = NSStackView(views: [clipboardSyncStatus, clipboardSyncRetry])
+        statusRow.orientation = .horizontal; statusRow.spacing = 8
+        statusRow.translatesAutoresizingMaskIntoConstraints = false
+        group.addArrangedSubview(statusRow)
+        NSLayoutConstraint.activate([statusRow.widthAnchor.constraint(equalTo: group.widthAnchor),
+            statusRow.heightAnchor.constraint(greaterThanOrEqualToConstant: 32)])
         clipboardOptionsSeparator = divider
         clipboardOptionsRowView = options
         return group
     }
+
+    private func syncText(_ key: String) -> String { localizationBundle.localizedString(forKey: key, value: key, table: nil) }
+    func applyClipboardSync(enabled: Bool, state: ClipboardSyncCoordinator.State, pauseNeedsRetry: Bool = false) {
+        syncPauseNeedsRetry = pauseNeedsRetry
+        syncEnabled = enabled; syncState = state; clipboardSyncSwitch.state = enabled ? .on : .off
+        let message: String
+        switch state {
+        case .off: message = "Sync paused on this Mac."
+        case .starting: message = "Connecting to iCloud…"
+        case .syncing: message = "iCloud sync is enabled. Changes sync automatically."
+        case .pausing: message = pauseNeedsRetry ? "Could not finish pausing. Retry to confirm sync has stopped." : "Pausing iCloud sync…"
+        case .waitingAccount: message = "Sign in to iCloud to resume sync."
+        case .configurationError: message = "iCloud sync needs a matching signed profile and container."
+        case .failed: message = "iCloud sync could not complete. Your local library is available."
+        }
+        clipboardSyncStatus.stringValue = syncText(message)
+        clipboardSyncRetry.isHidden = !pauseNeedsRetry && (!enabled || [.starting, .syncing, .pausing].contains(state))
+    }
+    func restoreClipboardSyncAfterSaveFailure(enabled: Bool, state: ClipboardSyncCoordinator.State, pauseNeedsRetry: Bool) {
+        applyClipboardSync(enabled: enabled, state: state, pauseNeedsRetry: pauseNeedsRetry)
+        clipboardSyncStatus.stringValue = syncText("Could not save the iCloud sync setting.")
+    }
+    @objc private func changeClipboardSync(_ sender: NSSwitch) {
+        let desired = sender.state == .on
+        if delegate?.settingsViewController(self, didChangeICloudSyncEnabled: desired) == true { return }
+        if let onICloudSyncChanged { onICloudSyncChanged(desired) }
+        else { sender.state = syncEnabled ? .on : .off }
+    }
+    @objc private func retryClipboardSync(_ sender: NSButton) { if syncEnabled || syncPauseNeedsRetry { onRetryClipboardSync?() } }
 
     private func updateClipboardOptionsVisibility() {
         let hidden = clipboardHistorySwitch.state != .on
@@ -1320,8 +1376,13 @@ private final class SemanticSurfaceView: NSView {
 
 @MainActor
 protocol SettingsViewControllerDelegate: AnyObject {
+    func settingsViewController(_ controller: SettingsViewController, didChangeICloudSyncEnabled enabled: Bool) -> Bool
     /// Return true when the delegate handled the action; false selects the
     /// controller's closure fallback.
     func settingsViewController(_ controller: SettingsViewController, didChange settings: TidyTapSettings) -> Bool
     func settingsViewControllerRequestsPermissionSettings(_ controller: SettingsViewController, permission: TidyTapPermission) -> Bool
+}
+
+extension SettingsViewControllerDelegate {
+    func settingsViewController(_ controller: SettingsViewController, didChangeICloudSyncEnabled enabled: Bool) -> Bool { false }
 }

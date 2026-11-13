@@ -209,6 +209,10 @@ run_step \
   "Release app nested-code verification" \
   "Check Developer ID signing of Sparkle's bundled services." \
   /usr/bin/codesign --verify --deep --strict --verbose=2 "$app_path"
+run_step \
+  "Release CloudKit configuration verification" \
+  "Configure the matching container, app entitlement and Developer ID provisioning profile." \
+  /usr/bin/python3 "$project_root/Scripts/verify-clipboard-cloudkit-configuration.py" "$app_path" --require-cloudkit
 
 version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app_path/Contents/Info.plist")
 if [[ -z "$version" ]]; then

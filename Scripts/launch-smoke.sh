@@ -136,6 +136,8 @@ for name, copied_at in [
     path.chmod(0o600)
 PY
 
+legacy_snapshot=$(/usr/bin/shasum -a 256 "$expired_history_entry" "$recent_history_entry")
+
 env \
   TIDYTAP_LAUNCH_SMOKE=1 \
   TIDYTAP_LAUNCH_SMOKE_PREFERENCES_SUITE="$main_suite" \
@@ -143,8 +145,14 @@ env \
 main_pid=$!
 
 wait_for_log "$main_pid" "$main_log" "TIDYTAP_LAUNCH_SMOKE main-delegate-started"
-if [[ -e "$expired_history_entry" || ! -e "$recent_history_entry" ]]; then
-  print -u2 -- "Settings startup did not prune only expired clipboard history."
+if [[ ! -e "$expired_history_entry" || ! -e "$recent_history_entry" ]] || \
+    [[ "$(/usr/bin/shasum -a 256 "$expired_history_entry" "$recent_history_entry")" != "$legacy_snapshot" ]]; then
+  print -u2 -- "Clipboard migration changed its legacy source files."
+  exit 1
+fi
+if ! /usr/bin/grep -Fq 'clipboard-library-history-count-1' "$main_log" || \
+   ! /usr/bin/grep -Fq 'clipboard-library-expiry-valid-true' "$main_log"; then
+  print -u2 -- "Settings startup did not keep only valid history in the v2 library."
   exit 1
 fi
 window_verified=0

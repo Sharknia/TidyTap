@@ -439,7 +439,7 @@ final class HelperClipboardCaptureHost {
             break
         }
         if service == nil {
-            let store = try ClipboardHistoryStore(
+            let store = try TidyTapProduct.clipboardRouter(
                 directory: directory,
                 retention: TidyTapClipboardPolicy.retention,
                 maximumEntries: TidyTapClipboardPolicy.maximumEntries,

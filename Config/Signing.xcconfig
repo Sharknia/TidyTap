@@ -2,6 +2,10 @@
 //
 // `LocalSigning.xcconfig` is intentionally ignored. Copy the adjacent example
 // and provide real credentials locally before signing a distribution archive.
+TIDYTAP_CLOUDKIT_CONTAINER_IDENTIFIER =
+TIDYTAP_CLOUDKIT_ENTITLEMENTS =
+TIDYTAP_CLOUDKIT_PROFILE_SPECIFIER =
+
 #include? "LocalSigning.xcconfig"
 
 CODE_SIGN_STYLE = Manual

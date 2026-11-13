@@ -4,6 +4,10 @@ import XCTest
 @testable import TidyTapInputEngine
 import ServiceManagement
 
+private func historySnapshot(_ entries: [ClipboardHistoryEntry]) -> ClipboardLibrarySnapshot {
+    .init(entries: entries, historyOrder: entries.sorted { $0.copiedAt > $1.copiedAt }.map(\.id), pinnedOrder: [])
+}
+
 @MainActor
 final class TidyTapSettingsTests: XCTestCase {
     func testClipboardPolicyKeepsNewestThousandAndSearchesThem() async throws {
@@ -37,7 +41,7 @@ final class TidyTapSettingsTests: XCTestCase {
         XCTAssertEqual(refreshed.first?.id, newest.id)
         XCTAssertFalse(FileManager.default.fileExists(atPath: directory.appendingPathComponent("1.clip").path))
         let panel = ClipboardHistoryPanelController()
-        panel.updateEntries(refreshed)
+        panel.updateEntries(historySnapshot(refreshed))
         XCTAssertEqual(panel.visibleCount, 1_000)
         panel.search("newest-copy")
         for _ in 0..<100 where panel.selectedEntry?.id != newest.id {
@@ -356,7 +360,7 @@ final class TidyTapSettingsTests: XCTestCase {
         board.clearContents()
         XCTAssertTrue(board.setString("A", forType: .string))
         host.captureLatestIfChanged()
-        let store = try ClipboardHistoryStore(
+        let store = try TidyTapProduct.clipboardLibrary(
             directory: directory,
             retention: TidyTapClipboardPolicy.retention,
             maximumEntries: TidyTapClipboardPolicy.maximumEntries,
@@ -440,7 +444,7 @@ final class TidyTapSettingsTests: XCTestCase {
         board.clearContents()
         XCTAssertTrue(board.setString("not collected without a new enable", forType: .string))
         host.captureLatestIfChanged()
-        let store = try ClipboardHistoryStore(
+        let store = try TidyTapProduct.clipboardLibrary(
             directory: directory,
             retention: TidyTapClipboardPolicy.retention,
             maximumEntries: TidyTapClipboardPolicy.maximumEntries,
@@ -2445,6 +2449,13 @@ final class TidyTapSettingsTests: XCTestCase {
 }
 
 private final class InMemoryPreferences: TidyTapPreferencesStoring {
+    var clipboardSyncEnabled = false
+    var clipboardSyncWriteError: Error?
+    func readClipboardICloudSyncEnabled() -> Bool { clipboardSyncEnabled }
+    func writeClipboardICloudSyncEnabled(_ enabled: Bool) throws {
+        if let clipboardSyncWriteError { throw clipboardSyncWriteError }
+        clipboardSyncEnabled = enabled
+    }
     var request: TidyTapSettingsRequest
     var status: TidyTapApplyStatus?
     var permissionRequest: TidyTapPermissionRequest?

@@ -85,4 +85,9 @@ if [[ "$bundle_program" != "Contents/MacOS/TidyTapHelper" ]]; then
   exit 1
 fi
 
+autoload -Uz is-at-least
+if is-at-least 0.3.0 "$expected_version"; then
+  /usr/bin/python3 "$project_root/Scripts/verify-clipboard-cloudkit-configuration.py" "$app_path" --require-cloudkit
+fi
+
 print -- "Release artifact contents verified: $dmg_name"

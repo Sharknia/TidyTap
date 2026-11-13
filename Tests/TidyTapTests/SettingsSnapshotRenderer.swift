@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import TidyTapInputEngine
 
 @MainActor
 enum SettingsSnapshotRenderer {
@@ -135,7 +136,7 @@ enum SettingsSnapshotRenderer {
             settings: fixture.settings,
             permissionState: fixture.permissions,
             appIcon: NSImage(contentsOf: sourceRoot.appendingPathComponent("Resources/TidyTap.icns")),
-            displayVersion: "0.1.3",
+            displayVersion: "0.3.0",
             renderingMode: .offscreenSemanticFallback,
             localizationBundle: localizedBundle(language: fixture.language)
         )
@@ -188,6 +189,49 @@ enum SettingsSnapshotRenderer {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
+    }
+
+    static func renderClipboardScenes(to directory: URL) throws -> [URL] {
+        struct Fixture: Encodable { let id: UUID; let copiedAt: Date; let content: ClipboardCapturedContent }
+        func entry(_ content: ClipboardCapturedContent) throws -> ClipboardHistoryEntry {
+            try PropertyListDecoder().decode(ClipboardHistoryEntry.self,
+                from: PropertyListEncoder().encode(Fixture(id: UUID(), copiedAt: Date(), content: content)))
+        }
+        let h = try entry(.text(plain: "프로젝트 안내 · Project note", rtf: nil, html: nil))
+        let p = try entry(.text(plain: "자주 쓰는 안내 문구 · Reusable text", rtf: nil, html: nil))
+        let image = try entry(.image(data: NSImage(systemSymbolName: "photo", accessibilityDescription: nil)?.tiffRepresentation ?? Data(), type: .tiff))
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        var files = [URL]()
+        for language in ["ko", "en"] {
+            for width in [480, 800] {
+                for scene in ["history", "pinned", "image", "empty", "errors"] {
+                    let panel = ClipboardHistoryPanelController(localizationBundle: localizedBundle(language: language))
+                    let snapshot = ClipboardLibrarySnapshot(entries: [h,p,image], historyOrder: [h.id,image.id], pinnedOrder: [p.id,image.id])
+                    panel.updateEntries(snapshot)
+                    if scene != "history" { _ = panel.switchPane(.pinned) }
+                    if scene == "image" {
+                        panel.refreshPreservingSelection(.init(entries: [image], historyOrder: [], pinnedOrder: [image.id]))
+                    }
+                    if scene == "empty" { panel.updateEntries(.init(entries: [], historyOrder: [], pinnedOrder: [])) }
+                    if scene == "errors" {
+                        panel.setPreviousAttempt("Paste failed · 붙여넣기 실패")
+                        panel.refreshPreservingSelection(.init(entries: [h,h], historyOrder: [h.id], pinnedOrder: []))
+                    }
+                    panel.panel.appearance = NSAppearance(named: .darkAqua)
+                    panel.panel.setContentSize(NSSize(width: width, height: 360))
+                    guard let view = panel.panel.contentView else { throw SnapshotError.bitmapUnavailable }
+                    view.layoutSubtreeIfNeeded()
+                    guard let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { throw SnapshotError.bitmapUnavailable }
+                    view.cacheDisplay(in: view.bounds, to: bitmap)
+                    guard let png = bitmap.representation(using: .png, properties: [:]) else { throw SnapshotError.pngEncodingFailed }
+                    let url = directory.appendingPathComponent("clipboard-\(language)-\(width)-\(scene).png")
+                    try png.write(to: url); files.append(url)
+                }
+            }
+        }
+        try Data("AppKit offscreen bitmap; not an installed-device acceptance\n".utf8)
+            .write(to: directory.appendingPathComponent("rendering-mode.txt"))
+        return files
     }
 
     private static func localizedBundle(language: String) -> Bundle {

@@ -3,8 +3,223 @@ import Darwin
 import TidyTapInputEngine
 import XCTest
 
+private func historySnapshot(_ entries: [ClipboardHistoryEntry]) -> ClipboardLibrarySnapshot {
+    .init(entries: entries, historyOrder: entries.sorted { $0.copiedAt > $1.copiedAt }.map(\.id), pinnedOrder: [])
+}
+
 @MainActor
 final class SettingsViewControllerTests: XCTestCase {
+    private func libraryEntry(_ plain: String, at: Date = Date()) throws -> ClipboardHistoryEntry {
+        struct Fixture: Encodable { let id: UUID; let copiedAt: Date; let content: ClipboardCapturedContent }
+        return try PropertyListDecoder().decode(ClipboardHistoryEntry.self,
+            from: PropertyListEncoder().encode(Fixture(id: UUID(), copiedAt: at,
+                content: .text(plain: plain, rtf: nil, html: nil))))
+    }
+
+    func testLibraryTabsKeepHistorySeparateAndRestoreEachSearch() throws {
+        let h = try libraryEntry("history"), p = try libraryEntry("pin")
+        let snapshot = ClipboardLibrarySnapshot(entries: [h,p], historyOrder: [h.id], pinnedOrder: [p.id])
+        let panel = ClipboardHistoryPanelController(); panel.updateEntries(snapshot)
+        XCTAssertEqual(panel.selectedEntry?.id, h.id)
+        panel.search("history")
+        XCTAssertTrue(panel.switchPane(.pinned)); XCTAssertEqual(panel.searchQuery, "")
+        XCTAssertEqual(panel.selectedEntry?.id, p.id)
+        panel.search("pin"); XCTAssertTrue(panel.switchPane(.history))
+        XCTAssertEqual(panel.searchQuery, "history"); XCTAssertEqual(panel.selectedEntry?.id, h.id)
+        XCTAssertTrue(panel.switchPane(.pinned)); XCTAssertEqual(panel.searchQuery, "pin")
+        XCTAssertTrue(panel.switchPane(.pinned)); XCTAssertEqual(panel.searchQuery, "pin")
+    }
+
+    func testInvalidLibrarySnapshotDoesNotReplaceCurrentValuesAndCannotOpen() throws {
+        let h = try libraryEntry("H"), panel = ClipboardHistoryPanelController()
+        panel.updateEntries(historySnapshot([h]))
+        let invalid = ClipboardLibrarySnapshot(entries: [h,h], historyOrder: [h.id], pinnedOrder: [])
+        panel.refreshPreservingSelection(invalid)
+        XCTAssertEqual(panel.selectedEntry?.id, h.id)
+        XCTAssertFalse(panel.show(snapshot: invalid, displayID: nil, pasteFormattedByDefault: false,
+            latestCopyTooLarge: false, onPaste: { _,_ in XCTFail() }, onSetPinned: { _,_,_ in XCTFail() },
+            onDeleteHistory: { _,_ in XCTFail() }, onCancel: { _ in }))
+        XCTAssertFalse(panel.isVisible); XCTAssertNil(panel.selectedEntry)
+    }
+
+    func testPaneKeysConsumeRepeatAndReleaseEvenAfterCommandReleased() throws {
+        func key(_ type: NSEvent.EventType, _ modifiers: NSEvent.ModifierFlags, repeatKey: Bool = false) throws -> NSEvent {
+            try XCTUnwrap(NSEvent.keyEvent(with: type, location: .zero, modifierFlags: modifiers, timestamp: 0,
+                windowNumber: 0, context: nil, characters: "2", charactersIgnoringModifiers: "2", isARepeat: repeatKey, keyCode: 19))
+        }
+        var state = ClipboardPaneKeyState()
+        XCTAssertEqual(try state.handle(key(.keyDown, [.command, .capsLock])).pane, .pinned)
+        XCTAssertTrue(try state.handle(key(.keyDown, .command, repeatKey: true)).consumed)
+        XCTAssertNil(try state.handle(key(.keyDown, .command, repeatKey: true)).pane)
+        XCTAssertTrue(try state.handle(key(.keyUp, [])).consumed)
+        XCTAssertFalse(try state.handle(key(.keyDown, [.command, .shift])).consumed)
+        XCTAssertFalse(try state.handle(key(.keyDown, [])).consumed)
+    }
+
+    func testMutationCompletionPreservesCurrentPaneSelectionAndOldSessionCannotChangeNewOne() throws {
+        let h = try libraryEntry("H"), p = try libraryEntry("P")
+        let initial = ClipboardLibrarySnapshot(entries: [h,p], historyOrder: [h.id], pinnedOrder: [p.id])
+        let panel = ClipboardHistoryPanelController(); defer { panel.close() }
+        var done: ((Result<ClipboardLibrarySnapshot, Error>) -> Void)?
+        XCTAssertTrue(panel.show(snapshot: initial, displayID: nil, pasteFormattedByDefault: false, latestCopyTooLarge: false,
+            onPaste: { _,_ in }, onSetPinned: { id, pinned, completion in
+                XCTAssertEqual(id, h.id); XCTAssertTrue(pinned); done = completion
+            }, onDeleteHistory: { _,_ in }, onCancel: { _ in }))
+        let button = try XCTUnwrap(panel.panel.contentView?.subviews.compactMap { $0 as? NSButton }.first { $0.identifier?.rawValue == "clipboard.history.pin" })
+        button.performClick(nil); XCTAssertNotNil(done)
+        XCTAssertTrue(panel.switchPane(.pinned)); XCTAssertEqual(panel.selectedEntry?.id, p.id)
+        done?(.success(.init(entries: [h,p], historyOrder: [h.id], pinnedOrder: [h.id,p.id])))
+        XCTAssertEqual(panel.pane, .pinned); XCTAssertEqual(panel.selectedEntry?.id, p.id)
+        panel.close()
+        XCTAssertTrue(panel.show(snapshot: initial, displayID: nil, pasteFormattedByDefault: false, latestCopyTooLarge: false,
+            onPaste: { _,_ in }, onSetPinned: { _,_,_ in }, onDeleteHistory: { _,_ in }, onCancel: { _ in }))
+        done?(.success(.init(entries: [], historyOrder: [], pinnedOrder: [])))
+        XCTAssertEqual(panel.pane, .history); XCTAssertEqual(panel.selectedEntry?.id, h.id)
+    }
+
+    func testLibraryTabsUseInjectedKoreanAndEnglishBundles() throws {
+        for (language, title) in [("ko", "보관함 ⌘2"), ("en", "Pinboard ⌘2")] {
+            let path = try XCTUnwrap(Bundle(for: Self.self).path(forResource: language, ofType: "lproj"))
+            let panel = ClipboardHistoryPanelController(localizationBundle: try XCTUnwrap(Bundle(path: path)))
+            let tabs = try XCTUnwrap(panel.panel.contentView?.subviews.compactMap { $0 as? NSSegmentedControl }
+                .first { $0.identifier?.rawValue == "clipboard.history.scope" })
+            XCTAssertEqual(tabs.label(forSegment: 1), title)
+            XCTAssertEqual(tabs.accessibilityLabel(), language == "ko" ? "클립보드 보관함" : "Clipboard library")
+            let h = try libraryEntry("최근 복사한 메모"), pinned = try libraryEntry("자주 쓰는 안내 문구")
+            panel.updateEntries(.init(entries: [h,pinned], historyOrder: [h.id], pinnedOrder: [pinned.id]))
+            XCTAssertTrue(panel.switchPane(.pinned)); XCTAssertEqual(panel.selectedEntry?.id, pinned.id)
+            panel.panel.setContentSize(NSSize(width: 480, height: 360))
+            let view = try XCTUnwrap(panel.panel.contentView); view.layoutSubtreeIfNeeded()
+            let search = try XCTUnwrap(view.subviews.compactMap { $0 as? NSSearchField }.first)
+            XCTAssertEqual(search.accessibilityLabel(), language == "ko" ? "복사한 텍스트 검색" : "Search copied text")
+            let table = try XCTUnwrap(view.subviews.compactMap { $0 as? NSScrollView }.compactMap { $0.documentView as? NSTableView }.first)
+            XCTAssertEqual(table.accessibilityLabel(), language == "ko" ? "클립보드 기록" : "Clipboard entries")
+            let pin = try XCTUnwrap(view.subviews.compactMap { $0 as? NSButton }.first { $0.identifier?.rawValue == "clipboard.history.pin" })
+            XCTAssertEqual(pin.title, language == "ko" ? "고정 해제" : "Unpin")
+            XCTAssertLessThanOrEqual(pin.frame.maxX, view.bounds.maxX)
+            XCTAssertLessThanOrEqual(tabs.frame.maxX, view.bounds.maxX)
+            let cell = try XCTUnwrap(table.view(atColumn: 0, row: 0, makeIfNecessary: true))
+            let marker = try XCTUnwrap(cell.subviews.first { $0.identifier?.rawValue == "clipboard.row.pin" })
+            let clip = try XCTUnwrap(table.enclosingScrollView?.contentView)
+            XCTAssertLessThanOrEqual(clip.convert(marker.bounds, from: marker).maxX, clip.bounds.maxX + 1)
+            let bitmap = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+            view.cacheDisplay(in: view.bounds, to: bitmap)
+            let png = try XCTUnwrap(bitmap.representation(using: .png, properties: [:]))
+            try png.write(to: FileManager.default.temporaryDirectory.appendingPathComponent("tidytap-pinboard-\(language).png"))
+            XCTAssertTrue(panel.switchPane(.history))
+            XCTAssertEqual(pin.title, language == "ko" ? "보관함에 고정" : "Pin to pinboard")
+            XCTAssertTrue(panel.switchPane(.pinned))
+            panel.updateEntries(.init(entries: [], historyOrder: [], pinnedOrder: []))
+            let expected = language == "ko" ? "보관함이 비어 있습니다. 최근 기록에서 항목을 고정하면 여기에 모입니다." : "Pinboard is empty. Pin an item from recent history."
+            XCTAssertTrue(view.subviews.compactMap { $0 as? NSTextField }.contains { $0.stringValue == expected })
+        }
+    }
+
+    func testLargeSearchRetainsSelectionAcrossBurstRefreshAndTabRoundTrip() async throws {
+        var entries = try (0..<12).map { try libraryEntry("shared-\($0) " + String(repeating: "x", count: 100_000)) }
+        let pin = try libraryEntry("pinned")
+        let panel = ClipboardHistoryPanelController()
+        func snapshot() -> ClipboardLibrarySnapshot {
+            .init(entries: entries + [pin], historyOrder: entries.map(\.id), pinnedOrder: [pin.id])
+        }
+        panel.updateEntries(snapshot()); panel.search("shared")
+        for _ in 0..<100 where panel.visibleCount != 12 { try await Task.sleep(for: .milliseconds(10)) }
+        let table = try XCTUnwrap(panel.panel.contentView?.subviews.compactMap { $0 as? NSScrollView }
+            .compactMap { $0.documentView as? NSTableView }.first)
+        table.selectRowIndexes(IndexSet(integer: 5), byExtendingSelection: false)
+        let selected = try XCTUnwrap(panel.selectedEntry?.id)
+        entries.append(try libraryEntry("shared-new")); panel.refreshPreservingSelection(snapshot())
+        entries.append(try libraryEntry("shared-newer")); panel.refreshPreservingSelection(snapshot())
+        XCTAssertTrue(panel.switchPane(.pinned)); XCTAssertEqual(panel.selectedEntry?.id, pin.id)
+        XCTAssertTrue(panel.switchPane(.history))
+        for _ in 0..<100 where panel.visibleCount != 14 { try await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertEqual(panel.selectedEntry?.id, selected)
+    }
+
+    func testMarkedEditorRefusalKeepsPaneSearchAndReturnsCommand() throws {
+        final class RefusingEditor: NSTextView {
+            var refuses = true
+            override var acceptsFirstResponder: Bool { true }
+            override func resignFirstResponder() -> Bool { !refuses }
+            override func hasMarkedText() -> Bool { refuses }
+        }
+        let h = try libraryEntry("keep"), panel = ClipboardHistoryPanelController()
+        let editor = RefusingEditor(frame: NSRect(x: 0, y: 0, width: 20, height: 20))
+        defer { editor.refuses = false; panel.close() }
+        XCTAssertTrue(panel.show(snapshot: historySnapshot([h]), displayID: nil, pasteFormattedByDefault: false,
+            latestCopyTooLarge: false, onPaste: { _,_ in }, onSetPinned: { _,_,_ in }, onDeleteHistory: { _,_ in }, onCancel: { _ in }))
+        panel.search("keep"); panel.panel.contentView?.addSubview(editor)
+        XCTAssertTrue(panel.panel.makeFirstResponder(editor))
+        XCTAssertFalse(panel.switchPane(.pinned)); XCTAssertEqual(panel.pane, .history)
+        XCTAssertEqual(panel.searchQuery, "keep"); XCTAssertTrue(editor.hasMarkedText())
+        let event = try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command,
+            timestamp: 0, windowNumber: panel.panel.windowNumber, context: nil, characters: "2", charactersIgnoringModifiers: "2", isARepeat: false, keyCode: 19))
+        XCTAssertTrue(panel.handleKey(event) === event)
+        editor.refuses = false; panel.close()
+        XCTAssertTrue(panel.handleKey(event) === event)
+    }
+
+    func testFailedMutationUnlocksButtonsAndLastUnpinShowsEmptyState() throws {
+        let h = try libraryEntry("H"), p = try libraryEntry("P"), panel = ClipboardHistoryPanelController()
+        defer { panel.close() }
+        let initial = ClipboardLibrarySnapshot(entries: [h,p], historyOrder: [h.id], pinnedOrder: [p.id])
+        var done: ((Result<ClipboardLibrarySnapshot, Error>) -> Void)?
+        XCTAssertTrue(panel.show(snapshot: initial, displayID: nil, pasteFormattedByDefault: false, latestCopyTooLarge: false,
+            onPaste: { _,_ in }, onSetPinned: { _,_,completion in done = completion }, onDeleteHistory: { _,_ in }, onCancel: { _ in }))
+        let button = try XCTUnwrap(panel.panel.contentView?.subviews.compactMap { $0 as? NSButton }.first { $0.identifier?.rawValue == "clipboard.history.pin" })
+        panel.setPreviousAttempt("synthetic paste failure")
+        button.performClick(nil); XCTAssertFalse(button.isEnabled)
+        done?(.failure(NSError(domain: "synthetic", code: 1)))
+        XCTAssertTrue(button.isEnabled); XCTAssertEqual(panel.selectedEntry?.id, h.id)
+        let error = panel.panel.contentView?.subviews.compactMap { $0 as? NSTextField }.first { $0.stringValue.contains("synthetic paste failure") }
+        XCTAssertEqual(error?.stringValue.components(separatedBy: "\n").count, 2)
+        XCTAssertTrue(panel.switchPane(.pinned)); button.performClick(nil)
+        done?(.success(historySnapshot([h])))
+        XCTAssertEqual(panel.pane, .pinned); XCTAssertNil(panel.selectedEntry); XCTAssertEqual(panel.visibleCount, 0)
+        XCTAssertFalse(button.isEnabled)
+    }
+
+    func testNewSessionMutationStaysLockedWhenOldSessionFails() throws {
+        let h = try libraryEntry("H"), panel = ClipboardHistoryPanelController(); defer { panel.close() }
+        var callbacks = [(Result<ClipboardLibrarySnapshot, Error>) -> Void]()
+        func open() {
+            XCTAssertTrue(panel.show(snapshot: historySnapshot([h]), displayID: nil, pasteFormattedByDefault: false, latestCopyTooLarge: false,
+                onPaste: { _,_ in }, onSetPinned: { _,_,completion in callbacks.append(completion) }, onDeleteHistory: { _,_ in }, onCancel: { _ in }))
+        }
+        open()
+        let button = try XCTUnwrap(panel.panel.contentView?.subviews.compactMap { $0 as? NSButton }.first { $0.identifier?.rawValue == "clipboard.history.pin" })
+        button.performClick(nil); panel.close(); open(); button.performClick(nil)
+        XCTAssertEqual(callbacks.count, 2)
+        callbacks[0](.failure(NSError(domain: "old", code: 1)))
+        XCTAssertFalse(button.isEnabled)
+        callbacks[1](.success(.init(entries: [h], historyOrder: [h.id], pinnedOrder: [h.id])))
+        XCTAssertTrue(button.isEnabled)
+    }
+
+    func testSyncSwitchIsIndependentVisibleWithHistoryOffAndCanRetryFailedPause() throws {
+        let controller = SettingsViewController(); _ = controller.view
+        controller.apply(.defaults)
+        controller.applyClipboardSync(enabled: true, state: .configurationError)
+        let toggle = try XCTUnwrap(findView(identifier: SettingsViewController.ControlIdentifier.clipboardSyncSwitch,
+            in: controller.view) as? NSSwitch)
+        XCTAssertFalse(toggle.isHiddenOrHasHiddenAncestor); XCTAssertEqual(toggle.state, .on)
+        controller.apply(.defaults); XCTAssertEqual(toggle.state, .on)
+        var input = 0, desired = [Bool]()
+        controller.onSettingsChange = { _ in input += 1 }
+        controller.onICloudSyncChanged = { enabled in
+            desired.append(enabled); controller.applyClipboardSync(enabled: enabled, state: .off)
+        }
+        toggle.performClick(nil); XCTAssertEqual(desired, [false]); XCTAssertEqual(input, 0)
+        var retry = 0; controller.onRetryClipboardSync = { retry += 1 }
+        controller.applyClipboardSync(enabled: false, state: .pausing, pauseNeedsRetry: true)
+        let button = try XCTUnwrap(findView(identifier: "settings.clipboardHistory.syncRetry", in: controller.view) as? NSButton)
+        XCTAssertFalse(button.isHidden); button.performClick(nil)
+        XCTAssertEqual(retry, 1); XCTAssertEqual(toggle.state, .off)
+        controller.restoreClipboardSyncAfterSaveFailure(enabled: false, state: .pausing, pauseNeedsRetry: true)
+        XCTAssertFalse(button.isHidden); XCTAssertEqual(toggle.state, .off)
+        button.performClick(nil); XCTAssertEqual(retry, 2)
+    }
+
     func testShortcutRecorderRequiresStartAndCanRestartAfterLosingFocus() throws {
         let recorder = ClipboardShortcutRecorder(
             prompt: "Press", inactivePrompt: "Click Start", invalidPrompt: "Invalid",
@@ -199,7 +414,7 @@ final class SettingsViewControllerTests: XCTestCase {
         let b = try store.add(.image(data: Data([0x89, 0x50, 0x4E, 0x47]), type: .png), copiedAt: now.addingTimeInterval(-1))
         let c = try store.add(.text(plain: "Latest note", rtf: nil, html: nil), copiedAt: now)
         let panel = ClipboardHistoryPanelController()
-        panel.updateEntries([a, c, b])
+        panel.updateEntries(historySnapshot([a, c, b]))
         XCTAssertEqual(panel.selectedEntry?.id, c.id)
         XCTAssertEqual(panel.sourcePosition(for: c.id).index, 0)
         XCTAssertEqual(panel.sourcePosition(for: c.id).count, 3)
@@ -211,16 +426,16 @@ final class SettingsViewControllerTests: XCTestCase {
         panel.search("")
         XCTAssertEqual(panel.selectedEntry?.id, c.id)
         let d = try store.add(.text(plain: "newest", rtf: nil, html: nil), copiedAt: now.addingTimeInterval(1))
-        panel.refreshPreservingSelection([a, b, c, d])
+        panel.refreshPreservingSelection(historySnapshot([a, b, c, d]))
         XCTAssertEqual(panel.visibleCount, 4)
         XCTAssertEqual(panel.selectedEntry?.id, c.id, "new copies do not interrupt the current selection")
         XCTAssertEqual(panel.sourcePosition(for: c.id).index, 1)
         XCTAssertEqual(panel.sourcePosition(for: c.id).count, 4)
-        panel.refreshAfterDeleting([c, a], previousRow: 1)
-        XCTAssertEqual(panel.selectedEntry?.id, a.id)
+        panel.refreshPreservingSelection(historySnapshot([c, a]))
+        XCTAssertEqual(panel.selectedEntry?.id, c.id, "refresh preserves the current ID when it still exists")
         XCTAssertEqual(panel.sourcePosition(for: a.id).index, 1)
         XCTAssertEqual(panel.sourcePosition(for: a.id).count, 2)
-        panel.refreshAfterDeleting([c], previousRow: 1)
+        panel.refreshPreservingSelection(historySnapshot([c]))
         XCTAssertEqual(panel.selectedEntry?.id, c.id)
         XCTAssertFalse(panel.isVisible)
     }
@@ -235,11 +450,11 @@ final class SettingsViewControllerTests: XCTestCase {
         let image = try store.add(.image(data: Data(), type: .png), copiedAt: now.addingTimeInterval(-1))
         let older = try store.add(.image(data: Data(), type: .tiff), copiedAt: now.addingTimeInterval(-2))
         let panel = ClipboardHistoryPanelController()
-        panel.updateEntries([older, text, image])
+        panel.updateEntries(historySnapshot([older, text, image]))
         panel.search("needle")
         let root = try XCTUnwrap(panel.panel.contentView)
         let search = try XCTUnwrap(root.subviews.compactMap { $0 as? NSSearchField }.first)
-        let filter = try XCTUnwrap(root.subviews.compactMap { $0 as? NSSegmentedControl }.first)
+        let filter = try XCTUnwrap(root.subviews.compactMap { $0 as? NSSegmentedControl }.first { $0.identifier?.rawValue == "clipboard.history.contentFilter" })
         func switchTo(_ segment: Int) throws {
             filter.selectedSegment = segment
             XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(filter.action), to: filter.target, from: filter))
@@ -257,12 +472,12 @@ final class SettingsViewControllerTests: XCTestCase {
         try switchTo(1)
         let newerText = try store.add(text.content, copiedAt: now.addingTimeInterval(1))
         let newerImage = try store.add(image.content, copiedAt: now.addingTimeInterval(2))
-        panel.refreshPreservingSelection([older, text, image, newerText, newerImage])
+        panel.refreshPreservingSelection(historySnapshot([older, text, image, newerText, newerImage]))
         XCTAssertEqual(panel.visibleCount, 3)
         XCTAssertEqual(panel.selectedEntry?.id, image.id)
-        panel.refreshAfterDeleting([older, text, newerText, newerImage], previousRow: 1)
+        panel.refreshPreservingSelection(historySnapshot([older, text, newerText, newerImage]))
         XCTAssertEqual(panel.selectedEntry?.id, older.id)
-        panel.refreshAfterDeleting([text, newerText], previousRow: 1)
+        panel.refreshPreservingSelection(historySnapshot([text, newerText]))
         XCTAssertEqual(panel.visibleCount, 0)
         XCTAssertNil(panel.selectedEntry)
         XCTAssertTrue(root.subviews.compactMap { $0 as? NSTextField }
@@ -283,24 +498,24 @@ final class SettingsViewControllerTests: XCTestCase {
         let text = try store.add(.text(plain: "needle", rtf: nil, html: nil))
         let image = try store.add(.image(data: Data(), type: .png), copiedAt: Date().addingTimeInterval(-1))
         let panel = ClipboardHistoryPanelController()
-        panel.updateEntries([text, image], latestCopyTooLarge: true)
+        panel.updateEntries(historySnapshot([text, image]), latestCopyTooLarge: true)
         panel.search("needle")
         XCTAssertEqual(panel.selectedEntry?.id, text.id)
         let root = try XCTUnwrap(panel.panel.contentView)
-        let filter = try XCTUnwrap(root.subviews.compactMap { $0 as? NSSegmentedControl }.first)
+        let filter = try XCTUnwrap(root.subviews.compactMap { $0 as? NSSegmentedControl }.first { $0.identifier?.rawValue == "clipboard.history.contentFilter" })
         filter.selectedSegment = 1
         XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(filter.action), to: filter.target, from: filter))
         XCTAssertEqual(panel.visibleCount, 1)
         XCTAssertNil(panel.selectedEntry)
         XCTAssertTrue(root.subviews.compactMap { $0 as? NSTextField }
             .contains { !$0.isHidden && $0.stringValue.contains("10 MiB") })
-        panel.refreshPreservingSelection([text, image], latestCopyTooLarge: true)
+        panel.refreshPreservingSelection(historySnapshot([text, image]), latestCopyTooLarge: true)
         XCTAssertNil(panel.selectedEntry)
         let table = try XCTUnwrap(root.subviews.compactMap { $0 as? NSScrollView }
             .compactMap { $0.documentView as? NSTableView }.first)
         table.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
         XCTAssertEqual(panel.selectedEntry?.id, image.id)
-        panel.refreshPreservingSelection([text, image], latestCopyTooLarge: true)
+        panel.refreshPreservingSelection(historySnapshot([text, image]), latestCopyTooLarge: true)
         XCTAssertEqual(panel.selectedEntry?.id, image.id)
     }
 
@@ -312,11 +527,11 @@ final class SettingsViewControllerTests: XCTestCase {
         let entry = try store.add(.text(plain: "needle", rtf: nil, html: nil))
         let panel = ClipboardHistoryPanelController()
         defer { panel.close() }
-        panel.show(entries: [entry], displayID: nil, pasteFormattedByDefault: false, latestCopyTooLarge: false,
-                   onPaste: { _, _ in XCTFail("filter changes must not paste") }, onDelete: { _, _ in }, onCancel: { _ in })
+        _ = panel.show(snapshot: historySnapshot([entry]), displayID: nil, pasteFormattedByDefault: false, latestCopyTooLarge: false,
+                   onPaste: { _, _ in XCTFail("filter changes must not paste") }, onSetPinned: { _, _, _ in }, onDeleteHistory: { _, _ in }, onCancel: { _ in })
         let root = try XCTUnwrap(panel.panel.contentView)
         let search = try XCTUnwrap(root.subviews.compactMap { $0 as? NSSearchField }.first)
-        let filter = try XCTUnwrap(root.subviews.compactMap { $0 as? NSSegmentedControl }.first)
+        let filter = try XCTUnwrap(root.subviews.compactMap { $0 as? NSSegmentedControl }.first { $0.identifier?.rawValue == "clipboard.history.contentFilter" })
         panel.search("needle")
         filter.selectedSegment = 1
         XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(filter.action), to: filter.target, from: filter))
@@ -328,8 +543,8 @@ final class SettingsViewControllerTests: XCTestCase {
         filter.selectedSegment = 1
         XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(filter.action), to: filter.target, from: filter))
         panel.close()
-        panel.show(entries: [entry], displayID: nil, pasteFormattedByDefault: false, latestCopyTooLarge: false,
-                   onPaste: { _, _ in XCTFail("reopening must not paste") }, onDelete: { _, _ in }, onCancel: { _ in })
+        _ = panel.show(snapshot: historySnapshot([entry]), displayID: nil, pasteFormattedByDefault: false, latestCopyTooLarge: false,
+                   onPaste: { _, _ in XCTFail("reopening must not paste") }, onSetPinned: { _, _, _ in }, onDeleteHistory: { _, _ in }, onCancel: { _ in })
         XCTAssertEqual(filter.selectedSegment, 0)
         XCTAssertTrue(search.isEnabled)
         XCTAssertEqual(panel.searchQuery, "")
@@ -345,11 +560,11 @@ final class SettingsViewControllerTests: XCTestCase {
         let text = try store.add(.text(plain: String(repeating: "x", count: 1_100_000) + "needle", rtf: nil, html: nil))
         let image = try store.add(.image(data: Data(), type: .png), copiedAt: Date().addingTimeInterval(-1))
         let panel = ClipboardHistoryPanelController()
-        panel.updateEntries([text, image])
+        panel.updateEntries(historySnapshot([text, image]))
         panel.search("needle")
         XCTAssertNil(panel.selectedEntry)
         let root = try XCTUnwrap(panel.panel.contentView)
-        let filter = try XCTUnwrap(root.subviews.compactMap { $0 as? NSSegmentedControl }.first)
+        let filter = try XCTUnwrap(root.subviews.compactMap { $0 as? NSSegmentedControl }.first { $0.identifier?.rawValue == "clipboard.history.contentFilter" })
         filter.selectedSegment = 1
         XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(filter.action), to: filter.target, from: filter))
         XCTAssertEqual(panel.selectedEntry?.id, image.id)
@@ -373,10 +588,10 @@ final class SettingsViewControllerTests: XCTestCase {
         )
         let previous = try store.add(.text(plain: "previous item", rtf: nil, html: nil))
         let panel = ClipboardHistoryPanelController()
-        panel.updateEntries([previous], latestCopyTooLarge: true)
+        panel.updateEntries(historySnapshot([previous]), latestCopyTooLarge: true)
         XCTAssertEqual(panel.visibleCount, 1)
         XCTAssertNil(panel.selectedEntry, "Enter must not paste an older item by accident")
-        panel.refreshPreservingSelection([previous], latestCopyTooLarge: true)
+        panel.refreshPreservingSelection(historySnapshot([previous]), latestCopyTooLarge: true)
         XCTAssertNil(panel.selectedEntry, "a late change notification must not select the older item")
         let root = try XCTUnwrap(panel.panel.contentView)
         let preview = try XCTUnwrap(root.subviews.compactMap { $0 as? NSScrollView }
@@ -391,11 +606,11 @@ final class SettingsViewControllerTests: XCTestCase {
 
         panel.search("previous")
         XCTAssertEqual(panel.selectedEntry?.id, previous.id)
-        panel.refreshPreservingSelection([previous], latestCopyTooLarge: true)
+        panel.refreshPreservingSelection(historySnapshot([previous]), latestCopyTooLarge: true)
         XCTAssertEqual(panel.selectedEntry?.id, previous.id, "an intentional selection remains stable")
         panel.search("")
         XCTAssertNil(panel.selectedEntry)
-        panel.refreshPreservingSelection([previous])
+        panel.refreshPreservingSelection(historySnapshot([previous]))
         XCTAssertEqual(panel.selectedEntry?.id, previous.id)
     }
 
@@ -409,7 +624,7 @@ final class SettingsViewControllerTests: XCTestCase {
         let fullText = String(repeating: "한", count: 30_000)
         let entry = try store.add(.text(plain: fullText, rtf: nil, html: nil))
         let panel = ClipboardHistoryPanelController()
-        panel.updateEntries([entry])
+        panel.updateEntries(historySnapshot([entry]))
         let root = try XCTUnwrap(panel.panel.contentView)
         let preview = try XCTUnwrap(root.subviews.compactMap { $0 as? NSScrollView }
             .compactMap { $0.documentView as? NSTextView }.first)
@@ -433,7 +648,7 @@ final class SettingsViewControllerTests: XCTestCase {
         let first = try store.add(.text(plain: String(repeating: "x", count: 600_000) + "needle", rtf: nil, html: nil))
         let second = try store.add(.text(plain: String(repeating: "y", count: 600_000) + "other", rtf: nil, html: nil))
         let panel = ClipboardHistoryPanelController()
-        panel.updateEntries([first, second])
+        panel.updateEntries(historySnapshot([first, second]))
 
         panel.search("needle")
         XCTAssertNil(panel.selectedEntry, "an old row cannot be pasted while search is pending")
@@ -443,13 +658,13 @@ final class SettingsViewControllerTests: XCTestCase {
         }
         XCTAssertEqual(panel.selectedEntry?.id, second.id)
         let newer = try store.add(.text(plain: String(repeating: "z", count: 600_000) + "other", rtf: nil, html: nil))
-        panel.refreshPreservingSelection([first, second, newer])
+        panel.refreshPreservingSelection(historySnapshot([first, second, newer]))
         XCTAssertNil(panel.selectedEntry)
         for _ in 0..<100 where panel.selectedEntry?.id != second.id {
             try await Task.sleep(for: .milliseconds(10))
         }
         XCTAssertEqual(panel.selectedEntry?.id, second.id, "a new copy does not steal the selected result")
-        panel.refreshAfterDeleting([first, newer], previousRow: 1)
+        panel.refreshPreservingSelection(historySnapshot([first, newer]))
         for _ in 0..<100 where panel.selectedEntry?.id != newer.id {
             try await Task.sleep(for: .milliseconds(10))
         }
@@ -485,7 +700,7 @@ final class SettingsViewControllerTests: XCTestCase {
         service.poll()
 
         let panel = ClipboardHistoryPanelController()
-        panel.updateEntries(try store.entries())
+        panel.updateEntries(historySnapshot(try store.entries()))
         XCTAssertEqual(panel.selectedEntry?.content, .text(plain: "second", rtf: nil, html: nil))
         panel.search("first")
         let selected = try XCTUnwrap(panel.selectedEntry)
@@ -517,8 +732,8 @@ final class SettingsViewControllerTests: XCTestCase {
         service.poll()
 
         panel.search("")
-        panel.updateEntries(try store.entries())
-        let filter = try XCTUnwrap(panel.panel.contentView?.subviews.compactMap { $0 as? NSSegmentedControl }.first)
+        panel.updateEntries(historySnapshot(try store.entries()))
+        let filter = try XCTUnwrap(panel.panel.contentView?.subviews.compactMap { $0 as? NSSegmentedControl }.first { $0.identifier?.rawValue == "clipboard.history.contentFilter" })
         filter.selectedSegment = 1
         XCTAssertTrue(NSApp.sendAction(try XCTUnwrap(filter.action), to: filter.target, from: filter))
         XCTAssertEqual(panel.visibleCount, 1)
@@ -577,15 +792,15 @@ final class SettingsViewControllerTests: XCTestCase {
             rtf: nil, html: nil
         ))
         let panel = ClipboardHistoryPanelController()
-        panel.updateEntries(try store.entries())
+        panel.updateEntries(historySnapshot(try store.entries()))
         XCTAssertNil(panel.panel.appearance, "history follows the system appearance")
         let view = try XCTUnwrap(panel.panel.contentView)
         view.layoutSubtreeIfNeeded()
         let search = try XCTUnwrap(view.subviews.compactMap { $0 as? NSSearchField }.first)
-        XCTAssertGreaterThanOrEqual(view.bounds.maxY - search.frame.maxY, 14)
-        XCTAssertLessThanOrEqual(view.bounds.maxY - search.frame.maxY, 24)
+        XCTAssertGreaterThanOrEqual(view.bounds.maxY - search.frame.maxY, 54)
+        XCTAssertLessThanOrEqual(view.bounds.maxY - search.frame.maxY, 68)
         XCTAssertTrue(panel.panel.standardWindowButton(.closeButton)?.isHidden == true)
-        XCTAssertEqual(view.bounds.height, 380, accuracy: 1,
+        XCTAssertEqual(view.bounds.height, 424, accuracy: 1,
                        "a mixed history reserves preview space before the image is selected")
         let listScroll = try XCTUnwrap(view.subviews.compactMap { $0 as? NSScrollView }
             .first { $0.documentView is NSTableView })
@@ -619,9 +834,9 @@ final class SettingsViewControllerTests: XCTestCase {
         }
         _ = try store.add(.text(plain: "새로운 메모\n검색과 선택을 빠르게 확인합니다.", rtf: nil, html: nil))
         panel.search("")
-        panel.updateEntries(try store.entries())
+        panel.updateEntries(historySnapshot(try store.entries()))
         view.layoutSubtreeIfNeeded()
-        XCTAssertEqual(view.bounds.height, 454, accuracy: 1)
+        XCTAssertEqual(view.bounds.height, 498, accuracy: 1)
         XCTAssertEqual(list.numberOfRows, 9)
         let denseBitmap = try XCTUnwrap(view.bitmapImageRepForCachingDisplay(in: view.bounds))
         view.cacheDisplay(in: view.bounds, to: denseBitmap)
@@ -650,9 +865,9 @@ final class SettingsViewControllerTests: XCTestCase {
             rtf: nil, html: nil
         ), copiedAt: now)
         let panel = ClipboardHistoryPanelController()
-        panel.updateEntries(try store.entries())
+        panel.updateEntries(historySnapshot(try store.entries()))
         let view = try XCTUnwrap(panel.panel.contentView)
-        XCTAssertLessThanOrEqual(view.bounds.height, 300, "text-only history stays compact")
+        XCTAssertLessThanOrEqual(view.bounds.height, 344, "text-only history stays compact with the tab row")
         let search = try XCTUnwrap(view.subviews.compactMap { $0 as? NSSearchField }.first)
         let list = try XCTUnwrap(view.subviews.compactMap { $0 as? NSScrollView }
             .compactMap { $0.documentView as? NSTableView }.first)
@@ -681,8 +896,8 @@ final class SettingsViewControllerTests: XCTestCase {
         view.layoutSubtreeIfNeeded()
 
         XCTAssertEqual(view.bounds.width, 800, accuracy: 1)
-        XCTAssertGreaterThanOrEqual(view.bounds.maxY - search.frame.maxY, 14)
-        XCTAssertLessThanOrEqual(view.bounds.maxY - search.frame.maxY, 24)
+        XCTAssertGreaterThanOrEqual(view.bounds.maxY - search.frame.maxY, 54)
+        XCTAssertLessThanOrEqual(view.bounds.maxY - search.frame.maxY, 68)
         XCTAssertLessThanOrEqual(footer.frame.maxX, delete.frame.minX - 8)
         for row in 0..<list.numberOfRows {
             let cell = try XCTUnwrap(list.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView)
@@ -737,7 +952,7 @@ final class SettingsViewControllerTests: XCTestCase {
         _ = try store.add(.text(plain: "Text selected first", rtf: nil, html: nil))
 
         let panel = ClipboardHistoryPanelController()
-        panel.updateEntries(try store.entries())
+        panel.updateEntries(historySnapshot(try store.entries()))
         let root = try XCTUnwrap(panel.panel.contentView)
         root.layoutSubtreeIfNeeded()
         let initialSize = panel.panel.frame.size
@@ -1239,6 +1454,9 @@ final class SettingsViewControllerTests: XCTestCase {
             try SettingsSnapshotRenderer.render(fixture, to: outputURL)
             XCTAssertTrue(FileManager.default.fileExists(atPath: outputURL.path))
         }
+        let scenes = try SettingsSnapshotRenderer.renderClipboardScenes(to: outputDirectory.appendingPathComponent("clipboard"))
+        XCTAssertEqual(scenes.count, 20)
+        XCTAssertTrue(scenes.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })
     }
 
     func testCapsLockFailureDisplaysLocalizedReasonAndPreservesEffectiveSettings() throws {

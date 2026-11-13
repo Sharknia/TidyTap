@@ -1,0 +1,19 @@
+{
+  "scope": "local-only",
+  "cloudkit": "not_run",
+  "run": "/Users/crobat/dev/tidytap/build/clipboard-cloudkit-probe/run.oedrtn73",
+  "status": "passed",
+  "build_exit": 0,
+  "probe_exit": 0,
+  "passed": [
+    "L01",
+    "L02",
+    "L03",
+    "L04",
+    "L05",
+    "L06",
+    "L07",
+    "L08",
+    "L09"
+  ]
+}

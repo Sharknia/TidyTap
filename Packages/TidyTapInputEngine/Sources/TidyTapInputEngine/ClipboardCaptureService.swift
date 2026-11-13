@@ -8,7 +8,7 @@ public final class ClipboardCaptureService {
         case continuousAccessRequired
     }
 
-    private let store: ClipboardHistoryStore
+    private let store: any ClipboardHistoryStoring
     private let pasteboard: NSPasteboard
     private let onFailure: (Error) -> Void
     private let onCaptured: (ClipboardHistoryEntry) -> Void
@@ -21,7 +21,7 @@ public final class ClipboardCaptureService {
     )
 
     public init(
-        store: ClipboardHistoryStore,
+        store: any ClipboardHistoryStoring,
         pasteboard: NSPasteboard,
         canRead: @escaping () -> Bool = { true },
         onCaptured: @escaping (ClipboardHistoryEntry) -> Void = { _ in },
@@ -40,7 +40,7 @@ public final class ClipboardCaptureService {
 
     private func save(_ capture: ClipboardCapture) {
         do {
-            let entry = try store.add(capture.content)
+            let entry = try store.add(capture.content, copiedAt: Date())
             onCaptured(entry)
         } catch ClipboardHistoryStore.StoreError.itemTooLarge {
             // Keep capturing later copies, but let the next history opening

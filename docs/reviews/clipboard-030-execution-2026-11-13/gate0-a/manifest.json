@@ -1,0 +1,50 @@
+{
+  "stage": "Gate0-A",
+  "status": "completed-local-probe-ready",
+  "target": "/Users/crobat/dev/tidytap/docs/CLIPBOARD_ICLOUD_GATE0.md",
+  "sha256": "b65a226248244d1cc2fdfb0a9c0b36ba16c771927fdd8ebc71f648e8a1603c66",
+  "lines": 112,
+  "scope": "local probe only; real cloud and product integration on hold by user",
+  "preset": "implementation",
+  "roles": [
+    "implementation_readiness",
+    "codebase_details",
+    "style"
+  ],
+  "context_sha256": {
+    "/Users/crobat/dev/tidytap/docs/CLIPBOARD_PINBOARD_ICLOUD_PLAN.md": "7b4e7619e6f6317151daf3140b9a8cd5ba01d5b4467475153f829e20d47e7c33",
+    "/Users/crobat/dev/tidytap/docs/CLIPBOARD_030_EXECUTION.md": "b6be2f6e0fddf74c615c2b65a7a52bbab03cf62383c301c9d691da6bb8f94372",
+    "/Users/crobat/dev/tidytap/docs/reviews/clipboard-managed-sync-2026-11-13/sources/history-consumption.md": "1998f1de830f1ea97b90c3b9facf015d110e359d4c37bbab5457a425530f63f5",
+    "/Users/crobat/dev/tidytap/docs/reviews/clipboard-managed-sync-2026-11-13/sources/model-limits.md": "755c77b320b812f2e033337cc3c509f0b20797d00c3ccc44a519f1664eaca1c9",
+    "/Users/crobat/dev/tidytap/docs/reviews/clipboard-managed-sync-2026-11-13/sources/coredata-sync.md": "9af7fd77dd16ee519a7b31bd0577d03141fdcd6dde97dde63aa36ea4df515d49",
+    "/Users/crobat/dev/tidytap/docs/reviews/clipboard-managed-sync-2026-11-13/sources/coredata-limits.md": "e18f3ccd65bc5b7178bcf8dbf2078c808b22be500ff268a33c6e14a1c03f7f67",
+    "/Users/crobat/dev/tidytap/docs/reviews/clipboard-managed-sync-2026-11-13/sources/store-configuration.md": "feae8e0867c3715f5bfa886db3c1c3a4f5d315fbf2d5c00e3fe02648af9b19b0"
+  },
+  "protocol": {
+    "fork_turns": "none",
+    "parent_conversation": false,
+    "host_instruction_exclusion": "unverified",
+    "child_tool_reads": "reviewer attestation only"
+  },
+  "reviewers": [
+    {
+      "task": "gate0a_readiness",
+      "status": "completed"
+    },
+    {
+      "task": "gate0a_codebase",
+      "status": "completed"
+    },
+    {
+      "task": "gate0a_style",
+      "status": "completed"
+    },
+    {
+      "task": "gate0a_reaudit",
+      "status": "completed",
+      "round": 2
+    }
+  ],
+  "reaudit_sha256": "a5f64871bee83e987c423f5b8e8a0a019398d1bd9e24a0fa4b5e135b19c6fd2c",
+  "followup_disclosure": "코드 검토자에게 public init 부재 확인 뒤 probe 전용 봉투 후보를 후속 메시지로 제공함. 재검토는 새 맥락에서 수정된 문서만 기준으로 수행."
+}

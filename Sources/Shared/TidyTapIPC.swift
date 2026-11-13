@@ -1,4 +1,5 @@
 import Foundation
+import TidyTapInputEngine
 
 enum TidyTapFinderFeedbackKind: String {
     case moveReady
@@ -19,10 +20,11 @@ enum TidyTapIPC {
     static let permissionResult = Notification.Name("com.sharknia.TidyTap.permissionResult")
     static let finderFeedback = Notification.Name("com.sharknia.TidyTap.finderFeedback")
     static let finderFeedbackReady = Notification.Name("com.sharknia.TidyTap.finderFeedbackReady")
-    // Keep launch-smoke clipboard events away from the installed app and worker.
-    static var clipboardNotificationObject: String {
+    // All smoke IPC must stay away from the installed app and worker.
+    static var notificationObject: String {
         TidyTapLaunchSmoke.current()?.preferencesSuite ?? TidyTapProduct.appBundleIdentifier
     }
+    static var clipboardNotificationObject: String { notificationObject }
     static let clipboardHistoryToggle = Notification.Name("com.sharknia.TidyTap.clipboardHistoryToggle")
     static let clipboardHistoryChanged = Notification.Name("com.sharknia.TidyTap.clipboardHistoryChanged")
     static let clipboardHistoryPaste = Notification.Name("com.sharknia.TidyTap.clipboardHistoryPaste")
@@ -65,7 +67,7 @@ enum TidyTapIPC {
     static func postPrepareForUpdate() {
         DistributedNotificationCenter.default().postNotificationName(
             prepareForUpdate,
-            object: TidyTapProduct.appBundleIdentifier,
+            object: notificationObject,
             userInfo: nil,
             deliverImmediately: true
         )
@@ -93,7 +95,7 @@ enum TidyTapIPC {
     static func postFinderFeedback(_ payload: TidyTapFinderFeedbackPayload) {
         DistributedNotificationCenter.default().postNotificationName(
             finderFeedback,
-            object: TidyTapProduct.appBundleIdentifier,
+            object: notificationObject,
             userInfo: finderFeedbackUserInfo(payload),
             deliverImmediately: true
         )
@@ -114,23 +116,24 @@ enum TidyTapIPC {
     }
 
     static func postClipboardHistoryPaste(
-        sessionID: UUID, entryID: UUID, formatted: Bool, deadlineContinuousTime: TimeInterval
+        sessionID: UUID, entryID: UUID, formatted: Bool, deadlineContinuousTime: TimeInterval,
+        route: ClipboardLibraryRouter.Route? = nil
     ) {
+        var info: [String: Any] = [
+            clipboardSessionUserInfoKey: sessionID.uuidString, clipboardEntryUserInfoKey: entryID.uuidString,
+            clipboardFormattedUserInfoKey: formatted, clipboardDeadlineUserInfoKey: deadlineContinuousTime
+        ]
+        if let route { info["libraryFolder"] = route.folder; info["libraryGeneration"] = route.generation.uuidString }
         DistributedNotificationCenter.default().postNotificationName(
             clipboardHistoryPaste,
             object: clipboardNotificationObject,
-            userInfo: [
-                clipboardSessionUserInfoKey: sessionID.uuidString,
-                clipboardEntryUserInfoKey: entryID.uuidString,
-                clipboardFormattedUserInfoKey: formatted,
-                clipboardDeadlineUserInfoKey: deadlineContinuousTime
-            ],
+            userInfo: info,
             deliverImmediately: true
         )
     }
 
     static func clipboardPasteRequest(in notification: Notification) -> (
-        sessionID: UUID, entryID: UUID, formatted: Bool, deadlineContinuousTime: TimeInterval
+        sessionID: UUID, entryID: UUID, formatted: Bool, deadlineContinuousTime: TimeInterval, route: ClipboardLibraryRouter.Route?
     )? {
         guard let info = notification.userInfo,
               let session = info[clipboardSessionUserInfoKey] as? String,
@@ -140,7 +143,14 @@ enum TidyTapIPC {
               let formatted = info[clipboardFormattedUserInfoKey] as? Bool,
               let deadline = info[clipboardDeadlineUserInfoKey] as? TimeInterval,
               deadline.isFinite, deadline > 0 else { return nil }
-        return (sessionID, entryID, formatted, deadline)
+        var route: ClipboardLibraryRouter.Route?
+        if info["libraryFolder"] != nil || info["libraryGeneration"] != nil {
+            guard let folder = info["libraryFolder"] as? String,
+                  folder == "local" || (folder.count == 64 && folder.allSatisfy { $0.isASCII && $0.isHexDigit }),
+                  let generation = info["libraryGeneration"] as? String, let id = UUID(uuidString: generation) else { return nil }
+            route = .init(folder: folder, generation: id)
+        }
+        return (sessionID, entryID, formatted, deadline, route)
     }
 
     static func postClipboardHistoryPasteResult(sessionID: UUID, error: String?) {
@@ -247,7 +257,7 @@ enum TidyTapIPC {
         }
         DistributedNotificationCenter.default().postNotificationName(
             finderFeedbackReady,
-            object: TidyTapProduct.appBundleIdentifier,
+            object: notificationObject,
             userInfo: userInfo,
             deliverImmediately: true
         )
@@ -276,7 +286,7 @@ enum TidyTapIPC {
     private static func post(_ name: Notification.Name, requestID: UUID) {
         DistributedNotificationCenter.default().postNotificationName(
             name,
-            object: TidyTapProduct.appBundleIdentifier,
+            object: notificationObject,
             userInfo: [applyRequestIDUserInfoKey: requestID.uuidString],
             deliverImmediately: true
         )

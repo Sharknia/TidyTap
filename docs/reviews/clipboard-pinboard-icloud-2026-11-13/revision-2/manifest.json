@@ -1,0 +1,184 @@
+{
+  "status": "completed",
+  "revision": 2,
+  "target": "/Users/crobat/dev/tidytap/docs/CLIPBOARD_PINBOARD_ICLOUD_PLAN.md",
+  "sha256": "a7e5b714f575a8d728239a9c47994485ce578d6516ff6bd7b4ee65dcaf435401",
+  "feature_range": [
+    1,
+    54
+  ],
+  "detailed_range": [
+    55,
+    235
+  ],
+  "local_context": [
+    "/Users/crobat/dev/tidytap/docs/CLIPBOARD_HISTORY_URS.md",
+    "/Users/crobat/dev/tidytap/docs/CLIPBOARD_PASTE_FEEDBACK_VALIDATION.md"
+  ],
+  "source_context": [
+    "/Users/crobat/dev/tidytap/docs/reviews/clipboard-pinboard-icloud-2026-11-13/sources/developer-id.txt",
+    "/Users/crobat/dev/tidytap/docs/reviews/clipboard-pinboard-icloud-2026-11-13/sources/enabling-cloudkit.md",
+    "/Users/crobat/dev/tidytap/docs/reviews/clipboard-pinboard-icloud-2026-11-13/sources/cksyncengine.md",
+    "/Users/crobat/dev/tidytap/docs/reviews/clipboard-pinboard-icloud-2026-11-13/sources/tn3125.md"
+  ],
+  "mode": "uninterrupted",
+  "reviewers": [
+    {
+      "stage": 5,
+      "task": "r2_05_zoom",
+      "status": "completed"
+    },
+    {
+      "stage": 5,
+      "task": "r2_05_catalyst",
+      "status": "completed"
+    },
+    {
+      "stage": 6,
+      "task": "r2_06_comprehension",
+      "status": "completed"
+    },
+    {
+      "stage": 6,
+      "task": "r2_06_comprehension_reaudit",
+      "status": "completed",
+      "reaudit": 1
+    },
+    {
+      "stage": 7,
+      "task": "r2_07_design",
+      "status": "completed"
+    },
+    {
+      "stage": 7,
+      "task": "r2_07_structural",
+      "status": "completed"
+    },
+    {
+      "stage": 7,
+      "task": "r2_07_style",
+      "status": "completed"
+    },
+    {
+      "stage": 8,
+      "task": "r2_08_zoom",
+      "status": "completed"
+    },
+    {
+      "stage": 9,
+      "task": "r2_09_readiness",
+      "status": "completed"
+    },
+    {
+      "stage": 9,
+      "task": "r2_09_codebase",
+      "status": "completed"
+    },
+    {
+      "stage": 9,
+      "task": "r2_09_style",
+      "status": "completed"
+    },
+    {
+      "stage": 9,
+      "task": "r2_09_readiness_reaudit",
+      "status": "completed",
+      "reaudit": 1
+    },
+    {
+      "stage": 9,
+      "task": "r2_09_codebase_reaudit",
+      "status": "completed",
+      "reaudit": 1
+    },
+    {
+      "stage": 9,
+      "task": "r2_09_style_reaudit",
+      "status": "completed",
+      "reaudit": 1
+    }
+  ],
+  "stage_reports": {
+    "5": "zoom_out_report.md",
+    "6": "comprehension_report.md",
+    "6_reaudit": "comprehension_reaudit_report.md",
+    "7": "critic_report.md",
+    "8": "intermediate_zoom_out_report.md",
+    "9": "implementation_readiness_report.md",
+    "9_reaudit": "implementation_readiness_reaudit_report.md"
+  },
+  "verification": {
+    "reviewers_completed": 14,
+    "acceptance_cases": 15,
+    "event_cases": 11,
+    "local_links": "passed",
+    "whitespace": "passed",
+    "contexts_unchanged_during_reviews": true,
+    "last_edit_terms_only": true,
+    "product_tests": "not_run",
+    "cloudkit_two_mac": "not_run"
+  },
+  "protocol": {
+    "fresh_context": "fork_turns=none",
+    "parent_conversation_supplied": false,
+    "host_instruction_exclusion": "미검증",
+    "previous_reports_to_naive_reviewers": false,
+    "product_code_changed": false
+  },
+  "context_sha256": {
+    "/Users/crobat/dev/tidytap/docs/CLIPBOARD_HISTORY_URS.md": "492374f1e17271c4cbd1c8f79acf9aff7252904458116b44c31a1ae7306a3854",
+    "/Users/crobat/dev/tidytap/docs/CLIPBOARD_PASTE_FEEDBACK_VALIDATION.md": "11d9b459052d15ded7e4c373acf6aba69f41beaabf2aaae49b8b7fe40a892ed0",
+    "/Users/crobat/dev/tidytap/docs/reviews/clipboard-pinboard-icloud-2026-11-13/sources/developer-id.txt": "53a369a961966ffb7e0af6a2ef24b7bbf082e0a93724617656478443428bcce7",
+    "/Users/crobat/dev/tidytap/docs/reviews/clipboard-pinboard-icloud-2026-11-13/sources/enabling-cloudkit.md": "160afd7ac068737113ad5d35c8ee66a8615a1d095b985c0de359ebee9e6fac1e",
+    "/Users/crobat/dev/tidytap/docs/reviews/clipboard-pinboard-icloud-2026-11-13/sources/cksyncengine.md": "b3aee830f8bee49683d222df2784e83ae872edf44607c47e164fab992225d75a",
+    "/Users/crobat/dev/tidytap/docs/reviews/clipboard-pinboard-icloud-2026-11-13/sources/tn3125.md": "a09d0cf87d3eb63be2384a942d8f05b5ee9427508c546f3175d338eb2b8c08a7"
+  },
+  "revisions": [
+    {
+      "name": "before_stage6_fix",
+      "sha256": "38b12f6b73cf01d36987905cda0e28c43be2a13392c6e672d8e5a3993e55d597",
+      "snapshot": "target_snapshot.md",
+      "lines": 220
+    },
+    {
+      "name": "after_stage6_fix",
+      "sha256": "f81f1cb1992eb9b63fa2c9fee518ec27175aaedc276c9a5b0452ca804b22c055",
+      "snapshot": "target_snapshot_after_c01.md",
+      "lines": 221
+    },
+    {
+      "name": "after_stage7_t01",
+      "sha256": "d7926ea22af1b3330d7eb9a0fca8b5b127c7ef2f297969a10c07620492d6188b",
+      "snapshot": "target_snapshot_after_t01.md",
+      "lines": 221
+    },
+    {
+      "name": "after_stage9_k01_u01",
+      "sha256": "cf3b39639fae061099cce0d9e78ce782c2adcf4dc35f1fd91fa942cd029d1561",
+      "snapshot": "target_snapshot_after_k01.md",
+      "lines": 235
+    },
+    {
+      "name": "final_editorial_terms_only",
+      "sha256": "a7e5b714f575a8d728239a9c47994485ce578d6516ff6bd7b4ee65dcaf435401",
+      "snapshot": "target_snapshot_final.md",
+      "lines": 235,
+      "independent_reaudit": false
+    }
+  ],
+  "reviewed_sha256_before_last_editorial_fix": "cf3b39639fae061099cce0d9e78ce782c2adcf4dc35f1fd91fa942cd029d1561",
+  "consolidated_report": "consolidated_review_report.md",
+  "convergence_claim": false,
+  "original_findings_documented": 7,
+  "additional_findings_documented": 5,
+  "unaddressed_new_findings": {
+    "차단": 0,
+    "높음": 0,
+    "중간": 0,
+    "낮음": 0
+  },
+  "known_prerequisites": [
+    "Gate0",
+    "Gate1"
+  ]
+}

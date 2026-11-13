@@ -30,14 +30,14 @@ final class HelperLifecycle: NSObject {
             self,
             selector: #selector(settingsDidChange(_:)),
             name: TidyTapIPC.settingsDidChange,
-            object: TidyTapProduct.appBundleIdentifier,
+            object: TidyTapIPC.notificationObject,
             suspensionBehavior: .deliverImmediately
         )
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(permissionRequestDidArrive(_:)),
             name: TidyTapIPC.permissionRequest,
-            object: TidyTapProduct.appBundleIdentifier,
+            object: TidyTapIPC.notificationObject,
             suspensionBehavior: .deliverImmediately
         )
         isObservingSettings = true

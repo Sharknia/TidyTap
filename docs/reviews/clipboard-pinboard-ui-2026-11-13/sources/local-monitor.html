@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+    <title>Monitoring Events</title>
+    <meta http-equiv="X-UA-Compatible" content="IE=7">
+    <meta charset="utf-8">
+    <meta id="book-resource-type" name="book-resource-type" content="Guide">
+    <meta scheme="apple_ref" id="identifier" name="identifier" content="//apple_ref/doc/uid/10000060i">
+    <meta id="document-version" name="document-version" content="8.3.1">
+    <meta id="build" name="build" content="c1e4c7a89af8f899a21cfa81fc33ba42" />
+    <meta id="chapterId" name="chapterId" content="10000060i-CH15">
+    <meta id="date" name="date" content="2016-09-13">
+    <meta id="description" name="description" content="Introduces event mechanisms and the types of events in Cocoa and describes how to handle events of each type.">
+    <meta id="book-title" name="book-title" content="Cocoa Event Handling Guide">
+    <meta id="book-root" name="book-root" content="../">
+    <meta id="book-json" name="book-json" content="../book.json">
+    <meta id="devcenter" name="devcenter" content="Mac Dev Center">
+    <meta id="devcenter-url" name="devcenter-url" content="http://developer.apple.com/devcenter/mac">
+    <meta id="reflib" name="reflib" content="Documentation Archive">
+    <meta id="book-assignments" name="book-assignments" content="{Type/Guide}">
+    
+    
+    <meta id="copyright" name="copyright" content="Copyright 2018 Apple Inc. All Rights Reserved.">
+    <meta id="xcode-display" name="xcode-display" content="render">
+    <meta id="IndexTitle" name="IndexTitle" content="Cocoa Event Handling Guide: Monitoring Events">
+    <meta id="resources-uri" name="resources-uri" content="../../../../../Resources/1282">
+    <link id="book-index-page" rel="Start" title="Cocoa Event Handling Guide" type="text/html" href="../index.html">
+    <link id="next-page" rel="Next" type="text/html" href="../TextDefaultsBindings/TextDefaultsBindings.html">
+    <link id="previous-page" rel="Prev" type="text/html" href="../HandlingTouchEvents/HandlingTouchEvents.html">
+    <link rel="stylesheet" type="text/css" href="../../../../../Resources/1282/CSS/screen.css">
+    
+    <!-- xcode_css -->
+    <link rel="stylesheet" type="text/css" href="../../../../../Resources/1282/CSS/feedback.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+	<meta id="platforms" name="platforms" content="">
+</head>    
+<body><a name="//apple_ref/doc/uid/10000060i-CH15" title="Monitoring Events"></a>
+    <div id="_omniture_top">
+    <!-- SiteCatalyst code version: H.8. Copyright 1997-2006 Omniture, Inc. -->
+    <script type="text/javascript">
+    /* RSID: */
+    var s_account="awdappledeveloper"
+    </script>
+
+    <script type="text/javascript" src="https://developer.apple.com/assets/metrics/scripts/analytics.js"></script>
+    <script type="text/javascript">
+    s.channel="www.documentationarchive.developer"
+
+    /************* DO NOT ALTER ANYTHING BELOW THIS LINE ! **************/
+    var s_code=s.t();if(s_code)document.write(s_code)</script>
+    <!-- End SiteCatalyst code version: H.8. -->
+    </div>
+
+    <div id="adcHeader" class="hideOnPrint hideInXcode">
+        <div id='ssi_Header' class="hideInXcode unified">
+            <a id="ssi_LibraryTitle" href='../../../../../navigation/'>Documentation Archive</a>
+            <a id="ssi_AppleDeveloperConnection" href='https://developer.apple.com/'>Developer</a>
+            <div id='ssi_SearchButton' role="button" title="Search">Search</div>
+        </div>
+        <form id='ssi_SearchMenu' method='get' action='../../../../../search/' accept-charset='utf-8'>
+            <label for='adcsearch'>Search Documentation Archive</label>
+            
+            
+    
+            <input type='search' id='ssi_SearchField' name='q' accesskey='s' results='5' />
+        </form>
+    </div>
+
+    <header id="header">
+        <div id="title" role="banner">
+            <h1>Cocoa Event Handling Guide</h1>
+            <span id="file_links">
+                <a id="PDF_link" role="button" tabindex='4' rel="alternate" title="Download PDF"><span id="pdf_icon"></span>PDF</a>
+                <a id="Companion_link" role="button" tabindex='3' title="Download Companion File"><span id="companion_icon"></span>Companion File</a>
+            </span>
+        </div>
+        <ul id="headerButtons" class="hideOnPrint" role="toolbar">
+            <li id="toc_button" style="display:none">
+                <button tabindex="5" id="table_of_contents" class="open" role="checkbox" aria-label="Show Table of Contents"><span class="disclosure"></span>Table of Contents</button>
+            </li>
+            <li id="jumpto_button" style="display:none" role="navigation"><select tabindex="6" id="jumpTo"><option value="top">Jump To&#133;</option></select></li>
+            <li id="downloadSample_button" style="display:none">
+                <a id="Sample_link"><button id="Sample_button">Download Sample Code</button></a>
+            </li>
+        </ul>
+    </header>
+    <nav id="tocContainer" tabindex="7">
+        <ul id="toc" role="tree"></ul>
+    </nav>
+
+    <article id="contents" tabindex="0" role="main">
+        <div id="pageNavigationLinks_top" class="pageNavigationLinks">
+            <a class='nextLink' rel='next' href='../TextDefaultsBindings/TextDefaultsBindings.html'>Next</a><a class='previousLink' rel='prev' href='../HandlingTouchEvents/HandlingTouchEvents.html'>Previous</a>
+        </div>
+        <a id="top" name="top"></a>
+        <a id="INDEX" href="../index.html" style="display:none;"></a>
+        
+        <a name="//apple_ref/doc/uid/10000060i-CH15-SW3" title="Monitoring Events"></a><h1 id="pageTitle">Monitoring Events</h1><p>The AppKit framework allows you to install an event monitor, an object that looks for user-input events of a certain type (or types) as an application dispatches them in its <code><a href="https://developer.apple.com/documentation/appkit/nsapplication/1428359-sendevent" class="urlLink" target="_self">sendEvent:</a></code> method. For example, a monitor could look for mouse-up, key-down, or swipe-gesture events, or even all events. </p><p>There are two kinds of event monitors, each differing in monitoring scope and capabilities:</p><ul class="ul"><li class="li"><p>A <em class="newTerm">global event monitor</em> looks for user-input events dispatched to applications other than the one in which it is installed. The monitor cannot modify an event or prevent its normal delivery. And it may only monitor key events if accessibility is enabled or if the application is trusted for accessibility. </p><p>You install a global event monitor with the <code>NSEvent</code> class method <code><a href="https://developer.apple.com/documentation/appkit/nsevent/1535472-addglobalmonitorforevents" class="urlLink" target="_self">addGlobalMonitorForEventsMatchingMask:handler:</a></code>.</p></li><li class="li"><p>A <em class="newTerm">local event monitor</em> looks at user-input events that are being dispatched to the application in which the monitor is installed. For a given event object of interest, the local monitor can return the object unmodified, create and return a new <code>NSEvent</code> object, or return <code>nil</code> to stop the dispatching of the event.</p><p>You install a local event monitor with the <code>NSEvent</code> class method <code><a href="https://developer.apple.com/documentation/appkit/nsevent/1534971-addlocalmonitorforeventsmatching" class="urlLink" target="_self">addLocalMonitorForEventsMatchingMask:handler:</a></code>.</p></li></ul><div class="notebox"><aside><a name="//apple_ref/doc/uid/10000060i-CH15-SW4" title="Note"></a><p><strong>Note:</strong>&nbsp;Local and global event monitors are mutually exclusive. For example, the global monitor does not observe the event stream of the application in which it is installed. The local event monitor only observes the event stream of its application. To monitor events from all applications, including the “current” application, you must install both event monitors.</p><p></p></aside></div><p>The parameters of both monitor-installation methods are nearly identical. The first parameter is an event mask for specifying the events of interest by type. The second parameter defines a block that performs the handling of monitored events; it is called for each new event that matches one of the specified types. For both methods, an <code>NSEvent</code> object is the sole argument of the block. However, the block handler for <code><a href="https://developer.apple.com/documentation/appkit/nsevent/1534971-addlocalmonitorforeventsmatching" class="urlLink" target="_self">addLocalMonitorForEventsMatchingMask:handler:</a></code> is typed to return an <code>NSEvent</code> object while the block handler for the global method returns <code>void</code>. The handlers are always called on the main thread. Both class methods return the monitor object, which the calling object does not own (and thus has no need to retain or release). </p><div class="importantbox clear"><aside><a name="//apple_ref/doc/uid/10000060i-CH15-DontLinkElementID_10" title="Important"></a><p><strong>Important:</strong>&nbsp;After you finish monitoring events, you should remove the monitor object with a call to the <code>NSEvent</code> class method <code><a href="https://developer.apple.com/documentation/appkit/nsevent/1533709-removemonitor" class="urlLink" target="_self">removeMonitor:</a></code>. Garbage-collected applications should never remove an event monitor in the <code><a href="https://developer.apple.com/documentation/objectivec/nsobject/1418513-finalize" class="urlLink" target="_self">finalize</a></code> method. Although memory-managed applications can remove the monitor in the <code>dealloc</code> method, that is discouraged. In both cases, removal of the event monitor should occur much earlier in the application life cycle.</p><p></p></aside></div><p>There are many scenarios where an event monitor might be useful to an application. One example is a pop-up window that acts like a menu. The application wants to know when the user clicks outside of that window so it can dismiss it. It also wants to know if the user presses the Escape key (to dismiss it without saving changes) or if the user presses the Enter key (to dismiss it and save changes). The <em><a href="../../../../../samplecode/AnimatedTableView/Introduction/Intro.html#//apple_ref/doc/uid/DTS40008863" data-renderer-version="1" target="_self">AnimatedTableView</a></em> sample code project installs a local event monitor (in <code>ATColorTableController.m</code>) that performs these functions. <span class="content_text">Listing 9-1</span> shows how it does this.</p><a name="//apple_ref/doc/uid/10000060i-CH15-SW1" title="Listing 9-1Installing a local event monitor"></a><p class="codesample clear"><strong class="caption_number">Listing 9-1</strong>&nbsp;&nbsp;Installing a local event monitor</p><div class="codesample clear"><table><tr><td scope="row"><pre>- (void)editColor:(NSColor *)color locatedAtScreenRect:(NSRect)rect {<span></span></pre></td></tr><tr><td scope="row"><pre> <span></span></pre></td></tr><tr><td scope="row"><pre>    // code unrelated to event monitoring deleted here.....<span></span></pre></td></tr><tr><td scope="row"><pre> <span></span></pre></td></tr><tr><td scope="row"><pre>    // Start watching events to figure out when to close the window<span></span></pre></td></tr><tr><td scope="row"><pre>    NSAssert(_eventMonitor == nil, @"_eventMonitor should not be created yet");<span></span></pre></td></tr><tr><td scope="row"><pre>    _eventMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:<span></span></pre></td></tr><tr><td scope="row"><pre>            (NSLeftMouseDownMask | NSRightMouseDownMask | NSOtherMouseDownMask | NSKeyDownMask)<span></span></pre></td></tr><tr><td scope="row"><pre>            handler:^(NSEvent *incomingEvent) {<span></span></pre></td></tr><tr><td scope="row"><pre>        NSEvent *result = incomingEvent;<span></span></pre></td></tr><tr><td scope="row"><pre>        NSWindow *targetWindowForEvent = [incomingEvent window];<span></span></pre></td></tr><tr><td scope="row"><pre>        if (targetWindowForEvent != _window) {<span></span></pre></td></tr><tr><td scope="row"><pre>            [self _closeAndSendAction:NO];<span></span></pre></td></tr><tr><td scope="row"><pre>        } else if ([incomingEvent type] == NSKeyDown) {<span></span></pre></td></tr><tr><td scope="row"><pre>            if ([incomingEvent keyCode] == 53) {<span></span></pre></td></tr><tr><td scope="row"><pre>                // Escape<span></span></pre></td></tr><tr><td scope="row"><pre>                [self _closeAndSendAction:NO];<span></span></pre></td></tr><tr><td scope="row"><pre>                result = nil; // Don't process the event<span></span></pre></td></tr><tr><td scope="row"><pre>            } else if ([incomingEvent keyCode] == 36) {<span></span></pre></td></tr><tr><td scope="row"><pre>                // Enter<span></span></pre></td></tr><tr><td scope="row"><pre>                [self _closeAndSendAction:YES];<span></span></pre></td></tr><tr><td scope="row"><pre>                result = nil;<span></span></pre></td></tr><tr><td scope="row"><pre>            }<span></span></pre></td></tr><tr><td scope="row"><pre>        }<span></span></pre></td></tr><tr><td scope="row"><pre>        return result;<span></span></pre></td></tr><tr><td scope="row"><pre>    }];<span></span></pre></td></tr><tr><td scope="row"><pre>}<span></span></pre></td></tr></table></div><p>When the window is closed, the application has no more need for the event monitor. So it posts a notification when it closes the window. The method in <span class="content_text">Listing 9-2</span> is invoked as a result of this notification, and the class implements it to remove the event monitor (among other things).</p><a name="//apple_ref/doc/uid/10000060i-CH15-SW2" title="Listing 9-2Removing an event monitor"></a><p class="codesample clear"><strong class="caption_number">Listing 9-2</strong>&nbsp;&nbsp;Removing an event monitor</p><div class="codesample clear"><table><tr><td scope="row"><pre>- (void)_windowClosed:(NSNotification *)note {<span></span></pre></td></tr><tr><td scope="row"><pre>    if (_eventMonitor) {<span></span></pre></td></tr><tr><td scope="row"><pre>        [NSEvent removeMonitor:_eventMonitor];<span></span></pre></td></tr><tr><td scope="row"><pre>        _eventMonitor = nil;<span></span></pre></td></tr><tr><td scope="row"><pre>    }<span></span></pre></td></tr><tr><td scope="row"><pre>    [[NSNotificationCenter defaultCenter] removeObserver:self name:NSWindowWillCloseNotification object:_window];<span></span></pre></td></tr><tr><td scope="row"><pre>    [[NSNotificationCenter defaultCenter] removeObserver:self name:NSApplicationDidResignActiveNotification object:nil];<span></span></pre></td></tr><tr><td scope="row"><pre>}<span></span></pre></td></tr></table></div><p>Although event monitoring can be the ideal solution for some problems, it might not be the best for other ones. For example, the <em><a href="../../../../../samplecode/AnimatedTableView/Introduction/Intro.html#//apple_ref/doc/uid/DTS40008863" data-renderer-version="1" target="_self">AnimatedTableView</a></em> application installs a local event monitor, which can detect mouse events sent to the application but cannot detect mouse events sent to other applications. But the application needs to dismiss the window if the user clicks in another application. To do this, <em>AnimatedTableView</em> observes the <code><a href="https://developer.apple.com/documentation/appkit/nsapplicationdidresignactivenotification" class="urlLink" target="_self">NSApplicationDidResignActiveNotification</a></code> notification instead of installing a global event monitor. A global event monitor would not be able to detect Command-Tab or a system alert, both of which should cause the window to be dismissed. Event monitors should be used only when there is no other way to solve your problem.</p>
+        <div id="pageNavigationLinks_bottom" class="pageNavigationLinks">
+            <a class='nextLink' rel='next' href='../TextDefaultsBindings/TextDefaultsBindings.html'>Next</a><a class='previousLink' rel='prev' href='../HandlingTouchEvents/HandlingTouchEvents.html'>Previous</a>
+        </div><br/>
+        <div class="copyright"><br/><hr /><div align="center"><p class="content_text" lang="en" dir="ltr"> Copyright &#x00a9; 2016 Apple Inc. All Rights Reserved.  <a href="http://www.apple.com/legal/internet-services/terms/site.html" target="_blank">Terms of Use</a>   |  <a href="http://www.apple.com/privacy/" target="_blank">Privacy Policy</a>  |  Updated: 2016-09-13</p></div></div>
+
+        <div id="pediaWindow">
+            <div id="pediaHeader"></div>
+            <div id="pediaBody"></div>
+        </div>
+    </article>
+
+    <div id="blackout">
+    <div id="preload"></div>
+</div>
+<div id="modal" aria-hidden="true">
+    <div id="closebox" tabindex="0" aria-label="Close feedback form" role="button"></div>
+    <div id="sending" class="hidden">
+        <h2 tabindex="0">Sending feedback&hellip;</h2>
+        <div id="sending_img"></div>
+    </div>
+    <div id="error" class="hidden">
+        <h2 tabindex="0">We&rsquo;re sorry, an error has occurred.</h2>
+        <p>Please try submitting your feedback later.</p>
+        <div id="error_icon"></div>
+    </div>
+    <div id="success" class="hidden">
+        <h2 tabindex="0">Thank you for providing feedback!</h2>
+        <p>Your input helps improve our developer documentation.</p>
+        <div id="thank_you_icon"></div>
+    </div>
+    
+    <form id="feedback" action="#" method="post">
+        <div class="left-leaf">
+            <h2 id="helpful_title" data-asterisk="a1" tabindex="0">How helpful is this document?</h2>     
+            <sup id="a1" class="asterisk" aria-hidden="true">*</sup>
+
+            <div id="star_group" role="radiogroup" aria-required="true">
+                <label> 
+                    <input class="radio" type="radio" name="helped" value="1" /> 
+                    Very helpful
+                </label>
+                <label> 
+                    <input class="radio" type="radio" name="helped" value="2" /> 
+                    Somewhat helpful
+                </label>
+                <label>
+                    <input class="radio" type="radio" name="helped" value="3" /> 
+                    Not helpful
+                </label>
+            </div>
+        </div>
+        <div class="right-leaf">
+            <h2>How can we improve this document?</h2>
+            <div id="improve" class="checkboxes">
+                <label>
+                    <input type="checkbox" name="typo" /> 
+                    Fix typos or links
+                </label>
+                <label>
+                    <input type="checkbox" name="infoIncorrect" /> 
+                    Fix incorrect information
+                </label>
+                <label>
+                    <input type="checkbox" name="needs_examples" /> 
+                    Add or update code samples
+                </label>
+                <label>
+                    <input type="checkbox" name="needs_art" /> 
+                    Add or update illustrations
+                </label>
+                <label>
+                    <input type="checkbox" name="missingInfo" /> 
+                    Add information about...
+                </label>
+            </div>
+        </div>
+
+        <textarea id="comment" name="problem" cols="70" rows="8" placeholder="Please tell us more about your experience with this document" data-asterisk="a2" required></textarea>
+        <sup id="a2" class="asterisk" aria-hidden="true">*</sup>
+
+        <p class="fineprint">
+            <em aria-hidden="true"><span>*</span> Required information</em>
+        </p> 
+
+        <input id="submit" type="button" value="Send" />
+
+        <section id="legal">
+            <p>
+                To submit a product bug or enhancement request, please visit the 
+                <a href="https://developer.apple.com/bugreporter/" target="_blank">Bug Reporter</a> 
+                page.
+            </p>
+            <p>
+                Please read <a href="http://www.apple.com/legal/policies/ideas.html" target="_blank">Apple's Unsolicited Idea Submission Policy</a> 
+                before you send us your feedback.
+            </p> 
+        </section>
+    </form>
+</div>
+
+    
+    <script charset="utf-8" src="../../../../../Resources/1282/JavaScript/lib/prototype.js"></script>
+    <script src="../../../../../Resources/1282/JavaScript/library.js"></script>
+</body>
+</html>

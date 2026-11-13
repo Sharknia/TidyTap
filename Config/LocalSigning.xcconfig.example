@@ -6,3 +6,9 @@ TIDYTAP_DEVELOPER_ID_APPLICATION =
 // Name of an existing notarytool keychain profile. Do not put Apple ID or
 // app-specific-password values in this file.
 TIDYTAP_NOTARYTOOL_KEYCHAIN_PROFILE =
+
+// Optional CloudKit signing (main app only; keep profile outside the repo).
+TIDYTAP_CLOUDKIT_CONTAINER_IDENTIFIER =
+// Set to Config/TidyTap.entitlements after provisioning the matching App ID.
+TIDYTAP_CLOUDKIT_ENTITLEMENTS =
+TIDYTAP_CLOUDKIT_PROFILE_SPECIFIER =

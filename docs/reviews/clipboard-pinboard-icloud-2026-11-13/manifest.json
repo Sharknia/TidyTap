@@ -1,0 +1,144 @@
+{
+  "target": "/Users/crobat/dev/tidytap/docs/CLIPBOARD_PINBOARD_ICLOUD_PLAN.md",
+  "sha256": "b0171155724ea695dfd79bd57e8b87bfa8fd93665189d23a462eca1cd8948095",
+  "feature_range": [
+    1,
+    52
+  ],
+  "detailed_range": [
+    53,
+    141
+  ],
+  "local_context": [
+    "/Users/crobat/dev/tidytap/docs/CLIPBOARD_HISTORY_URS.md"
+  ],
+  "sources": [
+    {
+      "file": "/Users/crobat/dev/tidytap/docs/reviews/clipboard-pinboard-icloud-2026-11-13/sources/developer-id.html",
+      "url": "https://developer.apple.com/help/account/certificates/create-developer-id-certificates/",
+      "bytes": 198337,
+      "sha256": "6e363f74573fadb9920b8281d8dfcca818f8144078d8830653d34a18f5ec5247"
+    },
+    {
+      "file": "/Users/crobat/dev/tidytap/docs/reviews/clipboard-pinboard-icloud-2026-11-13/sources/enabling-cloudkit.md",
+      "url": "https://developer.apple.com/documentation/cloudkit/enabling-cloudkit-in-your-app.md",
+      "bytes": 5816,
+      "sha256": "160afd7ac068737113ad5d35c8ee66a8615a1d095b985c0de359ebee9e6fac1e"
+    },
+    {
+      "file": "/Users/crobat/dev/tidytap/docs/reviews/clipboard-pinboard-icloud-2026-11-13/sources/cksyncengine.md",
+      "url": "https://developer.apple.com/documentation/cloudkit/cksyncengine-5sie5.md",
+      "bytes": 15578,
+      "sha256": "b3aee830f8bee49683d222df2784e83ae872edf44607c47e164fab992225d75a"
+    },
+    {
+      "file": "/Users/crobat/dev/tidytap/docs/reviews/clipboard-pinboard-icloud-2026-11-13/sources/tn3125.md",
+      "url": "https://developer.apple.com/documentation/technotes/tn3125-inside-code-signing-provisioning-profiles.md",
+      "bytes": 19285,
+      "sha256": "a09d0cf87d3eb63be2384a942d8f05b5ee9427508c546f3175d338eb2b8c08a7"
+    }
+  ],
+  "mode": "uninterrupted",
+  "status": "completed",
+  "review_protocol": {
+    "stages": [
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "fresh_context": "fork_turns=none",
+    "parent_conversation_supplied": false,
+    "host_instruction_exclusion": "미검증",
+    "target_edits_authorized": false,
+    "source_context_note": "계획서에 연결된 기존 URS와 앞서 조사한 Apple 공식문서만 제공. 이해도 단계는 대상 문서만 제공."
+  },
+  "reviewers": [
+    {
+      "stage": 5,
+      "task": "gf05_zoom",
+      "persona": "zoom_out",
+      "status": "completed"
+    },
+    {
+      "stage": 5,
+      "task": "gf05_catalyst",
+      "persona": "inventive_catalyst",
+      "status": "completed"
+    },
+    {
+      "stage": 6,
+      "task": "gf06_comprehension",
+      "persona": "comprehension",
+      "status": "completed"
+    },
+    {
+      "stage": 7,
+      "task": "gf07_design",
+      "persona": "design_critic",
+      "status": "completed"
+    },
+    {
+      "stage": 7,
+      "task": "gf07_structural",
+      "persona": "structural",
+      "status": "completed"
+    },
+    {
+      "stage": 7,
+      "task": "gf07_style",
+      "persona": "style",
+      "status": "completed"
+    },
+    {
+      "stage": 8,
+      "task": "gf08_zoom",
+      "persona": "zoom_out",
+      "status": "completed"
+    },
+    {
+      "stage": 9,
+      "task": "gf09_readiness",
+      "persona": "implementation_readiness",
+      "status": "completed"
+    },
+    {
+      "stage": 9,
+      "task": "gf09_codebase",
+      "persona": "codebase_details",
+      "status": "completed"
+    },
+    {
+      "stage": 9,
+      "task": "gf09_style",
+      "persona": "style",
+      "status": "completed"
+    }
+  ],
+  "stage_reports": {
+    "5": "zoom_out_report.md",
+    "6": "comprehension_report.md",
+    "7": "critic_report.md",
+    "8": "intermediate_zoom_out_report.md",
+    "9": "implementation_readiness_report.md"
+  },
+  "consolidated_report": "consolidated_review_report.md",
+  "finding_counts": {
+    "차단": 0,
+    "높음": 0,
+    "중간": 5,
+    "낮음": 2
+  },
+  "target_unchanged": true,
+  "verification": {
+    "target_hash_unchanged": true,
+    "completed_reviewers": 10,
+    "stage_reports": 5,
+    "consolidated_items": 7,
+    "report_local_links": "passed",
+    "whitespace": "passed",
+    "product_tests": "not_run",
+    "cloudkit_two_mac": "not_run"
+  }
+}

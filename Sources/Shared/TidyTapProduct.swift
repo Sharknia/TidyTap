@@ -2,6 +2,7 @@ import Darwin
 import AppKit
 import Foundation
 import Security
+import TidyTapInputEngine
 
 /// Shared across the app and Helper, and advances while the Mac sleeps.
 enum TidyTapContinuousClock {
@@ -69,10 +70,46 @@ enum TidyTapProduct {
             .deletingLastPathComponent()
             .appendingPathComponent("clipboard-history", isDirectory: true)
     }
+
+    @MainActor
+    static func prepareClipboardLegacyMigration(directory: URL, ensureCurrentWriter: () throws -> Void) throws {
+        let parent = directory.lastPathComponent == "clipboard-history" ? directory.deletingLastPathComponent() : directory
+        let marker = parent.appendingPathComponent("clipboard-library-v2/legacy-imported")
+        guard !FileManager.default.fileExists(atPath: marker.path), FileManager.default.fileExists(atPath: directory.path) else { return }
+        if try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil).contains(where: { $0.pathExtension == "clip" }) {
+            try ensureCurrentWriter()
+        }
+    }
+
+    @MainActor
+    static func clipboardRouter(directory: URL, retention: TimeInterval = TidyTapClipboardPolicy.retention,
+        maximumEntries: Int = TidyTapClipboardPolicy.maximumEntries, maximumBytes: Int = TidyTapClipboardPolicy.maximumBytes,
+        maximumItemBytes: Int = TidyTapClipboardPolicy.maximumItemBytes) throws -> ClipboardLibraryRouter {
+        let production = directory.standardizedFileURL == clipboardHistoryDirectory().standardizedFileURL
+        let testing = NSClassFromString("XCTestCase") != nil || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+            || ProcessInfo.processInfo.environment["TIDYTAP_LAUNCH_SMOKE"] == "1"
+        guard !(testing && production) else { throw ClipboardLibraryStore.StoreError.invalidPath }
+        let parent = directory.lastPathComponent == "clipboard-history" ? directory.deletingLastPathComponent() : directory
+        let root = parent.appendingPathComponent("clipboard-library-v2", isDirectory: true)
+        if !FileManager.default.fileExists(atPath: root.appendingPathComponent("legacy-imported").path) {
+            let logDirectory = production ? TidyTapClipboardPasteLog.directory : parent.appendingPathComponent("paste-logs")
+            guard TidyTapClipboardPasteLog.clear(in: logDirectory) else { throw ClipboardLibraryStore.StoreError.invalidPath }
+        }
+        return try ClipboardLibraryRouter(root: root, legacyDirectory: directory, retention: retention,
+            maximumEntries: maximumEntries, maximumBytes: maximumBytes, maximumItemBytes: maximumItemBytes)
+    }
+
+    @MainActor
+    static func clipboardLibrary(directory: URL, retention: TimeInterval = TidyTapClipboardPolicy.retention,
+        maximumEntries: Int = TidyTapClipboardPolicy.maximumEntries, maximumBytes: Int = TidyTapClipboardPolicy.maximumBytes,
+        maximumItemBytes: Int = TidyTapClipboardPolicy.maximumItemBytes) throws -> ClipboardLibraryHandle {
+        try ClipboardLibraryHandle(router: clipboardRouter(directory: directory, retention: retention,
+            maximumEntries: maximumEntries, maximumBytes: maximumBytes, maximumItemBytes: maximumItemBytes))
+    }
 }
 
 /// Small, private diagnostic trail for clipboard-history paste attempts.
-/// It may contain a bounded preview of the user's search and copied text.
+/// Copied content, search terms, and content hashes are excluded.
 enum TidyTapClipboardPasteLog {
     static let maximumFileBytes = 128 * 1024
     static let maximumLineBytes = 1_024

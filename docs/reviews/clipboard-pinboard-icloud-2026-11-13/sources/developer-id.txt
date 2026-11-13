@@ -1,0 +1,256 @@
+원본 URL: https://developer.apple.com/help/account/certificates/create-developer-id-certificates/
+원본 HTML은 developer-id.html에 보존. 다음은 본문 텍스트 추출.
+
+Developer ID certificates
+Replacing Developer ID certificates issued from the previous Sub-CA
+Create enterprise distribution certificates
+Create app license delivery certificates
+Create WatchKit services certificates
+Create VoIP services certificates
+Create a certificate signing request
+Revoke a certificate
+MDM Vendor CSR Signing Certificate
+WWDR intermediate certificates
+Keys
+Create a private key to access a service
+Get a key identifier
+Revoke, edit, and download keys
+Enterprise Program API
+Identifiers
+Register an App ID
+Register an App ID for App Clips
+Register a Services ID
+Enable app services
+Enable app capabilities
+Delete an App ID
+Register an app group
+Create an iCloud container
+Capabilities
+Capabilities overview
+Capability requests
+Configure Apple Pay
+Configure Apple Pay on the web
+Create a DeviceCheck private key
+Create a ClassKit Catalog key
+Create a Maps identifier and private key
+Create a media identifier and private key
+Communicate with APNs using authentication tokens
+Communicate with APNs using a TLS certificate
+Send push notifications from your web server
+About Sign in with Apple
+Enabling server-to-server notifications
+Group apps for Sign in with Apple
+Create a Sign in with Apple private key
+Configure Sign in with Apple for the web
+Configure private email relay service
+Create Wallet identifiers and certificates
+Create a Mac version of an iPad app
+Create a services identifier and private key for WeatherKit
+Create order type identifiers and certificates
+Services
+ShazamKit
+MusicKit
+WeatherKit
+Service Configurations
+Account and organizational data sharing
+Apple Music Feed
+Configure the Apps and Books for Organizations API
+iWork Document Exporting
+Maps tokens
+Devices
+Devices overview
+Register a single device
+Register multiple devices
+Disable or enable a device
+Removing devices for membership expiration
+Provisioning Profiles
+Provisioning profile updates
+Create a development provisioning profile
+Create an ad hoc provisioning profile (iOS, tvOS, watchOS)
+Create an App Store Connect provisioning profile
+Create a DriverKit development provisioning profile
+Edit, download, or delete provisioning profiles
+Reference
+Revoking privileges
+Supported capabilities (iOS)
+Supported capabilities (macOS)
+Supported capabilities (tvOS)
+Supported capabilities (visionOS)
+Supported capabilities (watchOS)
+Provisioning with capabilities
+Capability and entitlement updates
+Device registration updates
+Filter
+⌘K
+Certificates
+Developer ID certificates
+For Mac software that are downloaded from places other than the Mac App Store, developers can get a Developer ID certificate and submit their software for notarization by Apple. Digitally signing software with a unique Developer ID and including a notarization ticket from Apple lets Gatekeeper verify that the software is not known malware and has not been tampered with. Applications can also take advantage of advanced capabilities such as CloudKit and push notifications.
+You can create up to five Developer ID Application certificates and up to five Developer ID Installer certificates using either your developer account or Xcode.
+Required role:
+Account Holder.
+Cloud-managed
+certificates
+are also available to admins with the
+cloud-managed
+Developer ID certificate access role.
+Create a certificate
+In
+Certificates, Identifiers & Profiles
+, click Certificates in the sidebar.
+On the top left, click the add button (+).
+Under Software, select Developer ID, then click Continue.
+Developer ID Application:
+A certificate used to sign a Mac app.
+Developer ID
+Installer
+:
+A certificate used to sign a Mac
+Installer
+Package, containing your signed app.
+Follow the instructions to
+create a certificate signing request
+.
+Click Choose File.
+In the dialog that appears, select the certificate request file (a file with a
+.certSigningRequest
+file extension), then click Choose.
+Click Continue.
+Click Download.
+The certificate file (a file with a
+.cer
+file extension) appears in your
+Downloads
+folder.
+To install the certificate in your keychain, double-click the downloaded certificate file. The certificate appears in the My Certificates category in Keychain Access.
+Manage Developer ID certificate and provisioning profile expiration
+Apps signed with a Developer ID are evaluated by GateKeeper when a customer installs your application. If your application utilizes a Developer ID provisioning profile to support advanced capabilities, then that profile is also evaluated, both at app installation time and at every app launch. Developer ID provisioning profiles generated after February 22, 2017, are valid for 18 years from the creation date, regardless of the expiration date of your Developer ID certificate. It's helpful to understand how the expiration of your Developer ID certificate and Developer ID provisioning profile will impact you and your users.
+For apps that don’t utilize a Developer ID provisioning profile
+Gatekeeper will evaluate the validity of your Developer ID certificate when your application is installed. As long as your Developer ID certificate was valid when you compiled your app, then users can download and run your app, even after the expiration date of the certificate. However, you’ll need a new certificate to sign updates and new applications.
+For apps that utilize advanced capabilities with a Developer ID provisioning profile
+Gatekeeper will evaluate the validity of your Developer ID certificate when your application is installed and will evaluate the validity of your Developer ID provisioning profile at every app launch. As long as your Developer ID certificate was valid when you compiled your app, then users can download and run your app, even after the expiration date of the certificate. However, if your Developer ID provisioning profile expires, the app will no longer launch.
+For installer packages signed with a Developer ID Installer certificate
+Gatekeeper will evaluate the validity of your Developer ID Installer certificate when your installer package is run. Your installer package will only launch if your Developer ID Installer certificate is valid. Installer packages signed with a Developer ID Installer certificate that has expired must be re-signed with a valid Developer ID Installer certificate in order to run.
+Any Developer ID app signed with a certificate that has been revoked can no longer be installed nor launch if it’s already installed.
+What happens to my applications signed with Developer ID if my Apple Developer Program membership expires?
+If your membership expires, users can still download, install, and run your applications that are signed with Developer ID. However, once your Developer ID certificate expires, you must be an Apple Developer Program member to get new Developer ID certificates to sign updates and new applications.
+For more information about using your Developer ID certificate, see:
+Signing your apps for Gatekeeper
+Notarizing macOS software before distribution
+Submit your
+feedback
+Ask questions on the forums
+Contact Apple Developer Support
+Developer Footer
+Help
+Account
+Certificates
+Developer ID certificates
+Platforms
+Open Menu
+Close Menu
+iOS
+iPadOS
+macOS
+tvOS
+visionOS
+watchOS
+App Store
+Tools
+Open Menu
+Close Menu
+Swift
+SwiftUI
+Swift Playground
+TestFlight
+Xcode
+Xcode Cloud
+Icon Composer
+SF Symbols
+Technologies
+Open Menu
+Close Menu
+Accessibility
+Accessories
+AI & Machine Learning
+Apple In-App Purchase
+Apple Intelligence
+Audio & Video
+Augmented Reality
+Business
+Design
+Distribution
+Education
+Games
+Health & Fitness
+Localization
+Maps & Location
+Security
+Safari & Web
+Resources
+Open Menu
+Close Menu
+Documentation
+Downloads
+Sample Code
+Videos
+Documentation Archive
+Support
+Open Menu
+Close Menu
+Help Guides & Articles
+Contact Us
+Forums
+Feedback & Bug Reporting
+System Status
+Account
+Open Menu
+Close Menu
+Apple Developer
+App Store Connect
+Certificates, IDs, & Profiles
+Feedback Assistant
+Programs
+Open Menu
+Close Menu
+Apple Developer Program
+Apple Developer Enterprise Program
+App Store Small Business Program
+MFi Program
+Mini Apps Partner Program
+News Partner Program
+Video Partner Program
+Security Bounty Program
+Security Research Device Program
+Events
+Open Menu
+Close Menu
+Meet with Apple
+Apple Developer Centers
+App Store Awards
+Apple Design Awards
+Apple Developer Academies
+WWDC
+Read the
+latest news
+.
+Get the
+Apple Developer app
+.
+Follow us on
+bilibili
+,
+LinkedIn
+,
+WeChat
+, and
+YouTube
+.
+Light
+Dark
+Auto
+Copyright ©  2026
+Apple Inc.
+All rights reserved.
+Terms of Use
+Privacy Policy
+Agreements and Guidelines

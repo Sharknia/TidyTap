@@ -133,4 +133,11 @@ if ! /usr/bin/grep -Fq 'must precede' <<<"$mutation_output"; then
   exit 1
 fi
 
+assert_before 'verify-clipboard-cloudkit-configuration\.py.*--require-cloudkit' 'mv "\$publication_dir" "\$final_dir"'
+if ! /usr/bin/grep -Fq 'verify-clipboard-cloudkit-configuration.py' "$artifact_verifier"; then
+  print -u2 -- "Release artifact verifier is missing its CloudKit configuration gate."
+  exit 1
+fi
+python3 "$project_root/Scripts/test-clipboard-cloudkit-configuration.py"
+
 print -- "Release DMG signing workflow regression checks passed."

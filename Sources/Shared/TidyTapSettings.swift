@@ -321,6 +321,8 @@ struct TidyTapApplyStatus: Codable, Equatable {
 }
 
 protocol TidyTapPreferencesStoring: AnyObject {
+    func readClipboardICloudSyncEnabled() -> Bool
+    func writeClipboardICloudSyncEnabled(_ enabled: Bool) throws
     func readRequest() -> TidyTapSettingsRequest
     func write(settings: TidyTapSettings, applyRequestID: UUID) throws
     func readApplyStatus() -> TidyTapApplyStatus?
@@ -341,6 +343,7 @@ protocol TidyTapCapsOwnershipStoring: AnyObject {
 
 enum TidyTapPreferencesError: Error {
     case encodingFailed
+    case persistenceFailed
 }
 
 /// Both processes explicitly use this suite rather than `UserDefaults.standard`
@@ -354,6 +357,19 @@ final class TidyTapPreferencesStore: TidyTapPreferencesStoring, TidyTapCapsOwner
         self.defaults = defaults ?? UserDefaults(suiteName: TidyTapPreferences.domain) ?? .standard
         self.encoder = JSONEncoder()
         self.decoder = JSONDecoder()
+    }
+
+    func readClipboardICloudSyncEnabled() -> Bool {
+        synchronize(); return defaults.bool(forKey: "clipboardICloudSyncEnabled")
+    }
+    func writeClipboardICloudSyncEnabled(_ enabled: Bool) throws {
+        let old = defaults.object(forKey: "clipboardICloudSyncEnabled")
+        defaults.set(enabled, forKey: "clipboardICloudSyncEnabled")
+        guard defaults.synchronize() else {
+            if let old { defaults.set(old, forKey: "clipboardICloudSyncEnabled") }
+            else { defaults.removeObject(forKey: "clipboardICloudSyncEnabled") }
+            defaults.synchronize(); throw TidyTapPreferencesError.persistenceFailed
+        }
     }
 
     func readRequest() -> TidyTapSettingsRequest {

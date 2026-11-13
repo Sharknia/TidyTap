@@ -9,6 +9,8 @@ Switch languages with Caps Lock, adjust your mouse wheel, use side buttons in Sa
 
 **[Download for Mac](https://github.com/Sharknia/TidyTap/releases/latest)** · [한국어](README.ko.md)
 
+0.3.0 implementation status (not released): recent-history/pinboard tabs, persistent pins, and optional iCloud sync are implemented in source. The panel opens on recent history; `⌘1`/`⌘2` switch tabs. Sync defaults to off and requires matching CloudKit signing, provisioning, and schema setup. [Implementation and validation](docs/CLIPBOARD_030_EXECUTION.md) · [iCloud release setup](docs/CLIPBOARD_ICLOUD_RELEASE_SETUP.md)
+
 Apple silicon · macOS 15.1+ · English & Korean · [MIT license](LICENSE)
 
 <p align="center">
@@ -28,7 +30,7 @@ Apple silicon · macOS 15.1+ · English & Korean · [MIT license](LICENSE)
 
 Clipboard history is off until you enable it and record a shortcut. Settings suggests `⌥V` but does not assign it. Text pastes without formatting by default; `Shift+Enter` uses the opposite style. Requesting a paste moves that history item to the top, even if pasting is interrupted. A short, non-interactive notice reports paste problems; reopen history to see the previous attempt. See the [validation scope](docs/CLIPBOARD_HISTORY_ACCEPTANCE_STATUS.md).
 
-> **Closing the window or quitting with `⌘Q` keeps enabled features running.** To stop them, turn off all features in the app. [How to stop or uninstall](#stopping-or-uninstalling)
+> **Closing the window or quitting with `⌘Q` keeps enabled input features and clipboard capture running. iCloud sync resumes when the app next runs after quitting.** To stop them, turn off all features in the app. [How to stop or uninstall](#stopping-or-uninstalling)
 
 ## Install
 
@@ -81,9 +83,11 @@ Version 0.1.4 and earlier need one manual DMG replacement to gain in-app updates
 
 ## Stopping or uninstalling
 
-1. Turn off all five input features, clipboard history, and "Start at login". To remove saved history too, use **Clear all history** while clipboard history is still on, before turning it off.
-2. Wait for the app to report that changes were applied. Check that Caps Lock and language switching work as they did before, then quit with `⌘Q`.
-3. To uninstall, move TidyTap from Applications to the Trash. Deleting the app alone does not remove saved clipboard history from `~/Library/Application Support/com.sharknia.TidyTap/clipboard-history`.
+1. In 0.3.0, turn iCloud sync off and confirm the paused state. A pausing or retry status means shutdown has not been confirmed.
+2. To clear the active library, unpin each pinboard item, then use **Clear all history**. Clearing history preserves pins. Turn off the five input features, clipboard capture, and "Start at login" afterward.
+3. Confirm input changes were applied and Caps Lock/language switching were restored, then quit and trash the app. App deletion alone does not remove local records. After all features and the Helper have stopped, you can delete `~/Library/Application Support/com.sharknia.TidyTap/` in Finder to remove account libraries and legacy records.
+
+Local deletion does not establish deletion of iCloud server copies. Changes made while paused are eligible for transmission only after resuming; this version has no global reset for other accounts or unseen records. Actual server-deletion acceptance remains unverified.
 
 **Deleting the app first will not automatically restore your settings.** If you see an error or features keep running, follow [the shutdown and restoration checks](docs/TROUBLESHOOTING.md#check-shutdown-and-restoration). There is no dedicated uninstaller.
 
@@ -94,3 +98,9 @@ Check the status message at the bottom of the app and its Accessibility permissi
 If the [troubleshooting guide](docs/TROUBLESHOOTING.md) does not help, [report a bug](https://github.com/Sharknia/TidyTap/issues/new) with your macOS and app versions, mouse model, and steps to reproduce it. You can also email [zel@kakao.com](mailto:zel@kakao.com).
 
 Build commands, tests, and implementation details are in [Development](docs/DEVELOPMENT.md).
+
+## Clipboard library in 0.3.0
+
+Pins survive normal-history expiry and deletion. Unpinning keeps any valid recent-history entry. New local pins are limited to1,000 logical items/50MiB; pins already received from another Mac are preserved even if the merged library exceeds that budget.
+
+Enabling iCloud sync sends supported clipboard history and pinboard changes to the same Apple account’s private CloudKit database. Off pauses this Mac’s sync; resuming also includes valid changes retained while paused. Accounts use separate local libraries. Two-Mac sync acceptance is still unverified. The updater itself never sends clipboard content to GitHub.

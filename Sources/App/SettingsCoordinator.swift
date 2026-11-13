@@ -82,6 +82,9 @@ final class SettingsCoordinator {
         try? helperLauncher.ensureHelperRunning()
     }
 
+    func readClipboardICloudSyncEnabled() -> Bool { preferences.readClipboardICloudSyncEnabled() }
+    func saveClipboardICloudSyncEnabled(_ enabled: Bool) throws { try preferences.writeClipboardICloudSyncEnabled(enabled) }
+
     func persistedSettings() -> TidyTapSettings {
         preferences.readRequest().settings
     }

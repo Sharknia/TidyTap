@@ -1,0 +1,28 @@
+{
+  "date": "2026-11-13",
+  "task": "Astra 독립 아이데이션과 동기화 베스트 프랙티스 제안",
+  "agent": "astra_clipboard_sync_ideation",
+  "model": "gpt-6-astra",
+  "reasoning": "high",
+  "initial_context": "fork_turns=none",
+  "initial_prompt": "ideation_prompt.md",
+  "consultation_turns": 5,
+  "prior_plan_and_review_provided": false,
+  "host_instruction_exclusion": "미검증",
+  "agent_status": "completed",
+  "recommendation": "관리형 Core Data 개인 DB를 먼저 두 Mac에서 검증, 합격 시 채택",
+  "adoption_status": "proposal_not_user_adopted",
+  "existing_plans_changed": false,
+  "product_code_changed": false,
+  "runtime_tests": "not_run",
+  "sdk_version_inspected": "27.2",
+  "artifacts": {
+    "docs/CLIPBOARD_SYNC_BEST_PRACTICE_PROPOSAL.md": "b614cab501c4ac3d54204acdb1b70386cbe7c201de767279eb991ca5f54b7b5b",
+    "docs/research/clipboard-sync-2026-11-13/ideation_prompt.md": "0dd343cabaeb1d45e61dbaeeca5c47c450f3a2e0ede2def83eaba6f4de8ede4a",
+    "docs/research/clipboard-sync-2026-11-13/consultation_summary.md": "be1a4f755e11ba561b5896747d7c338ffd02041791081a693add41024e132dac"
+  },
+  "verification": {
+    "local_links": "passed",
+    "whitespace": "passed"
+  }
+}
